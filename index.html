@@ -287,544 +287,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 
 </div>
 
-<script>
-
-// ── STATE ──
-const DATA = { csv:[] };
-const CHARTS = {};
-const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-const MESES_SH = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-
-// ── NAV ──
-function goTab(btn) {
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
-  document.getElementById('page-'+btn.dataset.tab).classList.add('active');
-  btn.classList.add('active');
-}
-
-// ── UTILS ──
-function fmt(v) {
-  if(v==null||isNaN(v)) return '—';
-  return 'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-}
-function parseBRNum(s) {
-  if(!s) return 0;
-  s = String(s).trim().replace(/\s/g,'').replace(/R\$\s*/,'');
-  if(!s||s==='-') return 0;
-  if(s.includes(',')) { s=s.replace(/\./g,'').replace(',','.'); return parseFloat(s)||0; }
-  const dots=(s.match(/\./g)||[]).length;
-  if(dots===1) { const p=s.split('.'); if(p[1].length===3) s=s.replace('.',''); }
-  else if(dots>1) s=s.replace(/\./g,'');
-  return parseFloat(s)||0;
-}
-function parseDateBR(s) {
-  if(!s) return null;
-  s=String(s).trim();
-  const mBR=s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
-  if(mBR) { let y=parseInt(mBR[3]); if(y<100) y+=2000; const d=new Date(y,parseInt(mBR[2])-1,parseInt(mBR[1])); return isNaN(d.getTime())?null:d; }
-  const mISO=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if(mISO) { const d=new Date(parseInt(mISO[1]),parseInt(mISO[2])-1,parseInt(mISO[3])); return isNaN(d.getTime())?null:d; }
-  return null;
-}
-function parseTSV(text) {
-  const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
-  if(lines.length<2) return [];
-  const headers=lines[0].split('	').map(h=>h.trim());
-  return lines.slice(1).map(line=>{ const cols=line.split('	'); const row={}; headers.forEach((h,i)=>{row[h]=(cols[i]||'').trim();}); return row; });
-}
-function findCol(row, candidates) {
-  for(const c of candidates) {
-    const key=Object.keys(row).find(k=>k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(c.toLowerCase().replace(/[^a-z0-9]/g,'')));
-    if(key&&row[key]!==undefined) return row[key];
-  }
-  return '';
-}
-function findColKey(row, candidates) {
-  for(const c of candidates) {
-    const key=Object.keys(row).find(k=>k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(c.toLowerCase().replace(/[^a-z0-9]/g,'')));
-    if(key!==undefined) return {foundKey:key, value:(row[key]||'').trim()};
-  }
-  return {foundKey:null, value:''};
-}
-function findColExact(row, exactNames, fallback) {
-  const keys=Object.keys(row);
-  for(const name of exactNames) {
-    const key=keys.find(k=>k.trim().toLowerCase()===name.trim().toLowerCase());
-    if(key!==undefined) return {foundKey:key, value:(row[key]||'').trim()};
-  }
-  return findColKey(row, fallback||exactNames);
-}
-function setStatus(id,msg,ok) {
-  const el=document.getElementById(id);
-  el.textContent=msg;
-  el.className='paste-status'+(ok===true?' ok':ok===false?' err':'');
-}
-function destroyChart(id) { if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];} }
-function set(id,v) { const el=document.getElementById(id); if(el) el.textContent=v; }
-function normCC(s) { return (s||'').trim().toUpperCase().replace(/\s+/g,' '); }
-function ccMatch(a,b) { return normCC(a)===normCC(b); }
-
-// ── DIAGNÓSTICO ──
-function renderDiag(containerId, allHeaders, mappings, firstRow) {
-  const el=document.getElementById(containerId); if(!el) return;
-  const allCols=allHeaders.map(h=>`<span class="diag-pill">${h}</span>`).join('');
-  const rows=mappings.map(m=>{
-    const rawVal=firstRow?(firstRow[m.foundKey]??''):'';
-    const isEmpty=rawVal===''||rawVal===null||rawVal===undefined;
-    const valDisplay=isEmpty?'<span class="diag-col-val empty">(vazio)</span>':`<span class="diag-col-val">${String(rawVal).slice(0,80)}</span>`;
-    const mappedDisplay=m.foundKey?`<span class="diag-col-mapped">→ "${m.foundKey}"</span>`:`<span class="diag-col-mapped miss">✕ Não encontrada</span>`;
-    return `<div class="diag-row"><div class="diag-col-name">${m.label}</div>${mappedDisplay}${valDisplay}</div>`;
-  }).join('');
-  el.innerHTML=`<div class="diag-box"><div class="diag-header"><span class="diag-header-title">🔍 Diagnóstico de colunas</span><span class="diag-header-sub">Verifique se os valores estão corretos</span></div><div class="diag-grid">${rows}</div><div class="diag-all-cols"><div class="diag-all-label">Todas as colunas detectadas:</div>${allCols}</div></div>`;
-  el.style.display='block';
-}
-
-// ── WIREPASTE ──
-window.addEventListener('load', () => {
-  wirePaste('paste-csv', processCSVText, 'status-csv');
-  ['d-ano','d-mes','d-cc'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('change',renderDashboard); });
-  ['dt-obra','dt-ano','dt-mes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('change',renderDtlh); });
-});
-function wirePaste(taId, processFn, statusId) {
-  const ta=document.getElementById(taId); if(!ta) return;
-  ta.addEventListener('paste', e=>{
-    e.preventDefault();
-    setStatus(statusId,'Processando…',null);
-    const txt=(e.clipboardData||window.clipboardData).getData('text');
-    setTimeout(()=>{ processFn(txt); ta.value=''; },0);
-  });
-}
-
-// ── PARSE CSV ──
-function processCSVText(txt) {
-  const rows=parseTSV(txt);
-  if(!rows.length){ setStatus('status-csv','Nenhum dado encontrado.',false); return; }
-  const allHeaders=Object.keys(rows[0]);
-  const first=rows[0];
-  const mData={
-    data:        findColKey(first,['Data','data','dt']),
-    complemento: findColKey(first,['Complemento','complemento','Histórico','historico']),
-    valor:       findColExact(first,['Valor'],['Valor','valor']),
-    cc:          findColExact(first,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']),
-    conta:       findColExact(first,['Conta','Plano de Contas'],['Conta','conta']),
-  };
-  renderDiag('diag-csv', allHeaders, [
-    {label:'Data',                foundKey:mData.data.foundKey},
-    {label:'Complemento',         foundKey:mData.complemento.foundKey},
-    {label:'Valor',               foundKey:mData.valor.foundKey},
-    {label:'Nome Centro de Custo',foundKey:mData.cc.foundKey},
-    {label:'Conta',               foundKey:mData.conta.foundKey},
-  ], first);
-  const novos=rows.map(r=>{
-    const data=parseDateBR(findColKey(r,['Data','data','dt']).value);
-    const complemento=findColKey(r,['Complemento','complemento','Histórico','historico']).value;
-    const valor=Math.abs(parseBRNum(findColExact(r,['Valor'],['Valor','valor']).value));
-    const cc=normCC(findColExact(r,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']).value);
-    const conta=findColExact(r,['Conta','Plano de Contas'],['Conta','conta']).value;
-    const cu=complemento.toUpperCase();
-    const tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
-    return {data,complemento,valor,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
-  }).filter(r=>r.valor!==0||r.cc);
-  DATA.csv=[...DATA.csv,...novos];
-  setStatus('status-csv',`+${novos.length} registros — total: ${DATA.csv.length}.`,true);
-  renderCSVTable(); updateDashFilters(); updateDtlhFilters(); updateFluxoAnos(); renderDashboard(); renderDtlh(); renderFluxo();
-}
-function limparCSV() {
-  document.getElementById('paste-csv').value='';
-  DATA.csv=[];
-  document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>';
-  document.getElementById('count-csv').textContent='0 registros';
-  const d=document.getElementById('diag-csv'); if(d){d.style.display='none';d.innerHTML='';}
-  setStatus('status-csv','','');
-  updateFluxoAnos(); renderFluxo(); renderDashboard(); renderDtlh();
-}
-function clearCSVFilters() {
-  ['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-tipo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  renderCSVTable();
-}
-function renderCSVTable() {
-  const arr=DATA.csv;
-  const anos=[...new Set(arr.map(r=>r.ano).filter(x=>x!=null))].sort();
-  const meses=[...new Set(arr.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
-  const ccs=[...new Set(arr.map(r=>r.cc).filter(Boolean))].sort();
-  fillSelect('fcsv-ano',anos,v=>v,v=>v);
-  fillSelect('fcsv-mes',meses,v=>v,v=>MESES_PT[v]);
-  fillSelect('fcsv-cc',ccs,v=>v,v=>v);
-  const fAno=document.getElementById('fcsv-ano')?.value||'';
-  const fMes=document.getElementById('fcsv-mes')?.value||'';
-  const fCC=document.getElementById('fcsv-cc')?.value||'';
-  const fTipo=document.getElementById('fcsv-tipo')?.value||'';
-  const filtered=arr.filter(r=>(!fAno||String(r.ano)===fAno)&&(!fMes||String(r.mes)===fMes)&&(!fCC||ccMatch(r.cc||'',fCC))&&(!fTipo||r.tipo===fTipo));
-  document.getElementById('count-csv').textContent=filtered.length+' de '+arr.length+' registros';
-  const tbody=document.getElementById('body-csv');
-  if(!filtered.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum registro encontrado</p></div></td></tr>';return;}
-  tbody.innerHTML=filtered.map(r=>{
-    const tc=r.tipo==='FATURAMENTO'?'bg-green':r.tipo==='DESCONTO'?'bg-gold':'bg-red';
-    const vc=r.tipo==='FATURAMENTO'?'val-pos':r.tipo==='DESCONTO'?'val-gold':'val-neg';
-    return `<tr><td>${r.data?r.data.toLocaleDateString('pt-BR'):'—'}</td><td>${r.complemento||'—'}</td><td>${r.cc||'—'}</td><td>${r.conta||'—'}</td><td><span class="badge ${tc}">${r.tipo}</span></td><td class="r ${vc}">${fmt(r.valor)}</td></tr>`;
-  }).join('');
-}
-function exportExcelCSV() {
-  if(!DATA.csv.length){alert('Nenhum dado para exportar.');return;}
-  const fd=d=>d?d.toLocaleDateString('pt-BR'):'';
-  const fn=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const rows=DATA.csv.map(r=>({'Data':fd(r.data),'Complemento':r.complemento||'','Centro de Custo':r.cc||'','Conta':r.conta||'','Tipo':r.tipo||'','Valor':fn(r.valor)}));
-  const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.json_to_sheet(rows,{raw:false});
-  ws['!cols']=Object.keys(rows[0]).map(c=>({wch:Math.max(c.length,...rows.map(r=>String(r[c]||'').length))+2}));
-  XLSX.utils.book_append_sheet(wb,ws,'CSV Analítico');
-  XLSX.writeFile(wb,`Solucione_CSV_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
-}
-
-// ── DASHBOARD FILTERS ──
-function updateDashFilters() {
-  const anos=[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort();
-  const meses=[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
-  const ccs=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
-  fillSelect('d-ano',anos,v=>v,v=>v);
-  fillSelect('d-mes',meses,v=>v,v=>MESES_PT[v]);
-  fillSelect('d-cc',ccs,v=>v,v=>v);
-}
-function fillSelect(id,values,valFn,labelFn) {
-  const sel=document.getElementById(id); if(!sel) return;
-  const cur=sel.value;
-  sel.innerHTML='<option value="">'+sel.options[0]?.textContent+'</option>';
-  values.forEach(v=>{const o=document.createElement('option');o.value=valFn(v);o.textContent=labelFn(v);sel.appendChild(o);});
-  if(cur) sel.value=cur;
-}
-function clearDashFilters(){['d-ano','d-mes','d-cc'].forEach(id=>document.getElementById(id).value='');renderDashboard();}
-function getF(){return{ano:document.getElementById('d-ano').value,mes:document.getElementById('d-mes').value,cc:document.getElementById('d-cc').value};}
-function applyF(arr){const f=getF();return arr.filter(r=>(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes)&&(!f.cc||ccMatch(r.cc||'',f.cc)));}
-
-// ── DASHBOARD RENDER ──
-function renderDashboard() {
-  const csvF=applyF(DATA.csv);
-  const fatRows=csvF.filter(r=>r.tipo==='FATURAMENTO');
-  const descRows=csvF.filter(r=>r.tipo==='DESCONTO');
-  const pagRows=csvF.filter(r=>r.tipo==='PAGAMENTO');
-  const totalFatBruto=fatRows.reduce((s,r)=>s+r.valor,0);
-  const totalDesconto=descRows.reduce((s,r)=>s+r.valor,0);
-  const totalFatLiq=totalFatBruto-totalDesconto;
-  const totalPago=pagRows.reduce((s,r)=>s+r.valor,0);
-  const resultado=totalFatLiq-totalPago;
-  set('d-kpi-recebido',fmt(totalFatBruto));
-  set('d-kpi-recebido-n',fatRows.length+' lançamentos de recebimento');
-  set('d-kpi-desconto',totalDesconto>0?'− '+fmt(totalDesconto):fmt(0));
-  set('d-kpi-fat-liquido',fmt(totalFatLiq));
-  set('d-kpi-pago',fmt(totalPago));
-  set('d-kpi-pago-n',pagRows.length+' lançamentos');
-  const resEl=document.getElementById('d-kpi-resultado');
-  resEl.textContent=fmt(Math.abs(resultado));
-  resEl.className='kpi-val '+(resultado>=0?'pos':'neg');
-  set('d-kpi-resultado-sub',resultado>=0?'▲ Superávit':'▼ Déficit');
-  renderCharts(csvF);
-}
-
-// ── CHARTS ──
-const PAL=['#1B6B35','#1A5276','#B7950B','#7D3C98','#C0392B','#784212','#1A6161','#2E4057'];
-function monthKeys(arrs){
-  const keys=new Set();
-  arrs.forEach(arr=>arr.forEach(r=>{if(r.ano!=null&&r.mes!=null)keys.add(r.ano*100+r.mes);}));
-  return [...keys].sort().map(k=>({key:k,label:MESES_SH[k%100]+'/'+(Math.floor(k/100)),ano:Math.floor(k/100),mes:k%100}));
-}
-function renderCharts(csv) {
-  const pag=csv.filter(r=>r.tipo==='PAGAMENTO');
-  const fat=csv.filter(r=>r.tipo==='FATURAMENTO');
-  const dsc=csv.filter(r=>r.tipo==='DESCONTO');
-  const lbl=monthKeys([csv]);
-  const ln=lbl.map(l=>l.label);
-  const yFmt={ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}};
-  const leg={position:'top',labels:{font:{size:11}}};
-  destroyChart('ch-mensal-pago');
-  if(pag.length) CHARTS['ch-mensal-pago']=new Chart(document.getElementById('ch-mensal-pago'),{type:'bar',data:{labels:ln,datasets:[{label:'Pagamentos',data:lbl.map(l=>pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#C0392B',borderRadius:2}]},options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}});
-  destroyChart('ch-mensal-fat');
-  if(fat.length||dsc.length) CHARTS['ch-mensal-fat']=new Chart(document.getElementById('ch-mensal-fat'),{type:'bar',data:{labels:ln,datasets:[{label:'Recebimentos',data:lbl.map(l=>fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#1A7A3C',borderRadius:2},{label:'Descontos',data:lbl.map(l=>dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#B7950B',borderRadius:2}]},options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}});
-  destroyChart('ch-cc');
-  if(pag.length){const ccs=[...new Set(pag.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc']=new Chart(document.getElementById('ch-cc'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Pago',data:ccs.map(c=>pag.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
-  destroyChart('ch-cc-fat');
-  if(fat.length){const ccs=[...new Set(fat.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc-fat']=new Chart(document.getElementById('ch-cc-fat'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Recebido',data:ccs.map(c=>fat.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
-  destroyChart('ch-resultado-caixa');
-  if(csv.length){
-    const rd=lbl.map(l=>{
-      const f=fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);
-      const d=dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);
-      const p=pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);
-      return (f-d)-p;
-    });
-    CHARTS['ch-resultado-caixa']=new Chart(document.getElementById('ch-resultado-caixa'),{type:'bar',data:{labels:ln,datasets:[{label:'Resultado',data:rd,backgroundColor:rd.map(v=>v>=0?'#1A7A3C':'#C0392B'),borderRadius:2}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},scales:{y:{ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')},grid:{color:ctx=>ctx.tick.value===0?'rgba(0,0,0,0.3)':'rgba(0,0,0,0.05)'}}}}}); 
-  }
-}
-
-// ── BACKUP / RESTORE ──
-function backupJSON() {
-  const payload={version:1,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento}};
-  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download=`SolucioneBI_Backup_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.json`;
-  a.click(); URL.revokeObjectURL(a.href);
-}
-function restoreJSON(input) {
-  const file=input.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    try {
-      const payload=JSON.parse(e.target.result);
-      if(!payload.data) throw new Error('Formato inválido');
-      DATA.csv=(payload.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
-      DATA.estoque=payload.data.estoque||[];
-      DATA.orcamento=payload.data.orcamento||[];
-      renderCSVTable(); renderEstoqueTable(); renderOrcamentoTable();
-      updateDashFilters(); updateDtlhFilters(); renderDashboard(); renderDtlh();
-      alert(`✓ Backup restaurado! ${DATA.csv.length} registros CSV carregados.`);
-    } catch(err) { alert('Erro ao restaurar: '+err.message); }
-  };
-  reader.readAsText(file); input.value='';
-}
-
-// ── FLUXO DE CAIXA ──
-function updateFluxoAnos() {
-  const anos = [...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort();
-  fillSelect('fc-ano', anos, v=>v, v=>v);
-}
-
-function renderFluxo() {
-  const anoSel = document.getElementById('fc-ano')?.value || '';
-  const thead = document.getElementById('thead-fluxo');
-  const tbody = document.getElementById('tbody-fluxo');
-  const tfoot = document.getElementById('tfoot-fluxo');
-  if(!thead||!tbody||!tfoot) return;
-
-  const meses = [0,1,2,3,4,5,6,7,8,9,10,11];
-  const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-
-  // Filter by year
-  const dados = DATA.csv.filter(r => !anoSel || String(r.ano) === anoSel);
-
-  // Build conta → tipo → mes → total
-  const contas = {};
-  dados.forEach(r => {
-    const conta = r.conta || '(Sem conta)';
-    const tipo  = r.tipo;
-    if(!contas[conta]) contas[conta] = { FATURAMENTO:{}, DESCONTO:{}, PAGAMENTO:{} };
-    if(!contas[conta][tipo][r.mes]) contas[conta][tipo][r.mes] = 0;
-    contas[conta][tipo][r.mes] += r.valor;
-  });
-
-  if(!Object.keys(contas).length) {
-    tbody.innerHTML = '<tr><td colspan="14"><div class="empty-state"><p>Nenhum dado para o período selecionado</p></div></td></tr>';
-    thead.innerHTML = ''; tfoot.innerHTML = '';
-    document.getElementById('fc-badge').textContent = '—';
-    return;
-  }
-
-  // Header
-  thead.innerHTML = `<tr>
-    <th style="min-width:220px;text-align:left">Conta</th>
-    ${meses.map(m=>`<th class="r" style="min-width:90px">${MESES_ABR[m]}</th>`).join('')}
-    <th class="r" style="min-width:100px;background:var(--surface-2,#f8f8f8)"><strong>Total</strong></th>
-  </tr>`;
-
-  // Separate faturamento contas vs pagamento contas
-  const fatContas = Object.entries(contas)
-    .filter(([c,d]) => Object.keys(d.FATURAMENTO).length || Object.keys(d.DESCONTO).length)
-    .sort((a,b)=>a[0].localeCompare(b[0]));
-  const pagContas = Object.entries(contas)
-    .filter(([c,d]) => Object.keys(d.PAGAMENTO).length)
-    .sort((a,b)=>a[0].localeCompare(b[0]));
-
-  const fmt2 = v => v === 0 ? '<span style="color:#bbb">—</span>' : 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-
-  let rows = '';
-
-  // FATURAMENTOS
-  if(fatContas.length) {
-    rows += `<tr style="background:var(--brand-light,#D5F5E3)"><td colspan="14" style="padding:6px 12px;font-weight:700;font-size:12px;color:var(--brand,#1B6B35);letter-spacing:.05em">▶ FATURAMENTOS</td></tr>`;
-    let totalFatMes = Array(12).fill(0);
-    fatContas.forEach(([conta, d]) => {
-      const vals = meses.map(m => (d.FATURAMENTO[m]||0) - (d.DESCONTO[m]||0));
-      const total = vals.reduce((s,v)=>s+v,0);
-      vals.forEach((v,i) => totalFatMes[i] += v);
-      rows += `<tr>
-        <td style="padding-left:16px">${conta}</td>
-        ${vals.map(v=>`<td class="r" style="font-size:12px">${fmt2(v)}</td>`).join('')}
-        <td class="r" style="font-weight:600;background:var(--surface-2,#f8f8f8)">${fmt2(total)}</td>
-      </tr>`;
-    });
-    const totalFat = totalFatMes.reduce((s,v)=>s+v,0);
-    rows += `<tr style="background:#e8f5e9;font-weight:700">
-      <td>Total Faturamento</td>
-      ${totalFatMes.map(v=>`<td class="r">${fmt2(v)}</td>`).join('')}
-      <td class="r" style="background:var(--surface-2,#f8f8f8)">${fmt2(totalFat)}</td>
-    </tr>`;
-  }
-
-  // PAGAMENTOS
-  if(pagContas.length) {
-    rows += `<tr style="background:var(--danger-light,#FADBD8)"><td colspan="14" style="padding:6px 12px;font-weight:700;font-size:12px;color:var(--danger,#C0392B);letter-spacing:.05em">▶ PAGAMENTOS</td></tr>`;
-    let totalPagMes = Array(12).fill(0);
-    pagContas.forEach(([conta, d]) => {
-      const vals = meses.map(m => d.PAGAMENTO[m]||0);
-      const total = vals.reduce((s,v)=>s+v,0);
-      vals.forEach((v,i) => totalPagMes[i] += v);
-      rows += `<tr>
-        <td style="padding-left:16px">${conta}</td>
-        ${vals.map(v=>`<td class="r" style="font-size:12px">${fmt2(v)}</td>`).join('')}
-        <td class="r" style="font-weight:600;background:var(--surface-2,#f8f8f8)">${fmt2(total)}</td>
-      </tr>`;
-    });
-    const totalPag = totalPagMes.reduce((s,v)=>s+v,0);
-    rows += `<tr style="background:#fdecea;font-weight:700">
-      <td>Total Pagamentos</td>
-      ${totalPagMes.map(v=>`<td class="r">${fmt2(v)}</td>`).join('')}
-      <td class="r" style="background:var(--surface-2,#f8f8f8)">${fmt2(totalPag)}</td>
-    </tr>`;
-  }
-
-  tbody.innerHTML = rows;
-
-  // Footer — Resultado
-  const fatVals = meses.map(m => dados.filter(r=>r.tipo==='FATURAMENTO'||r.tipo==='DESCONTO').reduce((s,r)=>r.mes===m?s+(r.tipo==='FATURAMENTO'?r.valor:-r.valor):s,0));
-  const pagVals = meses.map(m => dados.filter(r=>r.tipo==='PAGAMENTO'&&r.mes===m).reduce((s,r)=>s+r.valor,0));
-  const resVals = meses.map((m,i) => fatVals[i] - pagVals[i]);
-  const resTotal = resVals.reduce((s,v)=>s+v,0);
-  tfoot.innerHTML = `<tr style="border-top:2px solid var(--border);font-weight:700;background:var(--surface-2,#f8f8f8)">
-    <td>Resultado do Período</td>
-    ${resVals.map(v=>`<td class="r" style="color:${v>=0?'var(--brand,#1B6B35)':'var(--danger,#C0392B)'}">${fmt2(v)}</td>`).join('')}
-    <td class="r" style="color:${resTotal>=0?'var(--brand,#1B6B35)':'var(--danger,#C0392B)'}">${fmt2(resTotal)}</td>
-  </tr>`;
-
-  const nContas = Object.keys(contas).length;
-  document.getElementById('fc-badge').textContent = nContas + (nContas===1?' conta':' contas');
-}
-
-
-</script>
-<script>
-
-// ── FILLSELECT HELPER ──
-function fillSelect(id,values,valFn,labelFn){
-  const sel=document.getElementById(id); if(!sel) return;
-  const cur=sel.value;
-  const first=sel.options[0]?.textContent||'';
-  sel.innerHTML='<option value="">'+first+'</option>';
-  values.forEach(v=>{const o=document.createElement('option');o.value=valFn(v);o.textContent=labelFn(v);sel.appendChild(o);});
-  if(cur) sel.value=cur;
-}
-
-// ── ESTOQUE ──
-DATA.estoque = [];
-function adicionarEstoque(){
-  const obra=document.getElementById('est-obra').value.trim();
-  const unidade=document.getElementById('est-unidade').value.trim();
-  const status=document.getElementById('est-status').value;
-  const area=parseBRNum(document.getElementById('est-area').value);
-  const venda=parseBRNum(document.getElementById('est-venda').value);
-  if(!obra||!unidade){alert('Preencha Obra e Unidade.');return;}
-  DATA.estoque.push({obra,unidade,status,area,venda});
-  ['est-obra','est-unidade','est-area','est-venda'].forEach(id=>document.getElementById(id).value='');
-  renderEstoqueTable();
-}
-function renderEstoqueTable(){
-  const tbody=document.getElementById('body-estoque'); if(!tbody) return;
-  const todasObras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];
-  const obraList=document.getElementById('est-obra-list');
-  if(obraList) obraList.innerHTML=todasObras.map(o=>`<option value="${o}">`).join('');
-  if(!DATA.estoque.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhuma unidade cadastrada</p></div></td></tr>';return;}
-  tbody.innerHTML=DATA.estoque.map((r,i)=>`<tr>
-    <td>${r.obra}</td><td>${r.unidade}</td>
-    <td><span class="badge ${r.status==='Disponível'?'bg-green':r.status==='Vendido'?'bg-red':'bg-gold'}">${r.status}</span></td>
-    <td class="r">${r.area?r.area.toLocaleString('pt-BR',{minimumFractionDigits:2})+'m²':'—'}</td>
-    <td class="r">${r.venda?fmt(r.venda):'—'}</td>
-    <td style="text-align:center"><button onclick="removerEstoque(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px">✕</button></td>
-  </tr>`).join('');
-}
-function removerEstoque(i){DATA.estoque.splice(i,1);renderEstoqueTable();}
-
-// ── DTLH FILTERS ──
-function updateDtlhFilters(){
-  const obras=[...new Set([...DATA.csv.map(r=>r.cc),...DATA.estoque.map(r=>r.obra)].filter(Boolean))].sort();
-  const anos=[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort();
-  const meses=[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
-  fillSelect('dt-obra',obras,v=>v,v=>v);
-  fillSelect('dt-ano',anos,v=>v,v=>v);
-  fillSelect('dt-mes',meses,v=>v,v=>MESES_PT[v]);
-}
-function clearDtlhFilters(){['dt-obra','dt-ano','dt-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderDtlh();}
-function getDtF(){return{obra:document.getElementById('dt-obra')?.value||'',ano:document.getElementById('dt-ano')?.value||'',mes:document.getElementById('dt-mes')?.value||'',entregaChaves:null};}
-function applyDtF(arr){
-  const f=getDtF();
-  return arr.filter(r=>(!f.obra||ccMatch(r.cc||'',f.obra))&&(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes));
-}
-
-// ── DTLH RENDER ──
-function renderDtlh(){
-  const f=getDtF();
-  const csvDt=applyDtF(DATA.csv);
-  const recebidas=csvDt.filter(r=>r.tipo==='FATURAMENTO');
-  const pagas=csvDt.filter(r=>r.tipo==='PAGAMENTO');
-  const vRecebido=recebidas.reduce((s,r)=>s+r.valor,0);
-  const vPagas=pagas.reduce((s,r)=>s+r.valor,0);
-  const vAReceber=0; const vInadimpl=0;
-  const vPotencial=vRecebido+vAReceber;
-  const vResultado=vRecebido-vPagas;
-  const vOrcado=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra)).reduce((s,o)=>s+o.valor,0);
-  // KPIs
-  const kpis={
-    'dt-kpi-recebido':fmt(vRecebido),'dt-kpi-pago':fmt(vPagas),
-    'dt-kpi-resultado':fmt(Math.abs(vResultado)),'dt-kpi-orcado':fmt(vOrcado),
-    'dt-kpi-areceber':fmt(vAReceber),'dt-kpi-inadimpl':fmt(vInadimpl),
-    'dt-kpi-potencial':fmt(vPotencial)
-  };
-  Object.entries(kpis).forEach(([id,v])=>set(id,v));
-  const resEl=document.getElementById('dt-kpi-resultado');
-  if(resEl) resEl.className='dtlh-kpi-main-val '+(vResultado>=0?'pos':'neg');
-  // Estoque
-  const estObra=DATA.estoque.filter(u=>!f.obra||ccMatch(u.obra,f.obra));
-  const total=estObra.length, vendidos=estObra.filter(u=>u.status==='Vendido').length;
-  const disponiveis=estObra.filter(u=>u.status==='Disponível').length;
-  set('dt-est-total',total||'—'); set('dt-est-vendidos',vendidos||'—'); set('dt-est-disponiveis',disponiveis||'—');
-  const vgv=estObra.reduce((s,u)=>s+(u.venda||0),0);
-  set('dt-est-vgv',vgv?fmt(vgv):'—');
-  renderDtlhOrcTable(pagas,f);
-}
-function renderDtlhOrcTable(pagas,f){
-  const tbody=document.getElementById('dt-orc-body'); if(!tbody) return;
-  const itens=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra));
-  if(!itens.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum orçamento cadastrado</p></div></td></tr>';return;}
-  const vOrcadoTotal=itens.reduce((s,o)=>s+o.valor,0);
-  tbody.innerHTML=itens.map(o=>{
-    const saldo=o.valor; const pct=0;
-    const pctW=Math.round(Math.min(pct,1)*80);
-    return `<tr>
-      <td>${o.obra}</td><td>${o.totalizador||'—'}</td><td>${o.codigo||'—'}</td><td>${o.descricao}</td>
-      <td class="r">${fmt(o.valor)}</td>
-      <td style="text-align:center"><button onclick="removerOrcamento(${DATA.orcamento.indexOf(o)})" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button></td>
-    </tr>`;
-  }).join('');
-  set('dt-orc-total',fmt(vOrcadoTotal));
-}
-
-// ── ORÇAMENTO ──
-DATA.orcamento = [];
-function adicionarOrcamento(){
-  const obra=document.getElementById('orc-obra').value.trim();
-  const tot=document.getElementById('orc-totalizador').value.trim();
-  const cod=document.getElementById('orc-codigo').value.trim();
-  const desc=document.getElementById('orc-descricao').value.trim();
-  const val=parseBRNum(document.getElementById('orc-valor').value);
-  if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}
-  DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});
-  ['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>document.getElementById(id).value='');
-  renderOrcamentoTable(); renderDtlh();
-}
-function renderOrcamentoTable(){
-  const tbody=document.getElementById('body-orcamento'); if(!tbody) return;
-  const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];
-  const obraList=document.getElementById('orc-obra-list');
-  if(obraList) obraList.innerHTML=obras.map(o=>`<option value="${o}">`).join('');
-  if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item cadastrado</p></div>
-
   <div class="tbl-card" style="margin-top:28px">
     <div class="tbl-head">
       <div class="tbl-title">Fluxo de Caixa por Conta</div>
@@ -844,50 +306,375 @@ function renderOrcamentoTable(){
       </table>
     </div>
   </div>
+</div>
 
-</td></tr>';return;}
-  tbody.innerHTML=DATA.orcamento.map((o,i)=>`<tr>
-    <td>${o.obra}</td><td>${o.totalizador||'—'}</td><td>${o.codigo||'—'}</td><td>${o.descricao}</td>
-    <td class="r val-neg">${fmt(o.valor)}</td>
-    <td style="text-align:center"><button onclick="removerOrcamento(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button></td>
-  </tr>`).join('');
+<script>
+const DATA = {csv:[], estoque:[], orcamento:[]};
+const CHARTS = {};
+const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function goTab(btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+btn.dataset.tab).classList.add('active');
+  btn.classList.add('active');
 }
-function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
-function importarOrcamento(input){
-  const file=input.files[0]; if(!file) return;
+function fmt(v){if(v==null||isNaN(v))return '—';return 'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function set(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
+function normCC(s){return (s||'').trim().toUpperCase().replace(/\s+/g,' ');}
+function ccMatch(a,b){return normCC(a)===normCC(b);}
+function parseBRNum(s){
+  if(!s)return 0; s=String(s).trim().replace(/\s/g,'').replace(/R\$\s*/,'');
+  if(!s||s==='-')return 0;
+  if(s.includes(','))return parseFloat(s.replace(/\./g,'').replace(',','.'))||0;
+  const dots=(s.match(/\./g)||[]).length;
+  if(dots===1){const p=s.split('.');if(p[1].length===3)s=s.replace('.','');}
+  else if(dots>1)s=s.replace(/\./g,'');
+  return parseFloat(s)||0;
+}
+function parseDateBR(s){
+  if(!s)return null; s=String(s).trim();
+  const m=s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if(m){let y=parseInt(m[3]);if(y<100)y+=2000;const d=new Date(y,parseInt(m[2])-1,parseInt(m[1]));return isNaN(d.getTime())?null:d;}
+  const m2=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(m2){const d=new Date(parseInt(m2[1]),parseInt(m2[2])-1,parseInt(m2[3]));return isNaN(d.getTime())?null:d;}
+  return null;
+}
+function parseTSV(text){
+  const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2)return [];
+  const headers=lines[0].split('	').map(h=>h.trim());
+  return lines.slice(1).map(line=>{const cols=line.split('	');const row={};headers.forEach((h,i)=>{row[h]=(cols[i]||'').trim();});return row;});
+}
+function findColKey(row,candidates){
+  for(const c of candidates){
+    const key=Object.keys(row).find(k=>k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(c.toLowerCase().replace(/[^a-z0-9]/g,'')));
+    if(key!==undefined)return{foundKey:key,value:(row[key]||'').trim()};
+  }
+  return{foundKey:null,value:''};
+}
+function findColExact(row,exactNames,fallback){
+  const keys=Object.keys(row);
+  for(const name of exactNames){
+    const key=keys.find(k=>k.trim().toLowerCase()===name.trim().toLowerCase());
+    if(key!==undefined)return{foundKey:key,value:(row[key]||'').trim()};
+  }
+  return findColKey(row,fallback||exactNames);
+}
+function fillSelect(id,values,valFn,labelFn){
+  const sel=document.getElementById(id);if(!sel)return;
+  const cur=sel.value;
+  const first=sel.options[0]?sel.options[0].textContent:'';
+  sel.innerHTML='<option value="">'+first+'</option>';
+  values.forEach(v=>{const o=document.createElement('option');o.value=valFn(v);o.textContent=labelFn(v);sel.appendChild(o);});
+  if(cur)sel.value=cur;
+}
+function setStatus(id,msg,ok){const el=document.getElementById(id);if(!el)return;el.textContent=msg;el.className='paste-status'+(ok===true?' ok':ok===false?' err':'');}
+function destroyChart(id){if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];}}
+function renderDiag(cid,allH,mappings,first){
+  const el=document.getElementById(cid);if(!el)return;
+  const pills=allH.map(h=>'<span class="diag-pill">'+h+'</span>').join('');
+  const rows=mappings.map(m=>{
+    const raw=first?(first[m.foundKey]!=null?first[m.foundKey]:''):'';
+    const isEmpty=raw==='';
+    return '<div class="diag-row"><div class="diag-col-name">'+m.label+'</div>'+(m.foundKey?'<span class="diag-col-mapped">→ "'+m.foundKey+'"</span>':'<span class="diag-col-mapped miss">✕ Não encontrada</span>')+(isEmpty?'<span class="diag-col-val empty">(vazio)</span>':'<span class="diag-col-val">'+String(raw).slice(0,80)+'</span>')+'</div>';
+  }).join('');
+  el.innerHTML='<div class="diag-box"><div class="diag-header"><span class="diag-header-title">Diagnóstico de colunas</span></div><div class="diag-grid">'+rows+'</div><div class="diag-all-cols"><div class="diag-all-label">Colunas detectadas:</div>'+pills+'</div></div>';
+  el.style.display='block';
+}
+function wirePaste(taId,fn,statusId){
+  const ta=document.getElementById(taId);if(!ta)return;
+  ta.addEventListener('paste',e=>{e.preventDefault();setStatus(statusId,'Processando...',null);const txt=(e.clipboardData||window.clipboardData).getData('text');setTimeout(()=>{fn(txt);ta.value='';},0);});
+}
+window.addEventListener('load',()=>{
+  wirePaste('paste-csv',processCSVText,'status-csv');
+  ['d-ano','d-mes','d-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',renderDashboard);});
+  ['dt-obra','dt-ano','dt-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',renderDtlh);});
+});
+
+// CSV
+function processCSVText(txt){
+  const rows=parseTSV(txt);
+  if(!rows.length){setStatus('status-csv','Nenhum dado encontrado.',false);return;}
+  const allH=Object.keys(rows[0]),first=rows[0];
+  const mData={
+    data:findColKey(first,['Data','data','dt']),
+    complemento:findColKey(first,['Complemento','complemento','Historico','historico']),
+    valor:findColExact(first,['Valor'],['Valor','valor']),
+    cc:findColExact(first,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']),
+    conta:findColExact(first,['Conta','Plano de Contas'],['Conta','conta']),
+  };
+  renderDiag('diag-csv',allH,[
+    {label:'Data',foundKey:mData.data.foundKey},
+    {label:'Complemento',foundKey:mData.complemento.foundKey},
+    {label:'Valor',foundKey:mData.valor.foundKey},
+    {label:'Nome Centro de Custo',foundKey:mData.cc.foundKey},
+    {label:'Conta',foundKey:mData.conta.foundKey},
+  ],first);
+  const novos=rows.map(r=>{
+    const data=parseDateBR(findColKey(r,['Data','data','dt']).value);
+    const complemento=findColKey(r,['Complemento','complemento','Historico','historico']).value;
+    const valor=Math.abs(parseBRNum(findColExact(r,['Valor'],['Valor','valor']).value));
+    const cc=normCC(findColExact(r,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']).value);
+    const conta=findColExact(r,['Conta','Plano de Contas'],['Conta','conta']).value;
+    const cu=complemento.toUpperCase();
+    const tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
+    return{data,complemento,valor,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
+  }).filter(r=>r.valor!==0||r.cc);
+  DATA.csv=[...DATA.csv,...novos];
+  setStatus('status-csv','+'+novos.length+' registros — total: '+DATA.csv.length+'.',true);
+  renderCSVTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();
+}
+function limparCSV(){
+  document.getElementById('paste-csv').value='';DATA.csv=[];
+  document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>';
+  document.getElementById('count-csv').textContent='0 registros';
+  const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}
+  setStatus('status-csv','','');renderDashboard();renderDtlh();
+}
+function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-tipo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
+function renderCSVTable(){
+  const arr=DATA.csv;
+  const anos=[...new Set(arr.map(r=>r.ano).filter(x=>x!=null))].sort();
+  const meses=[...new Set(arr.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
+  const ccs=[...new Set(arr.map(r=>r.cc).filter(Boolean))].sort();
+  fillSelect('fcsv-ano',anos,v=>v,v=>v);fillSelect('fcsv-mes',meses,v=>v,v=>MESES_PT[v]);fillSelect('fcsv-cc',ccs,v=>v,v=>v);
+  const fA=document.getElementById('fcsv-ano')?.value||'',fM=document.getElementById('fcsv-mes')?.value||'',fC=document.getElementById('fcsv-cc')?.value||'',fT=document.getElementById('fcsv-tipo')?.value||'';
+  const filtered=arr.filter(r=>(!fA||String(r.ano)===fA)&&(!fM||String(r.mes)===fM)&&(!fC||ccMatch(r.cc||'',fC))&&(!fT||r.tipo===fT));
+  document.getElementById('count-csv').textContent=filtered.length+' de '+arr.length+' registros';
+  const tbody=document.getElementById('body-csv');
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum registro encontrado</p></div></td></tr>';return;}
+  tbody.innerHTML=filtered.map(r=>{
+    const tc=r.tipo==='FATURAMENTO'?'bg-green':r.tipo==='DESCONTO'?'bg-gold':'bg-red';
+    const vc=r.tipo==='FATURAMENTO'?'val-pos':r.tipo==='DESCONTO'?'val-gold':'val-neg';
+    return '<tr><td>'+(r.data?r.data.toLocaleDateString('pt-BR'):'—')+'</td><td>'+(r.complemento||'—')+'</td><td>'+(r.cc||'—')+'</td><td>'+(r.conta||'—')+'</td><td><span class="badge '+tc+'">'+r.tipo+'</span></td><td class="r '+vc+'">'+fmt(r.valor)+'</td></tr>';
+  }).join('');
+}
+function exportExcelCSV(){
+  if(!DATA.csv.length){alert('Nenhum dado para exportar.');return;}
+  const fd=d=>d?d.toLocaleDateString('pt-BR'):'',fn=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const rows=DATA.csv.map(r=>({'Data':fd(r.data),'Complemento':r.complemento||'','Centro de Custo':r.cc||'','Conta':r.conta||'','Tipo':r.tipo||'','Valor':fn(r.valor)}));
+  const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});
+  ws['!cols']=Object.keys(rows[0]).map(c=>({wch:Math.max(c.length,...rows.map(r=>String(r[c]||'').length))+2}));
+  XLSX.utils.book_append_sheet(wb,ws,'CSV');XLSX.writeFile(wb,'Solucione_CSV_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
+}
+
+// DASHBOARD
+function updateDashFilters(){
+  const anos=[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort();
+  const meses=[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
+  const ccs=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
+  fillSelect('d-ano',anos,v=>v,v=>v);fillSelect('d-mes',meses,v=>v,v=>MESES_PT[v]);fillSelect('d-cc',ccs,v=>v,v=>v);
+}
+function clearDashFilters(){['d-ano','d-mes','d-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderDashboard();}
+function getF(){return{ano:document.getElementById('d-ano')?.value||'',mes:document.getElementById('d-mes')?.value||'',cc:document.getElementById('d-cc')?.value||''};}
+function applyF(arr){const f=getF();return arr.filter(r=>(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes)&&(!f.cc||ccMatch(r.cc||'',f.cc)));}
+function renderDashboard(){
+  const csvF=applyF(DATA.csv);
+  const fat=csvF.filter(r=>r.tipo==='FATURAMENTO'),dsc=csvF.filter(r=>r.tipo==='DESCONTO'),pag=csvF.filter(r=>r.tipo==='PAGAMENTO');
+  const tFatB=fat.reduce((s,r)=>s+r.valor,0),tDsc=dsc.reduce((s,r)=>s+r.valor,0),tFatL=tFatB-tDsc,tPag=pag.reduce((s,r)=>s+r.valor,0),res=tFatL-tPag;
+  set('d-kpi-recebido',fmt(tFatB));set('d-kpi-recebido-n',fat.length+' lançamentos de recebimento');
+  set('d-kpi-desconto',tDsc>0?'− '+fmt(tDsc):fmt(0));set('d-kpi-fat-liquido',fmt(tFatL));
+  set('d-kpi-pago',fmt(tPag));set('d-kpi-pago-n',pag.length+' lançamentos');
+  const resEl=document.getElementById('d-kpi-resultado');
+  if(resEl){resEl.textContent=fmt(Math.abs(res));resEl.className='kpi-val '+(res>=0?'pos':'neg');}
+  set('d-kpi-resultado-sub',res>=0?'▲ Superávit':'▼ Déficit');
+  renderCharts(csvF);renderFluxo();
+}
+const PAL=['#1B6B35','#1A5276','#B7950B','#7D3C98','#C0392B','#784212','#1A6161','#2E4057'];
+function monthKeys(arrs){
+  const keys=new Set();arrs.forEach(a=>a.forEach(r=>{if(r.ano!=null&&r.mes!=null)keys.add(r.ano*100+r.mes);}));
+  return[...keys].sort().map(k=>({key:k,label:MESES_ABR[k%100]+'/'+(Math.floor(k/100)),ano:Math.floor(k/100),mes:k%100}));
+}
+function renderCharts(csv){
+  const pag=csv.filter(r=>r.tipo==='PAGAMENTO'),fat=csv.filter(r=>r.tipo==='FATURAMENTO'),dsc=csv.filter(r=>r.tipo==='DESCONTO');
+  const lbl=monthKeys([csv]),ln=lbl.map(l=>l.label),yFmt={ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}},leg={position:'top',labels:{font:{size:11}}};
+  destroyChart('ch-mensal-pago');
+  if(pag.length)CHARTS['ch-mensal-pago']=new Chart(document.getElementById('ch-mensal-pago'),{type:'bar',data:{labels:ln,datasets:[{label:'Pagamentos',data:lbl.map(l=>pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#C0392B',borderRadius:2}]},options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}});
+  destroyChart('ch-mensal-fat');
+  if(fat.length||dsc.length)CHARTS['ch-mensal-fat']=new Chart(document.getElementById('ch-mensal-fat'),{type:'bar',data:{labels:ln,datasets:[{label:'Recebimentos',data:lbl.map(l=>fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#1A7A3C',borderRadius:2},{label:'Descontos',data:lbl.map(l=>dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#B7950B',borderRadius:2}]},options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}});
+  destroyChart('ch-cc');
+  if(pag.length){const ccs=[...new Set(pag.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc']=new Chart(document.getElementById('ch-cc'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Pago',data:ccs.map(c=>pag.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
+  destroyChart('ch-cc-fat');
+  if(fat.length){const ccs=[...new Set(fat.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc-fat']=new Chart(document.getElementById('ch-cc-fat'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Recebido',data:ccs.map(c=>fat.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
+  destroyChart('ch-resultado-caixa');
+  if(csv.length){
+    const rd=lbl.map(l=>{const f=fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),d=dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),p=pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);return(f-d)-p;});
+    CHARTS['ch-resultado-caixa']=new Chart(document.getElementById('ch-resultado-caixa'),{type:'bar',data:{labels:ln,datasets:[{label:'Resultado',data:rd,backgroundColor:rd.map(v=>v>=0?'#1A7A3C':'#C0392B'),borderRadius:2}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},scales:{y:{ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')},grid:{color:ctx=>ctx.tick.value===0?'rgba(0,0,0,0.3)':'rgba(0,0,0,0.05)'}}}}});
+  }
+}
+
+// FLUXO DE CAIXA
+function updateFluxoAnos(){
+  const anos=[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort();
+  fillSelect('fc-ano',anos,v=>v,v=>v);
+}
+function renderFluxo(){
+  const anoSel=document.getElementById('fc-ano')?.value||'';
+  const thead=document.getElementById('thead-fluxo'),tbody=document.getElementById('tbody-fluxo'),tfoot=document.getElementById('tfoot-fluxo');
+  if(!thead||!tbody||!tfoot)return;
+  updateFluxoAnos();
+  const dados=DATA.csv.filter(r=>!anoSel||String(r.ano)===anoSel);
+  const contas={};
+  dados.forEach(r=>{
+    const c=r.conta||'(Sem conta)';
+    if(!contas[c])contas[c]={FATURAMENTO:Array(12).fill(0),DESCONTO:Array(12).fill(0),PAGAMENTO:Array(12).fill(0)};
+    if(r.mes!=null)contas[c][r.tipo][r.mes]+=r.valor;
+  });
+  const nomes=Object.keys(contas);
+  if(!nomes.length){
+    thead.innerHTML='';tfoot.innerHTML='';
+    tbody.innerHTML='<tr><td colspan="14"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';
+    set('fc-badge','—');return;
+  }
+  const ABR=MESES_ABR;
+  thead.innerHTML='<tr><th style="min-width:220px;text-align:left">Conta</th>'+ABR.map(m=>'<th class="r" style="min-width:80px">'+m+'</th>').join('')+'<th class="r" style="min-width:95px;background:#f4f4f4">Total</th></tr>';
+  const f2=v=>v===0?'<span style="color:#ccc">—</span>':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  let rows='';
+  const fatNomes=nomes.filter(c=>contas[c].FATURAMENTO.some(v=>v>0)||contas[c].DESCONTO.some(v=>v>0)).sort();
+  const pagNomes=nomes.filter(c=>contas[c].PAGAMENTO.some(v=>v>0)).sort();
+  const totFatMes=Array(12).fill(0),totPagMes=Array(12).fill(0);
+  if(fatNomes.length){
+    rows+='<tr style="background:#D5F5E3"><td colspan="14" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;letter-spacing:.05em">FATURAMENTOS</td></tr>';
+    fatNomes.forEach(c=>{
+      const vals=Array.from({length:12},(_,i)=>contas[c].FATURAMENTO[i]-contas[c].DESCONTO[i]);
+      const tot=vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>totFatMes[i]+=v);
+      rows+='<tr><td style="padding-left:14px;font-size:12px">'+c+'</td>'+vals.map(v=>'<td class="r" style="font-size:11px">'+f2(v)+'</td>').join('')+'<td class="r" style="font-weight:600;background:#f4f4f4;font-size:11px">'+f2(tot)+'</td></tr>';
+    });
+    const totFat=totFatMes.reduce((s,v)=>s+v,0);
+    rows+='<tr style="background:#e8f5e9;font-weight:700;font-size:12px"><td>Total Faturamento</td>'+totFatMes.map(v=>'<td class="r">'+f2(v)+'</td>').join('')+'<td class="r" style="background:#f4f4f4">'+f2(totFat)+'</td></tr>';
+  }
+  if(pagNomes.length){
+    rows+='<tr style="background:#FADBD8"><td colspan="14" style="padding:5px 12px;font-weight:700;font-size:11px;color:#C0392B;letter-spacing:.05em">PAGAMENTOS</td></tr>';
+    pagNomes.forEach(c=>{
+      const vals=contas[c].PAGAMENTO.slice();
+      const tot=vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>totPagMes[i]+=v);
+      rows+='<tr><td style="padding-left:14px;font-size:12px">'+c+'</td>'+vals.map(v=>'<td class="r" style="font-size:11px">'+f2(v)+'</td>').join('')+'<td class="r" style="font-weight:600;background:#f4f4f4;font-size:11px">'+f2(tot)+'</td></tr>';
+    });
+    const totPag=totPagMes.reduce((s,v)=>s+v,0);
+    rows+='<tr style="background:#fdecea;font-weight:700;font-size:12px"><td>Total Pagamentos</td>'+totPagMes.map(v=>'<td class="r">'+f2(v)+'</td>').join('')+'<td class="r" style="background:#f4f4f4">'+f2(totPag)+'</td></tr>';
+  }
+  tbody.innerHTML=rows;
+  const resVals=totFatMes.map((v,i)=>v-totPagMes[i]),resTotal=resVals.reduce((s,v)=>s+v,0);
+  tfoot.innerHTML='<tr style="border-top:2px solid #ccc;font-weight:700;background:#f4f4f4"><td>Resultado do Período</td>'+resVals.map(v=>'<td class="r" style="color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="color:'+(resTotal>=0?'#1B6B35':'#C0392B')+'">'+f2(resTotal)+'</td></tr>';
+  set('fc-badge',nomes.length+(nomes.length===1?' conta':' contas'));
+}
+
+// BACKUP / RESTORE
+function backupJSON(){
+  const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento}};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);
+}
+function restoreJSON(input){
+  const file=input.files[0];if(!file)return;
   const reader=new FileReader();
   reader.onload=e=>{
     try{
-      const wb=XLSX.read(e.target.result,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      const payload=JSON.parse(e.target.result);
+      if(!payload||!payload.data)throw new Error('Formato inválido');
+      DATA.csv=(payload.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
+      DATA.estoque=payload.data.estoque||[];DATA.orcamento=payload.data.orcamento||[];
+      renderCSVTable();renderEstoqueTable();renderOrcamentoTable();
+      updateDashFilters();updateDtlhFilters();updateFluxoAnos();renderDashboard();renderDtlh();
+      alert('Backup restaurado! '+DATA.csv.length+' registros CSV carregados.');
+    }catch(err){alert('Erro ao restaurar: '+err.message);}
+  };
+  reader.readAsText(file);input.value='';
+}
+</script>
+<script>
+// ESTOQUE
+function adicionarEstoque(){
+  const obra=document.getElementById('est-obra').value.trim(),unidade=document.getElementById('est-unidade').value.trim(),status=document.getElementById('est-status').value,area=parseBRNum(document.getElementById('est-area').value),venda=parseBRNum(document.getElementById('est-venda').value);
+  if(!obra||!unidade){alert('Preencha Obra e Unidade.');return;}
+  DATA.estoque.push({obra,unidade,status,area,venda});
+  ['est-obra','est-unidade','est-area','est-venda'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderEstoqueTable();
+}
+function renderEstoqueTable(){
+  const tbody=document.getElementById('body-estoque');if(!tbody)return;
+  const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];
+  const ol=document.getElementById('est-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');
+  if(!DATA.estoque.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhuma unidade cadastrada</p></div></td></tr>';return;}
+  tbody.innerHTML=DATA.estoque.map((r,i)=>'<tr><td>'+r.obra+'</td><td>'+r.unidade+'</td><td><span class="badge '+(r.status==='Disponível'?'bg-green':r.status==='Vendido'?'bg-red':'bg-gold')+'">'+r.status+'</span></td><td class="r">'+(r.area?r.area.toLocaleString('pt-BR',{minimumFractionDigits:2})+'m²':'—')+'</td><td class="r">'+(r.venda?fmt(r.venda):'—')+'</td><td style="text-align:center"><button onclick="removerEstoque('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');
+}
+function removerEstoque(i){DATA.estoque.splice(i,1);renderEstoqueTable();}
+
+// DTLH
+function updateDtlhFilters(){
+  const obras=[...new Set([...DATA.csv.map(r=>r.cc),...DATA.estoque.map(r=>r.obra)].filter(Boolean))].sort();
+  const anos=[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort();
+  const meses=[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
+  fillSelect('dt-obra',obras,v=>v,v=>v);fillSelect('dt-ano',anos,v=>v,v=>v);fillSelect('dt-mes',meses,v=>v,v=>MESES_PT[v]);
+}
+function clearDtlhFilters(){['dt-obra','dt-ano','dt-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderDtlh();}
+function getDtF(){return{obra:document.getElementById('dt-obra')?.value||'',ano:document.getElementById('dt-ano')?.value||'',mes:document.getElementById('dt-mes')?.value||''};}
+function applyDtF(arr){const f=getDtF();return arr.filter(r=>(!f.obra||ccMatch(r.cc||'',f.obra))&&(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes));}
+function renderDtlh(){
+  const f=getDtF(),csvDt=applyDtF(DATA.csv),rec=csvDt.filter(r=>r.tipo==='FATURAMENTO'),pag=csvDt.filter(r=>r.tipo==='PAGAMENTO');
+  const vRec=rec.reduce((s,r)=>s+r.valor,0),vPag=pag.reduce((s,r)=>s+r.valor,0),vRes=vRec-vPag;
+  const vOrc=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra)).reduce((s,o)=>s+o.valor,0);
+  set('dt-kpi-recebido',fmt(vRec));set('dt-kpi-pago',fmt(vPag));set('dt-kpi-orcado',fmt(vOrc));set('dt-kpi-areceber',fmt(0));set('dt-kpi-inadimpl',fmt(0));set('dt-kpi-potencial',fmt(vRec));
+  const resEl=document.getElementById('dt-kpi-resultado');if(resEl){resEl.textContent=fmt(Math.abs(vRes));resEl.className='dtlh-kpi-main-val '+(vRes>=0?'pos':'neg');}
+  const estObra=DATA.estoque.filter(u=>!f.obra||ccMatch(u.obra,f.obra));
+  set('dt-est-total',estObra.length||'—');set('dt-est-vendidos',estObra.filter(u=>u.status==='Vendido').length||'—');set('dt-est-disponiveis',estObra.filter(u=>u.status==='Disponível').length||'—');
+  const vgv=estObra.reduce((s,u)=>s+(u.venda||0),0);set('dt-est-vgv',vgv?fmt(vgv):'—');
+  renderDtlhOrcTable(pag,f);
+}
+function renderDtlhOrcTable(pagas,f){
+  const tbody=document.getElementById('dt-orc-body');if(!tbody)return;
+  const itens=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra));
+  if(!itens.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum orçamento cadastrado</p></div></td></tr>';return;}
+  const totOrc=itens.reduce((s,o)=>s+o.valor,0);
+  tbody.innerHTML=itens.map((o,i)=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+DATA.orcamento.indexOf(o)+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');
+  set('dt-orc-total',fmt(totOrc));
+}
+
+// ORÇAMENTO
+function adicionarOrcamento(){
+  const obra=document.getElementById('orc-obra').value.trim(),tot=document.getElementById('orc-totalizador').value.trim(),cod=document.getElementById('orc-codigo').value.trim(),desc=document.getElementById('orc-descricao').value.trim(),val=parseBRNum(document.getElementById('orc-valor').value);
+  if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}
+  DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});
+  ['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderOrcamentoTable();renderDtlh();
+}
+function renderOrcamentoTable(){
+  const tbody=document.getElementById('body-orcamento');if(!tbody)return;
+  const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];
+  const ol=document.getElementById('orc-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');
+  if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item cadastrado</p></div></td></tr>';return;}
+  tbody.innerHTML=DATA.orcamento.map((o,i)=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r val-neg">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');
+}
+function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
+function importarOrcamento(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});
       rows.forEach(r=>{
-        const obra=String(r['Obra']||r['obra']||'').trim();
-        const desc=String(r['Descrição']||r['Descricao']||r['descricao']||'').trim();
-        const val=parseBRNum(String(r['Valor']||r['valor']||'0'));
-        if(obra&&desc&&val) DATA.orcamento.push({obra,totalizador:String(r['Totalizador']||'').trim(),codigo:String(r['Código']||r['Codigo']||'').trim(),descricao:desc,valor:val});
+        const obra=String(r['Obra']||r['obra']||'').trim(),desc=String(r['Descrição']||r['Descricao']||r['descricao']||'').trim(),val=parseBRNum(String(r['Valor']||r['valor']||'0'));
+        if(obra&&desc&&val)DATA.orcamento.push({obra,totalizador:String(r['Totalizador']||'').trim(),codigo:String(r['Código']||r['Codigo']||'').trim(),descricao:desc,valor:val});
       });
-      renderOrcamentoTable(); renderDtlh();
-      alert(`✓ ${DATA.orcamento.length} itens carregados.`);
+      renderOrcamentoTable();renderDtlh();alert(DATA.orcamento.length+' itens carregados.');
     }catch(err){alert('Erro ao importar: '+err.message);}
   };
-  reader.readAsArrayBuffer(file); input.value='';
+  reader.readAsArrayBuffer(file);input.value='';
 }
 function baixarModeloOrcamento(){
-  const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.aoa_to_sheet([['Obra','Totalizador','Código','Descrição','Valor'],['Exemplo Obra','01','1.1.1','Fundação',150000]]);
-  XLSX.utils.book_append_sheet(wb,ws,'Orçamento');
-  XLSX.writeFile(wb,'Modelo_Orcamento_Solucione.xlsx');
+  const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet([['Obra','Totalizador','Código','Descrição','Valor'],['Exemplo Obra','01','1.1.1','Fundação',150000]]);
+  XLSX.utils.book_append_sheet(wb,ws,'Orçamento');XLSX.writeFile(wb,'Modelo_Orcamento_Solucione.xlsx');
 }
 function exportarOrcamento(){
   if(!DATA.orcamento.length){alert('Nenhum item para exportar.');return;}
-  const wb=XLSX.utils.book_new();
   const rows=DATA.orcamento.map(o=>({'Obra':o.obra,'Totalizador':o.totalizador||'','Código':o.codigo||'','Descrição':o.descricao,'Valor':(o.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}));
-  const ws=XLSX.utils.json_to_sheet(rows,{raw:false});
-  XLSX.utils.book_append_sheet(wb,ws,'Orçamento');
-  XLSX.writeFile(wb,`Solucione_Orcamento_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
+  const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});
+  XLSX.utils.book_append_sheet(wb,ws,'Orçamento');XLSX.writeFile(wb,'Solucione_Orcamento_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
 }
-
 </script>
 <div class="page" id="page-csv">
   <div class="sec-title">CSV Analítico de Apropriações</div>
@@ -903,8 +690,8 @@ function exportarOrcamento(){
     </div>
     <textarea class="paste-box" id="paste-csv" placeholder="Clique aqui e cole com Ctrl+V — processamento automático ao colar."></textarea>
     <div class="paste-actions">
-      <button class="btn-secondary" onclick="limparCSV()">✕ Limpar dados</button>
-      <button class="btn-primary" style="margin-left:8px" onclick="exportExcelCSV()">⬇ Exportar Excel</button>
+      <button class="btn-secondary" onclick="limparCSV()">&#10005; Limpar dados</button>
+      <button class="btn-primary" style="margin-left:8px" onclick="exportExcelCSV()">&#8595; Exportar Excel</button>
       <span class="paste-status" id="status-csv"></span>
     </div>
   </div>
@@ -921,17 +708,13 @@ function exportarOrcamento(){
         <select class="filter-select" id="fcsv-mes" onchange="renderCSVTable()"><option value="">Todos os meses</option></select>
         <select class="filter-select" id="fcsv-cc" onchange="renderCSVTable()"><option value="">Todos os CCs</option></select>
         <select class="filter-select" id="fcsv-tipo" onchange="renderCSVTable()"><option value="">Todos os tipos</option><option value="FATURAMENTO">Faturamento</option><option value="DESCONTO">Desconto Concedido</option><option value="PAGAMENTO">Pagamento</option></select>
-        <button class="btn-ghost" onclick="clearCSVFilters()">✕</button>
+        <button class="btn-ghost" onclick="clearCSVFilters()">&#10005;</button>
       </div>
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead>
-          <tr><th>Data</th><th>Complemento</th><th>Centro de Custo</th><th>Conta</th><th>Tipo</th><th class="r">Valor (R$)</th></tr>
-        </thead>
-        <tbody id="body-csv">
-          <tr><td colspan="6"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>
-        </tbody>
+        <thead><tr><th>Data</th><th>Complemento</th><th>Centro de Custo</th><th>Conta</th><th>Tipo</th><th class="r">Valor (R$)</th></tr></thead>
+        <tbody id="body-csv"><tr><td colspan="6"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
