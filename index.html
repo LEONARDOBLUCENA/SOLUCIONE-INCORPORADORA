@@ -198,9 +198,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   <div class="nav-tabs">
     <button class="nav-tab active" data-tab="dash" onclick="goTab(this)">Dashboard</button>
     <button class="nav-tab" data-tab="dtlh" onclick="goTab(this)">Dashboard Dtlh de Obra</button>
-    <button class="nav-tab" data-tab="pagas" onclick="goTab(this)">Contas Pagas</button>
-    <button class="nav-tab" data-tab="recebidas" onclick="goTab(this)">Contas Recebidas</button>
-    <button class="nav-tab" data-tab="areceber" onclick="goTab(this)">Contas a Receber</button>
+    <button class="nav-tab" data-tab="csv" onclick="goTab(this)">CSV Analítico de Apropriações</button>
     <button class="nav-tab" data-tab="estoque" onclick="goTab(this)">Estoque</button>
     <button class="nav-tab" data-tab="orcamento" onclick="goTab(this)">Orçamento</button>
   </div>
@@ -224,53 +222,30 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   </div>
 
   <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
-    
     <div class="kpi-card c-green">
-      <div class="kpi-label">Total Recebido</div>
+      <div class="kpi-label">Faturamento Bruto</div>
       <div class="kpi-val pos" id="d-kpi-recebido">—</div>
       <div class="kpi-sub" id="d-kpi-recebido-n">0 lançamentos</div>
       <div class="kpi-split">
         <div class="kpi-split-item">
-          <div class="kpi-split-label">Caixa</div>
-          <div class="kpi-split-val caixa" id="d-kpi-rec-caixa">—</div>
+          <div class="kpi-split-label">Desconto Concedido</div>
+          <div class="kpi-split-val" style="color:var(--danger)" id="d-kpi-desconto">—</div>
         </div>
         <div class="kpi-split-item">
-          <div class="kpi-split-label">Permuta/Outros</div>
-          <div class="kpi-split-val permuta" id="d-kpi-rec-permuta">—</div>
+          <div class="kpi-split-label">Faturamento Líquido</div>
+          <div class="kpi-split-val caixa" id="d-kpi-fat-liquido">—</div>
         </div>
       </div>
     </div>
-    
     <div class="kpi-card c-red">
-      <div class="kpi-label">Total Pago</div>
+      <div class="kpi-label">Total Pagamentos</div>
       <div class="kpi-val neg" id="d-kpi-pago">—</div>
       <div class="kpi-sub" id="d-kpi-pago-n">0 lançamentos</div>
-      <div class="kpi-split">
-        <div class="kpi-split-item">
-          <div class="kpi-split-label">Caixa</div>
-          <div class="kpi-split-val caixa" id="d-kpi-caixa">—</div>
-        </div>
-        <div class="kpi-split-item">
-          <div class="kpi-split-label">Permuta/Outros</div>
-          <div class="kpi-split-val permuta" id="d-kpi-permuta">—</div>
-        </div>
-      </div>
     </div>
-    
     <div class="kpi-card c-blue">
-      <div class="kpi-label">Resultado (Rec. − Pago)</div>
+      <div class="kpi-label">Resultado (Fat. Líq. − Pago)</div>
       <div class="kpi-val" id="d-kpi-resultado">—</div>
       <div class="kpi-sub" id="d-kpi-resultado-sub">—</div>
-      <div class="kpi-split">
-        <div class="kpi-split-item">
-          <div class="kpi-split-label">Caixa</div>
-          <div class="kpi-split-val caixa" id="d-kpi-res-caixa">—</div>
-        </div>
-        <div class="kpi-split-item">
-          <div class="kpi-split-label">Permuta/Outros</div>
-          <div class="kpi-split-val permuta" id="d-kpi-res-permuta">—</div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -306,225 +281,21 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <div class="chart-subtitle">Recebido Caixa − Pago Caixa por mês (barras verdes = superávit, vermelhas = déficit)</div>
       <canvas id="ch-resultado-caixa"></canvas>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">Caixa vs Permuta/Outros — Pagamentos</div>
-      <div class="chart-subtitle">Composição dos pagamentos</div>
-      <canvas id="ch-caixapermuta"></canvas>
-    </div>
+
   </div>
 
-  <div class="tbl-card">
-    <div class="tbl-head">
-      <div class="tbl-title">Custo por Plano Financeiro</div>
-      <span class="tbl-badge" id="d-plano-count">0 planos</span>
-    </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Plano Financeiro</th>
-            <th class="r">Total Pago (R$)</th>
-            <th>% do Total</th>
-            <th class="r">Caixa (R$)</th>
-            <th class="r">Permuta/Outros (R$)</th>
-            <th class="r">Qtd.</th>
-          </tr>
-        </thead>
-        <tbody id="d-plano-body">
-          <tr><td colspan="6"><div class="empty-state"><p>Carregue dados em Contas Pagas para visualizar</p></div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
 
-<div class="page" id="page-pagas">
-  <div class="sec-title">Contas Pagas</div>
-  <div class="sec-sub">Cole aqui a tabela exportada do sistema financeiro</div>
-  <div class="paste-section">
-    <div class="paste-instructions">
-      <strong>Como usar:</strong>
-      <ol>
-        <li>No seu sistema, selecione toda a tabela incluindo o cabeçalho e copie com <strong>Ctrl+C</strong></li>
-        <li>Clique na área abaixo e cole com <strong>Ctrl+V</strong> — os dados são processados automaticamente</li>
-      </ol>
-      Colunas esperadas: <strong>Data de Pagamento · Desc centro custo · Conta Corrente · Valor aprop fin · Valor aprop obra · Descricao Plano Financeiro · Nome do Credor · Desc obra · Desc unid construtiva · Codigo Item Orcamento · Descricao Item Orcamento</strong>
-    </div>
-    <textarea class="paste-box" id="paste-pagas" placeholder="Clique aqui e cole com Ctrl+V — processamento automático ao colar."></textarea>
-    <div class="paste-actions">
-      <button class="btn-secondary" onclick="limparPagas()">✕ Limpar dados</button>
-      <span class="paste-status" id="status-pagas"></span>
-    </div>
-  </div>
-  <div id="diag-pagas" style="display:none;margin-bottom:20px"></div>
-  <div class="tbl-card">
-    <div class="tbl-head">
-      <div class="tbl-title">Lançamentos Processados</div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span class="tbl-badge" id="count-pagas">0 registros</span>
-        <button class="btn-export" onclick="exportExcel('pagas')">⬇ Exportar Excel</button>
-      </div>
-    </div>
-    <div style="padding:10px 20px 0;border-bottom:1px solid var(--border)">
-      <div class="inline-filters">
-        <span class="filter-label">Filtrar</span>
-        <select class="filter-select" id="fp-ano" onchange="renderPagasTable()"><option value="">Todos os anos</option></select>
-        <select class="filter-select" id="fp-mes" onchange="renderPagasTable()"><option value="">Todos os meses</option></select>
-        <input class="filter-input" id="fp-credor" placeholder="Credor..." oninput="renderPagasTable()">
-        <select class="filter-select" id="fp-cc" onchange="renderPagasTable()"><option value="">Todos os CCs</option></select>
-        <select class="filter-select" id="fp-plano" onchange="renderPagasTable()"><option value="">Todos os planos</option></select>
-        <button class="btn-ghost" onclick="clearPagasFilters()">✕</button>
-      </div>
-    </div>
-    <div class="tbl-wrap">
-      <table id="tbl-pagas">
-        <thead>
-          <tr>
-            <th>Data Pagamento</th>
-            <th>Nome do Credor</th>
-            <th>Centro de Custo</th>
-            <th>Desc Obra</th>
-            <th>Unid. Construtiva</th>
-            <th>Cód. Item Orç.</th>
-            <th>Desc. Item Orç.</th>
-            <th>Conta Corrente</th>
-            <th>Plano Financeiro</th>
-            <th>Tipo</th>
-            <th class="r">Vlr Aprop Fin (R$)</th>
-            <th class="r">Vlr Aprop Obra (R$)</th>
-          </tr>
-        </thead>
-        <tbody id="body-pagas">
-          <tr><td colspan="12"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<div class="page" id="page-recebidas">
-  <div class="sec-title">Contas Recebidas</div>
-  <div class="sec-sub">Cole aqui a tabela de faturamentos recebidos (baixados)</div>
-  <div class="paste-section">
-    <div class="paste-instructions">
-      <strong>Como usar:</strong>
-      <ol>
-        <li>Selecione e copie a tabela de contas recebidas com <strong>Ctrl+C</strong></li>
-        <li>Clique na área abaixo e cole com <strong>Ctrl+V</strong> — processamento automático</li>
-      </ol>
-      Colunas esperadas: <strong>Centro de Custo · Nome do Cliente · Dt. Baixa · Data Vecto. · Liquido · Acrescimos</strong>
-    </div>
-    <textarea class="paste-box" id="paste-recebidas" placeholder="Clique aqui e cole com Ctrl+V — processamento automático ao colar."></textarea>
-    <div class="paste-actions">
-      <button class="btn-secondary" onclick="limparRecebidas()">✕ Limpar dados</button>
-      <span class="paste-status" id="status-recebidas"></span>
-    </div>
-  </div>
-  <div id="diag-recebidas" style="display:none;margin-bottom:20px"></div>
-  <div class="tbl-card">
-    <div class="tbl-head">
-      <div class="tbl-title">Recebimentos Processados</div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span class="tbl-badge" id="count-recebidas">0 registros</span>
-        <button class="btn-export" onclick="exportExcel('recebidas')">⬇ Exportar Excel</button>
-      </div>
-    </div>
-    <div style="padding:10px 20px 0;border-bottom:1px solid var(--border)">
-      <div class="inline-filters">
-        <span class="filter-label">Filtrar</span>
-        <select class="filter-select" id="fr-ano" onchange="renderFatTable('recebidas','body-recebidas','count-recebidas',6)"><option value="">Todos os anos</option></select>
-        <select class="filter-select" id="fr-mes" onchange="renderFatTable('recebidas','body-recebidas','count-recebidas',6)"><option value="">Todos os meses</option></select>
-        <input class="filter-input" id="fr-cliente" placeholder="Cliente..." oninput="renderFatTable('recebidas','body-recebidas','count-recebidas',6)">
-        <select class="filter-select" id="fr-cc" onchange="renderFatTable('recebidas','body-recebidas','count-recebidas',6)"><option value="">Todos os CCs</option></select>
-        <button class="btn-ghost" onclick="clearRecibidasFilters()">✕</button>
-      </div>
-    </div>
-    <div class="tbl-wrap">
-      <table id="tbl-recebidas">
-        <thead>
-          <tr>
-            <th>Centro de Custo</th>
-            <th>Nome do Cliente</th>
-            <th>Dt. Baixa</th>
-            <th>Data Vecto.</th>
-            <th>Tipo</th>
-            <th class="r">Líquido (R$)</th>
-          </tr>
-        </thead>
-        <tbody id="body-recebidas">
-          <tr><td colspan="6"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<div class="page" id="page-areceber">
-  <div class="sec-title">Contas a Receber</div>
-  <div class="sec-sub">Cole aqui a tabela de faturamentos em aberto</div>
-  <div class="paste-section">
-    <div class="paste-instructions">
-      <strong>Como usar:</strong>
-      <ol>
-        <li>Selecione e copie a tabela de contas a receber com <strong>Ctrl+C</strong></li>
-        <li>Clique na área abaixo e cole com <strong>Ctrl+V</strong> — processamento automático</li>
-      </ol>
-      Colunas esperadas: <strong>Centro de Custo · Nome do Cliente · Data Vecto. · Total</strong>
-    </div>
-    <textarea class="paste-box" id="paste-areceber" placeholder="Clique aqui e cole com Ctrl+V — processamento automático ao colar."></textarea>
-    <div class="paste-actions">
-      <button class="btn-secondary" onclick="limparAReceber()">✕ Limpar dados</button>
-      <span class="paste-status" id="status-areceber"></span>
-    </div>
-  </div>
-  <div class="tbl-card">
-    <div class="tbl-head">
-      <div class="tbl-title">A Receber Processados</div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span class="tbl-badge" id="count-areceber">0 registros</span>
-        <button class="btn-export" onclick="exportExcel('areceber')">⬇ Exportar Excel</button>
-      </div>
-    </div>
-    <div style="padding:10px 20px 0;border-bottom:1px solid var(--border)">
-      <div class="inline-filters">
-        <span class="filter-label">Filtrar</span>
-        <select class="filter-select" id="fa-ano" onchange="renderAReceberTable()"><option value="">Todos os anos</option></select>
-        <select class="filter-select" id="fa-mes" onchange="renderAReceberTable()"><option value="">Todos os meses</option></select>
-        <input class="filter-input" id="fa-cliente" placeholder="Cliente..." oninput="renderAReceberTable()">
-        <select class="filter-select" id="fa-cc" onchange="renderAReceberTable()"><option value="">Todos os CCs</option></select>
-        <button class="btn-ghost" onclick="clearAReceberFilters()">✕</button>
-      </div>
-    </div>
-    <div class="tbl-wrap">
-      <table id="tbl-areceber">
-        <thead>
-          <tr>
-            <th>Centro de Custo</th>
-            <th>Nome do Cliente</th>
-            <th>Data Vecto.</th>
-            <th>Status</th>
-            <th class="r">Total (R$)</th>
-          </tr>
-        </thead>
-        <tbody id="body-areceber">
-          <tr><td colspan="5"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
 </div>
 
 <script>
 
-// STATE
-
-const DATA = { pagas:[], recebidas:[], areceber:[] };
+// ── STATE ──
+const DATA = { csv:[] };
 const CHARTS = {};
-const MESES_PT  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-const MESES_SH  = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+const MESES_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const MESES_SH = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
-// NAV
-
+// ── NAV ──
 function goTab(btn) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
@@ -532,836 +303,286 @@ function goTab(btn) {
   btn.classList.add('active');
 }
 
-// UTILS
-
+// ── UTILS ──
 function fmt(v) {
-  if(v==null||isNaN(v))return'—';
-  return'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  if(v==null||isNaN(v)) return '—';
+  return 'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
 function parseBRNum(s) {
-  if(s===null||s===undefined) return 0;
+  if(!s) return 0;
   s = String(s).trim().replace(/\s/g,'').replace(/R\$\s*/,'');
-  if(!s || s==='-') return 0;
-  // Se tem vírgula: formato BR (1.234,56) — remove pontos, troca vírgula por ponto
-  if(s.includes(',')) {
-    s = s.replace(/\./g,'').replace(',','.');
-    return parseFloat(s)||0;
-  }
-  // Sem vírgula: verifica se ponto é milhar (ex: 3.722) ou decimal (ex: 3.14)
-  const dots = (s.match(/\./g)||[]).length;
-  if(dots === 1) {
-    const parts = s.split('.');
-    // Se parte decimal tem 3 dígitos = milhar (3.722 → 3722)
-    if(parts[1].length === 3) s = s.replace('.','');
-    // Se 1 ou 2 dígitos = decimal (3.14 → 3.14)
-  } else if(dots > 1) {
-    // Múltiplos pontos = separador de milhar (1.234.567 → 1234567)
-    s = s.replace(/\./g,'');
-  }
+  if(!s||s==='-') return 0;
+  if(s.includes(',')) { s=s.replace(/\./g,'').replace(',','.'); return parseFloat(s)||0; }
+  const dots=(s.match(/\./g)||[]).length;
+  if(dots===1) { const p=s.split('.'); if(p[1].length===3) s=s.replace('.',''); }
+  else if(dots>1) s=s.replace(/\./g,'');
   return parseFloat(s)||0;
 }
 function parseDateBR(s) {
   if(!s) return null;
-  s = String(s).trim();
-  // dd/mm/yyyy ou dd-mm-yyyy ou dd.mm.yyyy
-  const mBR = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
-  if(mBR) {
-    let y = parseInt(mBR[3]);
-    if(y < 100) y += 2000;
-    const d = new Date(y, parseInt(mBR[2])-1, parseInt(mBR[1]));
-    return isNaN(d.getTime()) ? null : d;
-  }
-  // yyyy-mm-dd (ISO, vindo do backup JSON)
-  const mISO = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if(mISO) {
-    const d = new Date(parseInt(mISO[1]), parseInt(mISO[2])-1, parseInt(mISO[3]));
-    return isNaN(d.getTime()) ? null : d;
-  }
+  s=String(s).trim();
+  const mBR=s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if(mBR) { let y=parseInt(mBR[3]); if(y<100) y+=2000; const d=new Date(y,parseInt(mBR[2])-1,parseInt(mBR[1])); return isNaN(d.getTime())?null:d; }
+  const mISO=s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(mISO) { const d=new Date(parseInt(mISO[1]),parseInt(mISO[2])-1,parseInt(mISO[3])); return isNaN(d.getTime())?null:d; }
   return null;
 }
 function parseTSV(text) {
-  const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
-  if(lines.length<2)return[];
-  const headers=lines[0].split('\t').map(h=>h.trim());
-  return lines.slice(1).map(line=>{
-    const cols=line.split('\t');
-    const row={};
-    headers.forEach((h,i)=>{row[h]=(cols[i]||'').trim();});
-    return row;
-  });
+  const lines=text.trim().split(/?
+/).filter(l=>l.trim());
+  if(lines.length<2) return [];
+  const headers=lines[0].split('	').map(h=>h.trim());
+  return lines.slice(1).map(line=>{ const cols=line.split('	'); const row={}; headers.forEach((h,i)=>{row[h]=(cols[i]||'').trim();}); return row; });
 }
 function findCol(row, candidates) {
-  for(const c of candidates){
+  for(const c of candidates) {
     const key=Object.keys(row).find(k=>k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(c.toLowerCase().replace(/[^a-z0-9]/g,'')));
-    if(key&&row[key]!==undefined)return row[key];
+    if(key&&row[key]!==undefined) return row[key];
   }
-  return'';
+  return '';
 }
-function setStatus(id,msg,ok){
+function findColKey(row, candidates) {
+  for(const c of candidates) {
+    const key=Object.keys(row).find(k=>k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(c.toLowerCase().replace(/[^a-z0-9]/g,'')));
+    if(key!==undefined) return {foundKey:key, value:(row[key]||'').trim()};
+  }
+  return {foundKey:null, value:''};
+}
+function findColExact(row, exactNames, fallback) {
+  const keys=Object.keys(row);
+  for(const name of exactNames) {
+    const key=keys.find(k=>k.trim().toLowerCase()===name.trim().toLowerCase());
+    if(key!==undefined) return {foundKey:key, value:(row[key]||'').trim()};
+  }
+  return findColKey(row, fallback||exactNames);
+}
+function setStatus(id,msg,ok) {
   const el=document.getElementById(id);
   el.textContent=msg;
   el.className='paste-status'+(ok===true?' ok':ok===false?' err':'');
 }
-function destroyChart(id){if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];}}
+function destroyChart(id) { if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];} }
+function set(id,v) { const el=document.getElementById(id); if(el) el.textContent=v; }
+function normCC(s) { return (s||'').trim().toUpperCase().replace(/\s+/g,' '); }
+function ccMatch(a,b) { return normCC(a)===normCC(b); }
 
-// Classifica tipo pela coluna Acrescimos para faturamento
-function tipoFaturamento(acrescimos) {
-  const a = String(acrescimos||'').toUpperCase();
-  if(a.includes('POR BENS')||a.includes('OUTROS'))return'PERMUTA/OUTROS';
-  return'CAIXA';
+// ── DIAGNÓSTICO ──
+function renderDiag(containerId, allHeaders, mappings, firstRow) {
+  const el=document.getElementById(containerId); if(!el) return;
+  const allCols=allHeaders.map(h=>`<span class="diag-pill">${h}</span>`).join('');
+  const rows=mappings.map(m=>{
+    const rawVal=firstRow?(firstRow[m.foundKey]??''):'';
+    const isEmpty=rawVal===''||rawVal===null||rawVal===undefined;
+    const valDisplay=isEmpty?'<span class="diag-col-val empty">(vazio)</span>':`<span class="diag-col-val">${String(rawVal).slice(0,80)}</span>`;
+    const mappedDisplay=m.foundKey?`<span class="diag-col-mapped">→ "${m.foundKey}"</span>`:`<span class="diag-col-mapped miss">✕ Não encontrada</span>`;
+    return `<div class="diag-row"><div class="diag-col-name">${m.label}</div>${mappedDisplay}${valDisplay}</div>`;
+  }).join('');
+  el.innerHTML=`<div class="diag-box"><div class="diag-header"><span class="diag-header-title">🔍 Diagnóstico de colunas</span><span class="diag-header-sub">Verifique se os valores estão corretos</span></div><div class="diag-grid">${rows}</div><div class="diag-all-cols"><div class="diag-all-label">Todas as colunas detectadas:</div>${allCols}</div></div>`;
+  el.style.display='block';
 }
 
-// PASTE — wiring (após DOM pronto)
-
+// ── WIREPASTE ──
 window.addEventListener('load', () => {
-  wirePaste('paste-pagas',    processPagasText,    'status-pagas');
-  wirePaste('paste-recebidas',processRecibidasText,'status-recebidas');
-  wirePaste('paste-areceber', processAReceberText, 'status-areceber');
-  // Dashboard Geral filters
-  ['d-ano','d-mes','d-cc'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.addEventListener('change', renderDashboard);
-  });
-  // Dashboard Dtlh filters
-  ['dt-obra','dt-ano','dt-mes'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.addEventListener('change', renderDtlh);
-  });
+  wirePaste('paste-csv', processCSVText, 'status-csv');
+  ['d-ano','d-mes','d-cc'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('change',renderDashboard); });
+  ['dt-obra','dt-ano','dt-mes'].forEach(id=>{ const el=document.getElementById(id); if(el) el.addEventListener('change',renderDtlh); });
 });
-
 function wirePaste(taId, processFn, statusId) {
-  const ta = document.getElementById(taId);
-  if(!ta)return;
-  ta.addEventListener('paste', e => {
+  const ta=document.getElementById(taId); if(!ta) return;
+  ta.addEventListener('paste', e=>{
     e.preventDefault();
     setStatus(statusId,'Processando…',null);
     const txt=(e.clipboardData||window.clipboardData).getData('text');
-    setTimeout(()=>{
-      processFn(txt);
-      ta.value='';
-    },0);
+    setTimeout(()=>{ processFn(txt); ta.value=''; },0);
   });
 }
 
-// DIAGNÓSTICO — renderiza painel mostrando mapeamento de colunas
-
-function renderDiag(containerId, allHeaders, mappings, firstRow) {
-  const el = document.getElementById(containerId);
-  if(!el) return;
-
-  const allCols = allHeaders.map(h =>
-    `<span class="diag-pill">${h}</span>`
-  ).join('');
-
-  const rows = mappings.map(m => {
-    const rawVal = firstRow ? (firstRow[m.foundKey] ?? '') : '';
-    const isEmpty = rawVal === '' || rawVal === null || rawVal === undefined;
-    const valDisplay = isEmpty
-      ? '<span class="diag-col-val empty">(vazio)</span>'
-      : `<span class="diag-col-val">${String(rawVal).slice(0,80)}</span>`;
-    const mappedDisplay = m.foundKey
-      ? `<span class="diag-col-mapped">→ "${m.foundKey}"</span>`
-      : `<span class="diag-col-mapped miss">✕ Não encontrada</span>`;
-    return `<div class="diag-row">
-      <div class="diag-col-name">${m.label}</div>
-      ${mappedDisplay}
-      ${valDisplay}
-    </div>`;
-  }).join('');
-
-  el.innerHTML = `<div class="diag-box">
-    <div class="diag-header">
-      <span class="diag-header-title">🔍 Diagnóstico de colunas — 1ª linha dos seus dados</span>
-      <span class="diag-header-sub">Verifique se os valores estão corretos antes de usar o dashboard</span>
-    </div>
-    <div class="diag-grid">${rows}</div>
-    <div class="diag-all-cols">
-      <div class="diag-all-label">Todas as colunas detectadas no cabeçalho:</div>
-      ${allCols}
-    </div>
-  </div>`;
-  el.style.display = 'block';
-}
-
-// Encontra a chave real no objeto e retorna {foundKey, value}
-function findColKey(row, candidates) {
-  for(const c of candidates){
-    const key = Object.keys(row).find(k =>
-      k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(
-        c.toLowerCase().replace(/[^a-z0-9]/g,'')
-      )
-    );
-    if(key !== undefined) return { foundKey: key, value: (row[key]||'').trim() };
-  }
-  return { foundKey: null, value: '' };
-}
-
-// PARSE — CONTAS PAGAS
-
-function processPagasText(txt) {
-  const rows = parseTSV(txt);
-  if(!rows.length){ setStatus('status-pagas','Nenhum dado encontrado. Verifique se copiou com cabeçalho.',false); return; }
-
-  const allHeaders = Object.keys(rows[0]);
-  const first = rows[0];
-
-  // Mapeamento com diagnóstico
-  const mData = {
-    dataPag:   findColKey(first, ['Data de Pagamento','DataPagamento','datapagamento','dt pagamento','dt. pagamento']),
-    cc:        findColKey(first, ['Desc centro custo','DescCentroCusto','desc centro de custo','centro custo']),
-    conta:     findColKey(first, ['Conta Corrente','ContaCorrente','conta corrente']),
-    valor:     findColKey(first, ['Valor aprop fin','Vlr aprop fin','VlrApropFin','valor aprop fin']),
-    valorObra: findColKey(first, ['Valor aprop obra','Vlr aprop obra','VlrApropObra','valor aprop obra']),
-    plano:     findColKey(first, ['Descricao Plano Financeiro','Desc Plano Financeiro','DescPlanoFinanceiro','plano financeiro','descricao plano']),
-    credor:    findColKey(first, ['Nome do Credor','NomeCredor','nome credor','credor','fornecedor','nome fornecedor']),
-    descObra:  findColKey(first, ['Desc obra','DescObra','desc. obra','descricao obra','nome obra']),
-    unidConst: findColKey(first, ['Desc unid construtiva','DescUnidConstrutiva','unid construtiva','unidade construtiva']),
-    codItem:   findColKey(first, ['Codigo Item Orcamento','Código Item Orçamento','CodItemOrcamento','cod item orcamento','codigo item orcamento','codigo item','cod. item','cod item','item orcamento','itemorcamento']),
-    descItem:  findColKey(first, ['Descricao Item Orcamento','DescItemOrcamento','desc item orcamento','descricao item']),
-  };
-
-  renderDiag('diag-pagas', allHeaders, [
-    { label:'Data de Pagamento',       foundKey: mData.dataPag.foundKey },
-    { label:'Centro de Custo',         foundKey: mData.cc.foundKey },
-    { label:'Conta Corrente',          foundKey: mData.conta.foundKey },
-    { label:'Valor aprop fin',         foundKey: mData.valor.foundKey },
-    { label:'Valor aprop obra',        foundKey: mData.valorObra.foundKey },
-    { label:'Plano Financeiro',        foundKey: mData.plano.foundKey },
-    { label:'Nome do Credor',          foundKey: mData.credor.foundKey },
-    { label:'Desc Obra',               foundKey: mData.descObra.foundKey },
-    { label:'Unid. Construtiva',       foundKey: mData.unidConst.foundKey },
-    { label:'Codigo Item Orcamento',   foundKey: mData.codItem.foundKey },
-    { label:'Descricao Item Orcamento',foundKey: mData.descItem.foundKey },
-  ], first);
-
-  const novos = rows.map(r=>{
-    const dataPag  = parseDateBR((findColKey(r,['Data de Pagamento','DataPagamento','datapagamento','dt pagamento','dt. pagamento'])).value);
-    const cc       = normCC((findColKey(r,['Desc centro custo','DescCentroCusto','desc centro de custo','centro custo'])).value);
-    const conta    = (findColKey(r,['Conta Corrente','ContaCorrente','conta corrente'])).value;
-    const valor    = parseBRNum((findColKey(r,['Valor aprop fin','Vlr aprop fin','VlrApropFin','valor aprop fin'])).value);
-    const valorObra= parseBRNum((findColKey(r,['Valor aprop obra','Vlr aprop obra','VlrApropObra','valor aprop obra'])).value);
-    const plano    = (findColKey(r,['Descricao Plano Financeiro','Desc Plano Financeiro','DescPlanoFinanceiro','plano financeiro','descricao plano'])).value;
-    const credor   = (findColKey(r,['Nome do Credor','NomeCredor','nome credor','credor','fornecedor'])).value;
-    const descObra = (findColKey(r,['Desc obra','DescObra','desc. obra','descricao obra','nome obra'])).value;
-    const unidConst= (findColKey(r,['Desc unid construtiva','DescUnidConstrutiva','unid construtiva','unidade construtiva'])).value;
-    const codItem  = (findColKey(r,['Codigo Item Orcamento','Código Item Orçamento','CodItemOrcamento','cod item orcamento','codigo item orcamento','codigo item','cod. item','cod item','item orcamento','itemorcamento'])).value;
-    const descItem = (findColKey(r,['Descricao Item Orcamento','DescItemOrcamento','desc item orcamento','descricao item'])).value;
-    const tipo     = conta.toUpperCase().includes('REAPROPFIN') ? 'PERMUTA/OUTROS' : 'CAIXA';
-    return { dataPag, cc, conta, valor, valorObra, plano, credor, descObra, unidConst, codItem, descItem, tipo,
-      mes: dataPag ? dataPag.getMonth() : null,
-      ano: dataPag ? dataPag.getFullYear() : null };
-  }).filter(r => r.valor !== 0 || r.valorObra !== 0 || r.cc);
-
-  DATA.pagas = [...DATA.pagas, ...novos];
-  setStatus('status-pagas', `+${novos.length} registros adicionados — total: ${DATA.pagas.length}.`, true);
-  renderPagasTable();
-  updateDashFilters();
-  updateDtlhFilters();
-  renderDashboard();
-  renderDtlh();
-}
-
-function limparPagas(){
-  document.getElementById('paste-pagas').value='';
-  DATA.pagas=[];
-  document.getElementById('body-pagas').innerHTML='<tr><td colspan="12"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>';
-  document.getElementById('count-pagas').textContent='0 registros';
-  const d=document.getElementById('diag-pagas'); if(d){d.style.display='none';d.innerHTML='';}
-  setStatus('status-pagas','','');
-  renderDashboard();
-}
-
-function clearPagasFilters(){
-  ['fp-ano','fp-mes','fp-cc','fp-plano'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  const ci=document.getElementById('fp-credor');if(ci)ci.value='';
-  renderPagasTable();
-}
-
-function renderPagasTable(){
-  const tbody=document.getElementById('body-pagas');
-  // Populate filter options from current data
-  const anos=[...new Set(DATA.pagas.map(r=>r.ano).filter(x=>x!=null))].sort();
-  const meses=[...new Set(DATA.pagas.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
-  const ccs=[...new Set(DATA.pagas.map(r=>r.cc).filter(Boolean))].sort();
-  const planos=[...new Set(DATA.pagas.map(r=>r.plano).filter(Boolean))].sort();
-  fillSelect('fp-ano',anos,v=>v,v=>v);
-  fillSelect('fp-mes',meses,v=>v,v=>MESES_PT[v]);
-  fillSelect('fp-cc',ccs,v=>v,v=>v);
-  fillSelect('fp-plano',planos,v=>v,v=>v);
-
-  // Apply filters
-  const fAno  = document.getElementById('fp-ano')?.value||'';
-  const fMes  = document.getElementById('fp-mes')?.value||'';
-  const fCred = (document.getElementById('fp-credor')?.value||'').toLowerCase().trim();
-  const fCC   = document.getElementById('fp-cc')?.value||'';
-  const fPlan = document.getElementById('fp-plano')?.value||'';
-
-  const filtered = DATA.pagas.filter(r=>
-    (!fAno  || String(r.ano)===fAno) &&
-    (!fMes  || String(r.mes)===fMes) &&
-    (!fCred || (r.credor||'').toLowerCase().includes(fCred)) &&
-    (!fCC   || ccMatch(r.cc||'',fCC)) &&
-    (!fPlan || r.plano===fPlan)
-  );
-
-  document.getElementById('count-pagas').textContent=filtered.length+' de '+DATA.pagas.length+' registros';
-  if(!filtered.length){tbody.innerHTML='<tr><td colspan="12"><div class="empty-state"><p>Nenhum registro encontrado</p></div></td></tr>';return;}
-  tbody.innerHTML=filtered.map(r=>{
-    const cls=r.tipo==='PERMUTA/OUTROS'?'bg-gold':'bg-blue';
-    const d=r.dataPag?r.dataPag.toLocaleDateString('pt-BR'):'—';
-    return`<tr>
-      <td>${d}</td><td>${r.credor||'—'}</td><td>${r.cc||'—'}</td>
-      <td>${r.descObra||'—'}</td><td>${r.unidConst||'—'}</td>
-      <td>${r.codItem||'—'}</td><td>${r.descItem||'—'}</td>
-      <td>${r.conta||'—'}</td><td>${r.plano||'—'}</td>
-      <td><span class="badge ${cls}">${r.tipo}</span></td>
-      <td class="r val-neg">${fmt(r.valor)}</td>
-      <td class="r val-neg">${fmt(r.valorObra)}</td>
-    </tr>`;
-  }).join('');
-}
-
-// PARSE — CONTAS RECEBIDAS
-
-function processRecibidasText(txt) {
+// ── PARSE CSV ──
+function processCSVText(txt) {
   const rows=parseTSV(txt);
-  if(!rows.length){setStatus('status-recebidas','Nenhum dado encontrado.',false);return;}
-  DATA.recebidas=parseFaturamento(rows, 'diag-recebidas');
-  setStatus('status-recebidas',DATA.recebidas.length+' registros processados.',true);
-  renderFatTable('recebidas','body-recebidas','count-recebidas',6);
-  updateDashFilters();
-  updateDtlhFilters();
-  renderDashboard();
-  renderDtlh();
-}
-function limparRecebidas(){
-  document.getElementById('paste-recebidas').value='';
-  DATA.recebidas=[];
-  document.getElementById('body-recebidas').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>';
-  document.getElementById('count-recebidas').textContent='0 registros';
-  const d=document.getElementById('diag-recebidas'); if(d){d.style.display='none';d.innerHTML='';}
-  setStatus('status-recebidas','','');
-  renderDashboard();
-}
-
-// PARSE — CONTAS A RECEBER (Centro de Custo, Data Vecto., Total)
-
-function processAReceberText(txt) {
-  const rows = parseTSV(txt);
-  if(!rows.length){ setStatus('status-areceber','Nenhum dado encontrado.',false); return; }
-
-  const today = new Date(); today.setHours(0,0,0,0);
-  const allHeaders = Object.keys(rows[0]);
-  const first = rows[0];
-  const mData = {
-    cc:      findColKey(first, ['Centro de Custo','CentroCusto','centro custo']),
-    cliente: findColKey(first, ['Nome do Cliente','NomeCliente','nome cliente','cliente','razao social','nome']),
-    dtVecto: findColKey(first, ['Data Vecto.','DataVecto','data vecto','vencimento','dt vecto','dt. vecto','data de vecto']),
-    total:   findColKey(first, ['Total','total','vlr total','valor total']),
+  if(!rows.length){ setStatus('status-csv','Nenhum dado encontrado.',false); return; }
+  const allHeaders=Object.keys(rows[0]);
+  const first=rows[0];
+  const mData={
+    data:        findColKey(first,['Data','data','dt']),
+    complemento: findColKey(first,['Complemento','complemento','Histórico','historico']),
+    valor:       findColExact(first,['Valor'],['Valor','valor']),
+    cc:          findColExact(first,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']),
+    conta:       findColExact(first,['Conta','Plano de Contas'],['Conta','conta']),
   };
-
-  // Diagnóstico
-  const allCols = allHeaders.map(h=>`<span class="diag-pill">${h}</span>`).join('');
-  const diagRows = [
-    {label:'Centro de Custo',                        foundKey: mData.cc.foundKey},
-    {label:'Nome do Cliente',                        foundKey: mData.cliente.foundKey},
-    {label:'Data Vecto. (usada para inadimplência)', foundKey: mData.dtVecto.foundKey},
-    {label:'Total (valor)',                          foundKey: mData.total.foundKey},
-  ].map(m=>{
-    const raw = first[m.foundKey]??'';
-    const val = raw===''?'<span class="diag-col-val empty">(vazio)</span>':`<span class="diag-col-val">${String(raw).slice(0,80)}</span>`;
-    const mapped = m.foundKey?`<span class="diag-col-mapped">→ "${m.foundKey}"</span>`:`<span class="diag-col-mapped miss">✕ Não encontrada</span>`;
-    return`<div class="diag-row"><div class="diag-col-name">${m.label}</div>${mapped}${val}</div>`;
-  }).join('');
-  let diagEl = document.getElementById('diag-areceber');
-  if(!diagEl){
-    diagEl = document.createElement('div');
-    diagEl.id = 'diag-areceber';
-    diagEl.style.marginBottom = '20px';
-    const tblCard = document.querySelector('#page-areceber .tbl-card');
-    tblCard.parentNode.insertBefore(diagEl, tblCard);
-  }
-  diagEl.innerHTML=`<div class="diag-box"><div class="diag-header"><span class="diag-header-title">🔍 Diagnóstico de colunas — 1ª linha dos seus dados</span><span class="diag-header-sub">Verifique se os valores estão corretos</span></div><div class="diag-grid">${diagRows}</div><div class="diag-all-cols"><div class="diag-all-label">Todas as colunas detectadas:</div>${allCols}</div></div>`;
-  diagEl.style.display='block';
-
-  DATA.areceber = rows.map(r => {
-    const cc       = normCC((findColKey(r, ['Centro de Custo','CentroCusto','centro custo'])).value);
-    const cliente  = (findColKey(r, ['Nome do Cliente','NomeCliente','nome cliente','cliente','razao social','nome'])).value;
-    const dtVecto  = parseDateBR((findColKey(r, ['Data Vecto.','DataVecto','data vecto','vencimento','dt vecto','dt. vecto','data de vecto'])).value);
-    const liquido  = parseBRNum((findColKey(r, ['Total','total','vlr total','valor total'])).value);
-    const inadimplente = dtVecto ? dtVecto < today : false;
-    return { cc, cliente, dtVecto, liquido, inadimplente,
-      mes: dtVecto ? dtVecto.getMonth() : null,
-      ano: dtVecto ? dtVecto.getFullYear() : null };
-  }).filter(r => r.liquido !== 0 || r.cc);
-
-  setStatus('status-areceber', DATA.areceber.length + ' registros processados.', true);
-  renderAReceberTable();
-  updateDashFilters();
-  updateDtlhFilters();
-  renderDashboard();
-  renderDtlh();
+  renderDiag('diag-csv', allHeaders, [
+    {label:'Data',                foundKey:mData.data.foundKey},
+    {label:'Complemento',         foundKey:mData.complemento.foundKey},
+    {label:'Valor',               foundKey:mData.valor.foundKey},
+    {label:'Nome Centro de Custo',foundKey:mData.cc.foundKey},
+    {label:'Conta',               foundKey:mData.conta.foundKey},
+  ], first);
+  const novos=rows.map(r=>{
+    const data=parseDateBR(findColKey(r,['Data','data','dt']).value);
+    const complemento=findColKey(r,['Complemento','complemento','Histórico','historico']).value;
+    const valor=Math.abs(parseBRNum(findColExact(r,['Valor'],['Valor','valor']).value));
+    const cc=normCC(findColExact(r,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']).value);
+    const conta=findColExact(r,['Conta','Plano de Contas'],['Conta','conta']).value;
+    const cu=complemento.toUpperCase();
+    const tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
+    return {data,complemento,valor,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
+  }).filter(r=>r.valor!==0||r.cc);
+  DATA.csv=[...DATA.csv,...novos];
+  setStatus('status-csv',`+${novos.length} registros — total: ${DATA.csv.length}.`,true);
+  renderCSVTable(); updateDashFilters(); updateDtlhFilters(); renderDashboard(); renderDtlh();
 }
-
-function limparAReceber(){
-  document.getElementById('paste-areceber').value='';
-  DATA.areceber=[];
-  document.getElementById('body-areceber').innerHTML='<tr><td colspan="5"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>';
-  document.getElementById('count-areceber').textContent='0 registros';
-  const d=document.getElementById('diag-areceber'); if(d){d.style.display='none';d.innerHTML='';}
-  setStatus('status-areceber','','');
-  renderDashboard();
-  renderDtlh();
+function limparCSV() {
+  document.getElementById('paste-csv').value='';
+  DATA.csv=[];
+  document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>';
+  document.getElementById('count-csv').textContent='0 registros';
+  const d=document.getElementById('diag-csv'); if(d){d.style.display='none';d.innerHTML='';}
+  setStatus('status-csv','','');
+  renderDashboard(); renderDtlh();
 }
-
-function renderAReceberTable() {
-  const tbody = document.getElementById('body-areceber');
-  const arr = DATA.areceber;
-  // Populate dropdowns
+function clearCSVFilters() {
+  ['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-tipo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderCSVTable();
+}
+function renderCSVTable() {
+  const arr=DATA.csv;
   const anos=[...new Set(arr.map(r=>r.ano).filter(x=>x!=null))].sort();
   const meses=[...new Set(arr.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
   const ccs=[...new Set(arr.map(r=>r.cc).filter(Boolean))].sort();
-  fillSelect('fa-ano',anos,v=>v,v=>v);
-  fillSelect('fa-mes',meses,v=>v,v=>MESES_PT[v]);
-  fillSelect('fa-cc',ccs,v=>v,v=>v);
-  // Apply filters
-  const fAno=(document.getElementById('fa-ano')?.value||'');
-  const fMes=(document.getElementById('fa-mes')?.value||'');
-  const fCli=(document.getElementById('fa-cliente')?.value||'').toLowerCase().trim();
-  const fCC=(document.getElementById('fa-cc')?.value||'');
-  const filtered=arr.filter(r=>
-    (!fAno||String(r.ano)===fAno)&&
-    (!fMes||String(r.mes)===fMes)&&
-    (!fCli||(r.cliente||'').toLowerCase().includes(fCli))&&
-    (!fCC||ccMatch(r.cc||'',fCC))
-  );
-  document.getElementById('count-areceber').textContent = filtered.length+' de '+arr.length+' registros';
-  if(!filtered.length){
-    tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><p>Nenhum registro encontrado</p></div></td></tr>';
-    return;
-  }
-  tbody.innerHTML = filtered.map(r => {
-    const statusCls = r.inadimplente ? 'bg-red'  : 'bg-gold';
-    const statusTxt = r.inadimplente ? 'Inadimplente' : 'A Receber';
-    const valCls    = r.inadimplente ? 'val-neg' : 'val-gold';
-    return `<tr>
-      <td>${r.cc||'—'}</td>
-      <td>${r.cliente||'—'}</td>
-      <td>${r.dtVecto ? r.dtVecto.toLocaleDateString('pt-BR') : '—'}</td>
-      <td><span class="badge ${statusCls}">${statusTxt}</span></td>
-      <td class="r ${valCls}">${fmt(r.liquido)}</td>
-    </tr>`;
+  fillSelect('fcsv-ano',anos,v=>v,v=>v);
+  fillSelect('fcsv-mes',meses,v=>v,v=>MESES_PT[v]);
+  fillSelect('fcsv-cc',ccs,v=>v,v=>v);
+  const fAno=document.getElementById('fcsv-ano')?.value||'';
+  const fMes=document.getElementById('fcsv-mes')?.value||'';
+  const fCC=document.getElementById('fcsv-cc')?.value||'';
+  const fTipo=document.getElementById('fcsv-tipo')?.value||'';
+  const filtered=arr.filter(r=>(!fAno||String(r.ano)===fAno)&&(!fMes||String(r.mes)===fMes)&&(!fCC||ccMatch(r.cc||'',fCC))&&(!fTipo||r.tipo===fTipo));
+  document.getElementById('count-csv').textContent=filtered.length+' de '+arr.length+' registros';
+  const tbody=document.getElementById('body-csv');
+  if(!filtered.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum registro encontrado</p></div></td></tr>';return;}
+  tbody.innerHTML=filtered.map(r=>{
+    const tc=r.tipo==='FATURAMENTO'?'bg-green':r.tipo==='DESCONTO'?'bg-gold':'bg-red';
+    const vc=r.tipo==='FATURAMENTO'?'val-pos':r.tipo==='DESCONTO'?'val-gold':'val-neg';
+    return `<tr><td>${r.data?r.data.toLocaleDateString('pt-BR'):'—'}</td><td>${r.complemento||'—'}</td><td>${r.cc||'—'}</td><td>${r.conta||'—'}</td><td><span class="badge ${tc}">${r.tipo}</span></td><td class="r ${vc}">${fmt(r.valor)}</td></tr>`;
   }).join('');
 }
-
-function parseFaturamento(rows, diagId) {
-  const allHeaders = Object.keys(rows[0]);
-  const first = rows[0];
-
-  const mData = {
-    cc:      findColKey(first, ['Centro de Custo','CentroCusto','centro custo']),
-    cliente: findColKey(first, ['Nome do Cliente','NomeCliente','nome cliente','cliente','razao social','nome']),
-    dtBaixa: findColKey(first, ['Dt. Baixa','DtBaixa','dt baixa','data baixa','dtbaixa']),
-    dtVecto: findColKey(first, ['Data Vecto.','DataVecto','data vecto','vencimento','dt vecto','dt. vecto']),
-    liquido: findColKey(first, ['Liquido','Líquido','liquido','vlr liquido','valor liquido','liq']),
-    acresc:  findColKey(first, ['Acrescimos','Acréscimos','acrescimos','acrescimo','acréscimo']),
-  };
-
-  if(diagId) {
-    renderDiag(diagId, allHeaders, [
-      { label:'Centro de Custo',       foundKey: mData.cc.foundKey },
-      { label:'Nome do Cliente',       foundKey: mData.cliente.foundKey },
-      { label:'Dt. Baixa (data usada)',foundKey: mData.dtBaixa.foundKey },
-      { label:'Data Vecto.',           foundKey: mData.dtVecto.foundKey },
-      { label:'Líquido (valor)',        foundKey: mData.liquido.foundKey },
-      { label:'Acréscimos (tipo)',      foundKey: mData.acresc.foundKey },
-    ], first);
-  }
-
-  return rows.map(r => {
-    const cc      = normCC((findColKey(r, ['Centro de Custo','CentroCusto','centro custo'])).value);
-    const cliente = (findColKey(r, ['Nome do Cliente','NomeCliente','nome cliente','cliente','razao social','nome'])).value;
-    const dtBaixa = parseDateBR((findColKey(r, ['Dt. Baixa','DtBaixa','dt baixa','data baixa','dtbaixa'])).value);
-    const dtVecto = parseDateBR((findColKey(r, ['Data Vecto.','DataVecto','data vecto','vencimento','dt vecto','dt. vecto'])).value);
-    const liquido = parseBRNum((findColKey(r, ['Liquido','Líquido','liquido','vlr liquido','valor liquido','liq'])).value);
-    const acrRaw  = (findColKey(r, ['Acrescimos','Acréscimos','acrescimos','acrescimo','acréscimo'])).value;
-    const tipo    = tipoFaturamento(acrRaw);
-    return { cc, cliente, dtBaixa, dtVecto, liquido, tipo,
-      mes: dtBaixa ? dtBaixa.getMonth() : null,
-      ano: dtBaixa ? dtBaixa.getFullYear() : null };
-  }).filter(r => r.liquido !== 0 || r.cc);
+function exportExcelCSV() {
+  if(!DATA.csv.length){alert('Nenhum dado para exportar.');return;}
+  const fd=d=>d?d.toLocaleDateString('pt-BR'):'';
+  const fn=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const rows=DATA.csv.map(r=>({'Data':fd(r.data),'Complemento':r.complemento||'','Centro de Custo':r.cc||'','Conta':r.conta||'','Tipo':r.tipo||'','Valor':fn(r.valor)}));
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.json_to_sheet(rows,{raw:false});
+  ws['!cols']=Object.keys(rows[0]).map(c=>({wch:Math.max(c.length,...rows.map(r=>String(r[c]||'').length))+2}));
+  XLSX.utils.book_append_sheet(wb,ws,'CSV Analítico');
+  XLSX.writeFile(wb,`Solucione_CSV_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
 }
 
-function clearRecibidasFilters(){
-  ['fr-ano','fr-mes','fr-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  const ci=document.getElementById('fr-cliente');if(ci)ci.value='';
-  renderFatTable('recebidas','body-recebidas','count-recebidas',6);
-}
-function clearAReceberFilters(){
-  ['fa-ano','fa-mes','fa-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  const ci=document.getElementById('fa-cliente');if(ci)ci.value='';
-  renderAReceberTable();
-}
-
-function renderFatTable(key, bodyId, countId, cols) {
-  const arr=DATA[key];
-  const valClass=key==='recebidas'?'val-pos':'val-gold';
-
-  // Populate + apply filters for recebidas
-  if(key==='recebidas') {
-    const anos=[...new Set(arr.map(r=>r.ano).filter(x=>x!=null))].sort();
-    const meses=[...new Set(arr.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
-    const ccs=[...new Set(arr.map(r=>r.cc).filter(Boolean))].sort();
-    fillSelect('fr-ano',anos,v=>v,v=>v);
-    fillSelect('fr-mes',meses,v=>v,v=>MESES_PT[v]);
-    fillSelect('fr-cc',ccs,v=>v,v=>v);
-    const fAno=(document.getElementById('fr-ano')?.value||'');
-    const fMes=(document.getElementById('fr-mes')?.value||'');
-    const fCli=(document.getElementById('fr-cliente')?.value||'').toLowerCase().trim();
-    const fCC=(document.getElementById('fr-cc')?.value||'');
-    const filtered=arr.filter(r=>
-      (!fAno||String(r.ano)===fAno)&&
-      (!fMes||String(r.mes)===fMes)&&
-      (!fCli||(r.cliente||'').toLowerCase().includes(fCli))&&
-      (!fCC||ccMatch(r.cc||'',fCC))
-    );
-    document.getElementById(countId).textContent=filtered.length+' de '+arr.length+' registros';
-    if(!filtered.length){document.getElementById(bodyId).innerHTML=`<tr><td colspan="${cols}"><div class="empty-state"><p>Nenhum registro encontrado</p></div></td></tr>`;return;}
-    document.getElementById(bodyId).innerHTML=filtered.map(r=>{
-      const cls=r.tipo==='PERMUTA/OUTROS'?'bg-gold':'bg-blue';
-      return`<tr>
-        <td>${r.cc||'—'}</td><td>${r.cliente||'—'}</td>
-        <td>${r.dtBaixa?r.dtBaixa.toLocaleDateString('pt-BR'):'—'}</td>
-        <td>${r.dtVecto?r.dtVecto.toLocaleDateString('pt-BR'):'—'}</td>
-        <td><span class="badge ${cls}">${r.tipo}</span></td>
-        <td class="r ${valClass}">${fmt(r.liquido)}</td>
-      </tr>`;
-    }).join('');
-    return;
-  }
-
-  // Default (no filters)
-  document.getElementById(countId).textContent=arr.length+' registros';
-  const empty=`<tr><td colspan="${cols}"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>`;
-  if(!arr.length){document.getElementById(bodyId).innerHTML=empty;return;}
-  document.getElementById(bodyId).innerHTML=arr.map(r=>{
-    const cls=r.tipo==='PERMUTA/OUTROS'?'bg-gold':'bg-blue';
-    return`<tr>
-      <td>${r.cc||'—'}</td><td>${r.cliente||'—'}</td>
-      <td>${r.dtBaixa?r.dtBaixa.toLocaleDateString('pt-BR'):'—'}</td>
-      <td>${r.dtVecto?r.dtVecto.toLocaleDateString('pt-BR'):'—'}</td>
-      <td><span class="badge ${cls}">${r.tipo}</span></td>
-      <td class="r ${valClass}">${fmt(r.liquido)}</td>
-    </tr>`;
-  }).join('');
-}
-
-// EXPORT EXCEL
-
-function exportExcel(key) {
-  const names = {pagas:'Contas Pagas', recebidas:'Contas Recebidas', areceber:'Contas a Receber'};
-  const fmtDate = d => d ? d.toLocaleDateString('pt-BR') : '';
-  const fmtNum  = v => (v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
-
-  let rows = [];
-  if(key === 'pagas') {
-    rows = DATA.pagas.map(r => ({
-      'Data Pagamento':        fmtDate(r.dataPag),
-      'Nome do Credor':        r.credor||'',
-      'Centro de Custo':       r.cc||'',
-      'Desc Obra':             r.descObra||'',
-      'Unid. Construtiva':     r.unidConst||'',
-      'Cód. Item Orç.':        r.codItem||'',
-      'Desc. Item Orç.':       r.descItem||'',
-      'Conta Corrente':        r.conta||'',
-      'Plano Financeiro':      r.plano||'',
-      'Tipo':                  r.tipo||'',
-      'Vlr Aprop Fin.':        fmtNum(r.valor),
-      'Vlr Aprop Obra':        fmtNum(r.valorObra)
-    }));
-  } else if(key === 'recebidas') {
-    rows = DATA.recebidas.map(r => ({
-      'Centro de Custo':  r.cc||'',
-      'Nome do Cliente':  r.cliente||'',
-      'Dt. Baixa':        fmtDate(r.dtBaixa),
-      'Data Vecto.':      fmtDate(r.dtVecto),
-      'Tipo':             r.tipo||'',
-      'Líquido':          fmtNum(r.liquido)
-    }));
-  } else if(key === 'areceber') {
-    rows = DATA.areceber.map(r => ({
-      'Centro de Custo':  r.cc||'',
-      'Nome do Cliente':  r.cliente||'',
-      'Data Vecto.':      fmtDate(r.dtVecto),
-      'Status':           r.inadimplente ? 'Inadimplente' : 'A Receber',
-      'Total':            fmtNum(r.liquido)
-    }));
-  }
-
-  if(!rows.length){ alert('Nenhum dado para exportar.'); return; }
-
-  const wb = XLSX.utils.book_new();
-  // raw:false garante que tudo vai como texto, sem conversão automática de datas/números
-  const ws = XLSX.utils.json_to_sheet(rows, {raw: false});
-
-  // Ajusta largura das colunas automaticamente
-  const cols = Object.keys(rows[0]);
-  ws['!cols'] = cols.map(c => ({
-    wch: Math.max(c.length, ...rows.map(r => String(r[c]||'').length)) + 2
-  }));
-
-  XLSX.utils.book_append_sheet(wb, ws, names[key]||key);
-  const date = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-  XLSX.writeFile(wb, `Solucione_${(names[key]||key).replace(/ /g,'_')}_${date}.xlsx`);
-}
-
-// DASHBOARD FILTERS
-
+// ── DASHBOARD FILTERS ──
 function updateDashFilters() {
-  const anos=[...new Set([...DATA.pagas,...DATA.recebidas,...DATA.areceber].map(r=>r.ano).filter(x=>x!=null))].sort();
-  const meses=[...new Set([...DATA.pagas,...DATA.recebidas,...DATA.areceber].map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
-  const ccs=[...new Set([...DATA.pagas,...DATA.recebidas,...DATA.areceber].map(r=>r.cc).filter(Boolean))].sort();
+  const anos=[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort();
+  const meses=[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
+  const ccs=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
   fillSelect('d-ano',anos,v=>v,v=>v);
   fillSelect('d-mes',meses,v=>v,v=>MESES_PT[v]);
   fillSelect('d-cc',ccs,v=>v,v=>v);
 }
-function fillSelect(id,values,valFn,labelFn){
-  const sel=document.getElementById(id);
-  if(!sel)return;
+function fillSelect(id,values,valFn,labelFn) {
+  const sel=document.getElementById(id); if(!sel) return;
   const cur=sel.value;
   sel.innerHTML='<option value="">'+sel.options[0]?.textContent+'</option>';
   values.forEach(v=>{const o=document.createElement('option');o.value=valFn(v);o.textContent=labelFn(v);sel.appendChild(o);});
-  if(cur)sel.value=cur;
+  if(cur) sel.value=cur;
 }
 function clearDashFilters(){['d-ano','d-mes','d-cc'].forEach(id=>document.getElementById(id).value='');renderDashboard();}
-function normCC(s){ return (s||'').trim().toUpperCase().replace(/\s+/g,' '); }
 function getF(){return{ano:document.getElementById('d-ano').value,mes:document.getElementById('d-mes').value,cc:document.getElementById('d-cc').value};}
-function ccMatch(a,b){return normCC(a)===normCC(b);}
 function applyF(arr){const f=getF();return arr.filter(r=>(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes)&&(!f.cc||ccMatch(r.cc||'',f.cc)));}
 
-// DASHBOARD RENDER
-
+// ── DASHBOARD RENDER ──
 function renderDashboard() {
-  const pagas    =applyF(DATA.pagas);
-  const recebidas=applyF(DATA.recebidas);
-
-  // ── KPIs ──
-  const totalPago   =pagas.reduce((s,r)=>s+r.valor,0);
-  const caixaPago   =pagas.filter(r=>r.tipo==='CAIXA').reduce((s,r)=>s+r.valor,0);
-  const permutaPago =pagas.filter(r=>r.tipo==='PERMUTA/OUTROS').reduce((s,r)=>s+r.valor,0);
-
-  const totalRec    =recebidas.reduce((s,r)=>s+r.liquido,0);
-  const caixaRec    =recebidas.filter(r=>r.tipo==='CAIXA').reduce((s,r)=>s+r.liquido,0);
-  const permutaRec  =recebidas.filter(r=>r.tipo==='PERMUTA/OUTROS').reduce((s,r)=>s+r.liquido,0);
-
-  const resultado=totalRec-totalPago;
-
-  set('d-kpi-recebido',   fmt(totalRec));
-  set('d-kpi-recebido-n', recebidas.length+' lançamentos');
-  set('d-kpi-rec-caixa',  fmt(caixaRec));
-  set('d-kpi-rec-permuta',fmt(permutaRec));
-
-  set('d-kpi-pago',    fmt(totalPago));
-  set('d-kpi-pago-n',  pagas.length+' lançamentos');
-  set('d-kpi-caixa',   fmt(caixaPago));
-  set('d-kpi-permuta', fmt(permutaPago));
-
+  const csvF=applyF(DATA.csv);
+  const fatRows=csvF.filter(r=>r.tipo==='FATURAMENTO');
+  const descRows=csvF.filter(r=>r.tipo==='DESCONTO');
+  const pagRows=csvF.filter(r=>r.tipo==='PAGAMENTO');
+  const totalFatBruto=fatRows.reduce((s,r)=>s+r.valor,0);
+  const totalDesconto=descRows.reduce((s,r)=>s+r.valor,0);
+  const totalFatLiq=totalFatBruto-totalDesconto;
+  const totalPago=pagRows.reduce((s,r)=>s+r.valor,0);
+  const resultado=totalFatLiq-totalPago;
+  set('d-kpi-recebido',fmt(totalFatBruto));
+  set('d-kpi-recebido-n',fatRows.length+' lançamentos de recebimento');
+  set('d-kpi-desconto',totalDesconto>0?'− '+fmt(totalDesconto):fmt(0));
+  set('d-kpi-fat-liquido',fmt(totalFatLiq));
+  set('d-kpi-pago',fmt(totalPago));
+  set('d-kpi-pago-n',pagRows.length+' lançamentos');
   const resEl=document.getElementById('d-kpi-resultado');
   resEl.textContent=fmt(Math.abs(resultado));
   resEl.className='kpi-val '+(resultado>=0?'pos':'neg');
-  set('d-kpi-resultado-sub', resultado>=0?'▲ Superávit':'▼ Déficit');
-  // Subdivisão resultado
-  const resCaixa   = caixaRec - caixaPago;
-  const resPermuta = permutaRec - permutaPago;
-  const rcEl = document.getElementById('d-kpi-res-caixa');
-  const rpEl = document.getElementById('d-kpi-res-permuta');
-  if(rcEl){ rcEl.textContent = fmt(Math.abs(resCaixa));   rcEl.className='kpi-split-val caixa'+(resCaixa<0?' neg-txt':''); }
-  if(rpEl){ rpEl.textContent = fmt(Math.abs(resPermuta)); rpEl.className='kpi-split-val permuta'+(resPermuta<0?' neg-txt':''); }
-
-  renderCharts(pagas,recebidas);
-  renderPlanoTable(pagas);
+  set('d-kpi-resultado-sub',resultado>=0?'▲ Superávit':'▼ Déficit');
+  renderCharts(csvF);
 }
-function set(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
 
-// CHARTS
-
-const PAL=['#C0392B','#1A7A3C','#B7950B','#1A5276','#7D3C98','#784212','#1A6161','#2E4057'];
-
-function monthKeys(arrs) {
+// ── CHARTS ──
+const PAL=['#1B6B35','#1A5276','#B7950B','#7D3C98','#C0392B','#784212','#1A6161','#2E4057'];
+function monthKeys(arrs){
   const keys=new Set();
   arrs.forEach(arr=>arr.forEach(r=>{if(r.ano!=null&&r.mes!=null)keys.add(r.ano*100+r.mes);}));
-  return[...keys].sort().map(k=>({key:k,label:MESES_SH[k%100]+'/'+(Math.floor(k/100)),ano:Math.floor(k/100),mes:k%100}));
+  return [...keys].sort().map(k=>({key:k,label:MESES_SH[k%100]+'/'+(Math.floor(k/100)),ano:Math.floor(k/100),mes:k%100}));
 }
-function sumM(arr,lbl,key){return lbl.map(l=>arr.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+(r[key]||0),0));}
-function sumMT(arr,lbl,key,tipo){return lbl.map(l=>arr.filter(r=>r.ano===l.ano&&r.mes===l.mes&&r.tipo===tipo).reduce((s,r)=>s+(r[key]||0),0));}
-
-function renderCharts(pagas,recebidas) {
-  const lbl=monthKeys([pagas,recebidas]);
+function renderCharts(csv) {
+  const pag=csv.filter(r=>r.tipo==='PAGAMENTO');
+  const fat=csv.filter(r=>r.tipo==='FATURAMENTO');
+  const dsc=csv.filter(r=>r.tipo==='DESCONTO');
+  const lbl=monthKeys([csv]);
   const ln=lbl.map(l=>l.label);
   const yFmt={ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}};
   const leg={position:'top',labels:{font:{size:11}}};
-
-  // 1 — pagamentos por mês (caixa vs permuta)
   destroyChart('ch-mensal-pago');
-  if(pagas.length){
-    CHARTS['ch-mensal-pago']=new Chart(document.getElementById('ch-mensal-pago'),{
-      type:'bar',
-      data:{labels:ln,datasets:[
-        {label:'Caixa',         data:sumMT(pagas,lbl,'valor','CAIXA'),          backgroundColor:'#1A5276',borderRadius:2},
-        {label:'Permuta/Outros',data:sumMT(pagas,lbl,'valor','PERMUTA/OUTROS'), backgroundColor:'#B7950B',borderRadius:2}
-      ]},
-      options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}
-    });
-  }
-
-  // 2 — faturamento por mês (caixa vs permuta)
+  if(pag.length) CHARTS['ch-mensal-pago']=new Chart(document.getElementById('ch-mensal-pago'),{type:'bar',data:{labels:ln,datasets:[{label:'Pagamentos',data:lbl.map(l=>pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#C0392B',borderRadius:2}]},options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}});
   destroyChart('ch-mensal-fat');
-  if(recebidas.length){
-    CHARTS['ch-mensal-fat']=new Chart(document.getElementById('ch-mensal-fat'),{
-      type:'bar',
-      data:{labels:ln,datasets:[
-        {label:'Caixa',         data:sumMT(recebidas,lbl,'liquido','CAIXA'),          backgroundColor:'#1A7A3C',borderRadius:2},
-        {label:'Permuta/Outros',data:sumMT(recebidas,lbl,'liquido','PERMUTA/OUTROS'), backgroundColor:'#B7950B',borderRadius:2}
-      ]},
-      options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}
-    });
-  }
-
-  // 3 — pagamentos por CC (horizontal)
+  if(fat.length||dsc.length) CHARTS['ch-mensal-fat']=new Chart(document.getElementById('ch-mensal-fat'),{type:'bar',data:{labels:ln,datasets:[{label:'Recebimentos',data:lbl.map(l=>fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#1A7A3C',borderRadius:2},{label:'Descontos',data:lbl.map(l=>dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#B7950B',borderRadius:2}]},options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}});
   destroyChart('ch-cc');
-  if(pagas.length){
-    const ccs=[...new Set(pagas.map(r=>r.cc).filter(Boolean))];
-    CHARTS['ch-cc']=new Chart(document.getElementById('ch-cc'),{
-      type:'bar',
-      data:{labels:ccs,datasets:[{label:'Total Pago',data:ccs.map(c=>pagas.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},
-      options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}
-    });
-  }
-
-  // 4 — faturamento por CC (horizontal)
+  if(pag.length){const ccs=[...new Set(pag.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc']=new Chart(document.getElementById('ch-cc'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Pago',data:ccs.map(c=>pag.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
   destroyChart('ch-cc-fat');
-  if(recebidas.length){
-    const ccsF=[...new Set(recebidas.map(r=>r.cc).filter(Boolean))];
-    CHARTS['ch-cc-fat']=new Chart(document.getElementById('ch-cc-fat'),{
-      type:'bar',
-      data:{labels:ccsF,datasets:[{label:'Total Recebido',data:ccsF.map(c=>recebidas.filter(r=>r.cc===c).reduce((s,r)=>s+r.liquido,0)),backgroundColor:['#1A7A3C','#2471A3','#B7950B','#7D3C98','#C0392B','#784212','#1A6161','#2E4057'],borderRadius:2}]},
-      options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}
-    });
-  }
-
-  // 5 — resultado mensal SOMENTE CAIXA (verde=positivo, vermelho=negativo)
+  if(fat.length){const ccs=[...new Set(fat.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc-fat']=new Chart(document.getElementById('ch-cc-fat'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Recebido',data:ccs.map(c=>fat.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
   destroyChart('ch-resultado-caixa');
-  if(pagas.length||recebidas.length){
-    const resultCaixaData = lbl.map(l => {
-      const recCaixa = recebidas.filter(r=>r.ano===l.ano&&r.mes===l.mes&&r.tipo==='CAIXA').reduce((s,r)=>s+r.liquido,0);
-      const pagCaixa = pagas.filter(r=>r.ano===l.ano&&r.mes===l.mes&&r.tipo==='CAIXA').reduce((s,r)=>s+r.valor,0);
-      return recCaixa - pagCaixa;
+  if(csv.length){
+    const rd=lbl.map(l=>{
+      const f=fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);
+      const d=dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);
+      const p=pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);
+      return (f-d)-p;
     });
-    CHARTS['ch-resultado-caixa']=new Chart(document.getElementById('ch-resultado-caixa'),{
-      type:'bar',
-      data:{labels:ln,datasets:[{
-        label:'Resultado Caixa',
-        data:resultCaixaData,
-        backgroundColor:resultCaixaData.map(v=>v>=0?'#1A7A3C':'#C0392B'),
-        borderRadius:2
-      }]},
-      options:{
-        responsive:true,
-        plugins:{
-          legend:{display:false},
-          tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}
-        },
-        scales:{
-          y:{
-            ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')},
-            grid:{color:ctx=>ctx.tick.value===0?'rgba(0,0,0,0.3)':'rgba(0,0,0,0.05)'}
-          }
-        }
-      }
-    });
-  }
-
-  // 6 — donut caixa vs permuta (pagamentos)
-  destroyChart('ch-caixapermuta');
-  if(pagas.length){
-    const cT=pagas.filter(r=>r.tipo==='CAIXA').reduce((s,r)=>s+r.valor,0);
-    const pT=pagas.filter(r=>r.tipo==='PERMUTA/OUTROS').reduce((s,r)=>s+r.valor,0);
-    CHARTS['ch-caixapermuta']=new Chart(document.getElementById('ch-caixapermuta'),{
-      type:'doughnut',
-      data:{labels:['Caixa','Permuta/Outros'],datasets:[{data:[cT,pT],backgroundColor:['#1A5276','#B7950B'],borderWidth:2,borderColor:'#fff'}]},
-      options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:12}}},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}}}
-    });
+    CHARTS['ch-resultado-caixa']=new Chart(document.getElementById('ch-resultado-caixa'),{type:'bar',data:{labels:ln,datasets:[{label:'Resultado',data:rd,backgroundColor:rd.map(v=>v>=0?'#1A7A3C':'#C0392B'),borderRadius:2}]},options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}},scales:{y:{ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')},grid:{color:ctx=>ctx.tick.value===0?'rgba(0,0,0,0.3)':'rgba(0,0,0,0.05)'}}}}}); 
   }
 }
 
-// BACKUP / RESTORE JSON
-
+// ── BACKUP / RESTORE ──
 function backupJSON() {
-  const payload = {
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    data: {
-      pagas:     DATA.pagas.map(r=>({...r, dataPag: r.dataPag ? r.dataPag.toISOString() : null})),
-      recebidas: DATA.recebidas.map(r=>({...r, dtBaixa: r.dtBaixa ? r.dtBaixa.toISOString() : null, dtVecto: r.dtVecto ? r.dtVecto.toISOString() : null})),
-      areceber:  DATA.areceber.map(r=>({...r, dtVecto: r.dtVecto ? r.dtVecto.toISOString() : null})),
-      estoque:   DATA.estoque,
-      orcamento: DATA.orcamento
-    }
-  };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  const date = new Date().toLocaleDateString('pt-BR').replace(/\//g,'-');
-  a.download = `SolucioneBI_Backup_${date}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  const payload={version:1,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento}};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+  a.download=`SolucioneBI_Backup_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.json`;
+  a.click(); URL.revokeObjectURL(a.href);
 }
-
 function restoreJSON(input) {
-  const file = input.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
     try {
-      const payload = JSON.parse(e.target.result);
+      const payload=JSON.parse(e.target.result);
       if(!payload.data) throw new Error('Formato inválido');
-
-      // Reidrata datas
-      DATA.pagas = (payload.data.pagas||[]).map(r=>({...r,
-        dataPag: r.dataPag ? new Date(r.dataPag) : null
-      }));
-      DATA.recebidas = (payload.data.recebidas||[]).map(r=>({...r,
-        dtBaixa: r.dtBaixa ? new Date(r.dtBaixa) : null,
-        dtVecto: r.dtVecto ? new Date(r.dtVecto) : null
-      }));
-      const today = new Date(); today.setHours(0,0,0,0);
-      DATA.areceber = (payload.data.areceber||[]).map(r=>{
-        const dtVecto = r.dtVecto ? new Date(r.dtVecto) : null;
-        return {...r, dtVecto, inadimplente: dtVecto ? dtVecto < today : false};
-      });
-
-      DATA.estoque   = payload.data.estoque   || [];
-      DATA.orcamento = payload.data.orcamento || [];
-
-      renderPagasTable();
-      renderFatTable('recebidas','body-recebidas','count-recebidas',6);
-      renderAReceberTable();
-      renderEstoqueTable();
-      renderOrcamentoTable();
-      updateDashFilters();
-      updateDtlhFilters();
-      renderDashboard();
-      renderDtlh();
-
-      const total = DATA.pagas.length + DATA.recebidas.length + DATA.areceber.length;
-      alert(`✓ Backup restaurado com sucesso!\n${DATA.pagas.length} contas pagas · ${DATA.recebidas.length} recebidas · ${DATA.areceber.length} a receber\nTotal: ${total} registros`);
-    } catch(err) {
-      alert('Erro ao restaurar: ' + err.message + '\nVerifique se o arquivo é um backup válido do BI Solucione.');
-    }
+      DATA.csv=(payload.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
+      DATA.estoque=payload.data.estoque||[];
+      DATA.orcamento=payload.data.orcamento||[];
+      renderCSVTable(); renderEstoqueTable(); renderOrcamentoTable();
+      updateDashFilters(); updateDtlhFilters(); renderDashboard(); renderDtlh();
+      alert(`✓ Backup restaurado! ${DATA.csv.length} registros CSV carregados.`);
+    } catch(err) { alert('Erro ao restaurar: '+err.message); }
   };
-  reader.readAsText(file);
-  input.value = '';
+  reader.readAsText(file); input.value='';
 }
+
 </script>
 <script>
 
@@ -1934,6 +1155,54 @@ function debugOrcamento() {
   alert(msg);
 }
 </script>
+<div class="page" id="page-csv">
+  <div class="sec-title">CSV Analítico de Apropriações</div>
+  <div class="sec-sub">Cole aqui os dados do relatório analítico exportado do ERP</div>
+  <div class="paste-section">
+    <div class="paste-instructions">
+      <strong>Como usar:</strong>
+      <ol>
+        <li>Exporte o relatório analítico no ERP, selecione a tabela com cabeçalho</li>
+        <li>Copie com <strong>Ctrl+C</strong>, clique abaixo e cole com <strong>Ctrl+V</strong></li>
+      </ol>
+      Colunas usadas: <strong>Data · Complemento · Valor · Nome Centro de Custo · Conta</strong>
+    </div>
+    <textarea class="paste-box" id="paste-csv" placeholder="Clique aqui e cole com Ctrl+V — processamento automático ao colar."></textarea>
+    <div class="paste-actions">
+      <button class="btn-secondary" onclick="limparCSV()">✕ Limpar dados</button>
+      <button class="btn-primary" style="margin-left:8px" onclick="exportExcelCSV()">⬇ Exportar Excel</button>
+      <span class="paste-status" id="status-csv"></span>
+    </div>
+  </div>
+  <div id="diag-csv" style="display:none;margin-bottom:20px"></div>
+  <div class="tbl-card">
+    <div class="tbl-head">
+      <div class="tbl-title">Lançamentos Processados</div>
+      <span class="tbl-badge" id="count-csv">0 registros</span>
+    </div>
+    <div style="padding:10px 20px 0;border-bottom:1px solid var(--border)">
+      <div class="inline-filters">
+        <span class="filter-label">Filtrar</span>
+        <select class="filter-select" id="fcsv-ano" onchange="renderCSVTable()"><option value="">Todos os anos</option></select>
+        <select class="filter-select" id="fcsv-mes" onchange="renderCSVTable()"><option value="">Todos os meses</option></select>
+        <select class="filter-select" id="fcsv-cc" onchange="renderCSVTable()"><option value="">Todos os CCs</option></select>
+        <select class="filter-select" id="fcsv-tipo" onchange="renderCSVTable()"><option value="">Todos os tipos</option><option value="FATURAMENTO">Faturamento</option><option value="DESCONTO">Desconto Concedido</option><option value="PAGAMENTO">Pagamento</option></select>
+        <button class="btn-ghost" onclick="clearCSVFilters()">✕</button>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr><th>Data</th><th>Complemento</th><th>Centro de Custo</th><th>Conta</th><th>Tipo</th><th class="r">Valor (R$)</th></tr>
+        </thead>
+        <tbody id="body-csv">
+          <tr><td colspan="6"><div class="empty-state"><p>Nenhum dado processado ainda</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <div class="page" id="page-estoque">
   <div class="sec-title">Estoque</div>
   <div class="sec-sub">Cadastre as unidades disponíveis por obra para cálculo de Estoque e Afetação + Comissão</div>
@@ -1965,7 +1234,7 @@ function debugOrcamento() {
       <div class="tbl-title">Unidades em Estoque</div>
       <div style="display:flex;align-items:center;gap:10px">
         <span class="tbl-badge" id="count-estoque">0 unidades</span>
-        <span class="tbl-badge" id="total-estoque" style="background:var(--danger-light);color:var(--danger)">R$ 0,00</span>
+        <span class="tbl-badge" id="total-estoque" style="background:var(--brand-light);color:var(--brand)">R$ 0,00</span>
       </div>
     </div>
     <div style="padding:10px 20px 0;border-bottom:1px solid var(--border)">
