@@ -328,8 +328,7 @@ function parseDateBR(s) {
   return null;
 }
 function parseTSV(text) {
-  const lines=text.trim().split(/?
-/).filter(l=>l.trim());
+  const lines=text.trim().split(/\r?\n/).filter(l=>l.trim());
   if(lines.length<2) return [];
   const headers=lines[0].split('	').map(h=>h.trim());
   return lines.slice(1).map(line=>{ const cols=line.split('	'); const row={}; headers.forEach((h,i)=>{row[h]=(cols[i]||'').trim();}); return row; });
@@ -586,574 +585,170 @@ function restoreJSON(input) {
 </script>
 <script>
 
-// PLANO FINANCEIRO TABLE
-
-function renderPlanoTable(pagas) {
-  const planos={};
-  pagas.forEach(r=>{
-    const p=r.plano||'(Sem plano)';
-    if(!planos[p])planos[p]={total:0,caixa:0,permuta:0,n:0};
-    planos[p].total+=r.valor;
-    if(r.tipo==='CAIXA')planos[p].caixa+=r.valor;
-    else planos[p].permuta+=r.valor;
-    planos[p].n++;
-  });
-  const total=Object.values(planos).reduce((s,p)=>s+p.total,0);
-  const sorted=Object.entries(planos).sort((a,b)=>b[1].total-a[1].total);
-  set('d-plano-count',sorted.length+' planos');
-  if(!sorted.length){
-    document.getElementById('d-plano-body').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Carregue dados em Contas Pagas para visualizar</p></div></td></tr>';
-    return;
-  }
-  document.getElementById('d-plano-body').innerHTML=sorted.map(([nome,d])=>{
-    const pct=total>0?d.total/total:0;
-    const w=Math.round(pct*80);
-    return`<tr>
-      <td>${nome}</td>
-      <td class="r val-neg">${fmt(d.total)}</td>
-      <td><div class="pct-bar-wrap"><div class="pct-bar-bg"><div class="pct-bar-fill" style="width:${w}px"></div></div><span class="pct-txt">${(pct*100).toFixed(1)}%</span></div></td>
-      <td class="r val-blue">${fmt(d.caixa)}</td>
-      <td class="r val-gold">${fmt(d.permuta)}</td>
-      <td class="r">${d.n}</td>
-    </tr>`;
-  }).join('');
+// ── FILLSELECT HELPER ──
+function fillSelect(id,values,valFn,labelFn){
+  const sel=document.getElementById(id); if(!sel) return;
+  const cur=sel.value;
+  const first=sel.options[0]?.textContent||'';
+  sel.innerHTML='<option value="">'+first+'</option>';
+  values.forEach(v=>{const o=document.createElement('option');o.value=valFn(v);o.textContent=labelFn(v);sel.appendChild(o);});
+  if(cur) sel.value=cur;
 }
 
-// ESTOQUE
-
-// DATA.estoque = [{obra, unidade, valor}]
-if(!DATA.estoque) DATA.estoque = [];
-
-function adicionarEstoque() {
-  const obra    = document.getElementById('est-obra').value.trim();
-  const unidade = document.getElementById('est-unidade').value.trim();
-  const valor   = parseBRNum(document.getElementById('est-valor').value);
-  if(!obra || !unidade || !valor) { alert('Preencha Obra, Unidade e Valor.'); return; }
-  DATA.estoque.push({ obra: normCC(obra), unidade, valor });
-  document.getElementById('est-obra').value = '';
-  document.getElementById('est-unidade').value = '';
-  document.getElementById('est-valor').value = '';
+// ── ESTOQUE ──
+DATA.estoque = [];
+function adicionarEstoque(){
+  const obra=document.getElementById('est-obra').value.trim();
+  const unidade=document.getElementById('est-unidade').value.trim();
+  const status=document.getElementById('est-status').value;
+  const area=parseBRNum(document.getElementById('est-area').value);
+  const venda=parseBRNum(document.getElementById('est-venda').value);
+  if(!obra||!unidade){alert('Preencha Obra e Unidade.');return;}
+  DATA.estoque.push({obra,unidade,status,area,venda});
+  ['est-obra','est-unidade','est-area','est-venda'].forEach(id=>document.getElementById(id).value='');
   renderEstoqueTable();
-  updateDtlhFilters();
-  renderDtlh();
+}
+function renderEstoqueTable(){
+  const tbody=document.getElementById('body-estoque'); if(!tbody) return;
+  const todasObras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];
+  const obraList=document.getElementById('est-obra-list');
+  if(obraList) obraList.innerHTML=todasObras.map(o=>`<option value="${o}">`).join('');
+  if(!DATA.estoque.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhuma unidade cadastrada</p></div></td></tr>';return;}
+  tbody.innerHTML=DATA.estoque.map((r,i)=>`<tr>
+    <td>${r.obra}</td><td>${r.unidade}</td>
+    <td><span class="badge ${r.status==='Disponível'?'bg-green':r.status==='Vendido'?'bg-red':'bg-gold'}">${r.status}</span></td>
+    <td class="r">${r.area?r.area.toLocaleString('pt-BR',{minimumFractionDigits:2})+'m²':'—'}</td>
+    <td class="r">${r.venda?fmt(r.venda):'—'}</td>
+    <td style="text-align:center"><button onclick="removerEstoque(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px">✕</button></td>
+  </tr>`).join('');
+}
+function removerEstoque(i){DATA.estoque.splice(i,1);renderEstoqueTable();}
+
+// ── DTLH FILTERS ──
+function updateDtlhFilters(){
+  const obras=[...new Set([...DATA.csv.map(r=>r.cc),...DATA.estoque.map(r=>r.obra)].filter(Boolean))].sort();
+  const anos=[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort();
+  const meses=[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
+  fillSelect('dt-obra',obras,v=>v,v=>v);
+  fillSelect('dt-ano',anos,v=>v,v=>v);
+  fillSelect('dt-mes',meses,v=>v,v=>MESES_PT[v]);
+}
+function clearDtlhFilters(){['dt-obra','dt-ano','dt-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderDtlh();}
+function getDtF(){return{obra:document.getElementById('dt-obra')?.value||'',ano:document.getElementById('dt-ano')?.value||'',mes:document.getElementById('dt-mes')?.value||'',entregaChaves:null};}
+function applyDtF(arr){
+  const f=getDtF();
+  return arr.filter(r=>(!f.obra||ccMatch(r.cc||'',f.obra))&&(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes));
 }
 
-function renderEstoqueTable() {
-  const tbody = document.getElementById('body-estoque');
-  // Populate obra filter
-  const obras=[...new Set(DATA.estoque.map(r=>r.obra).filter(Boolean))].sort();
-  fillSelect('fe-obra',obras,v=>v,v=>v);
-  // Apply filter
-  const fObra=(document.getElementById('fe-obra')?.value||'');
-  const filtered=DATA.estoque.filter(r=>!fObra||ccMatch(r.obra,fObra));
-  const total = filtered.reduce((s,r)=>s+r.valor,0);
-  document.getElementById('count-estoque').textContent = filtered.length + ' unidades';
-  document.getElementById('total-estoque').textContent = fmt(total);
-  // Autocomplete obras from all sources
-  const todasObras = [...new Set([...DATA.pagas,...DATA.recebidas,...DATA.areceber].map(r=>r.cc).filter(Boolean))];
-  document.getElementById('est-obra-list').innerHTML = todasObras.map(o=>`<option value="${o}">`).join('');
-  if(!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><p>Nenhuma unidade encontrada</p></div></td></tr>';
-    return;
-  }
-  tbody.innerHTML = filtered.map((r) => {
-    const i = DATA.estoque.indexOf(r);
+// ── DTLH RENDER ──
+function renderDtlh(){
+  const f=getDtF();
+  const csvDt=applyDtF(DATA.csv);
+  const recebidas=csvDt.filter(r=>r.tipo==='FATURAMENTO');
+  const pagas=csvDt.filter(r=>r.tipo==='PAGAMENTO');
+  const vRecebido=recebidas.reduce((s,r)=>s+r.valor,0);
+  const vPagas=pagas.reduce((s,r)=>s+r.valor,0);
+  const vAReceber=0; const vInadimpl=0;
+  const vPotencial=vRecebido+vAReceber;
+  const vResultado=vRecebido-vPagas;
+  const vOrcado=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra)).reduce((s,o)=>s+o.valor,0);
+  // KPIs
+  const kpis={
+    'dt-kpi-recebido':fmt(vRecebido),'dt-kpi-pago':fmt(vPagas),
+    'dt-kpi-resultado':fmt(Math.abs(vResultado)),'dt-kpi-orcado':fmt(vOrcado),
+    'dt-kpi-areceber':fmt(vAReceber),'dt-kpi-inadimpl':fmt(vInadimpl),
+    'dt-kpi-potencial':fmt(vPotencial)
+  };
+  Object.entries(kpis).forEach(([id,v])=>set(id,v));
+  const resEl=document.getElementById('dt-kpi-resultado');
+  if(resEl) resEl.className='dtlh-kpi-main-val '+(vResultado>=0?'pos':'neg');
+  // Estoque
+  const estObra=DATA.estoque.filter(u=>!f.obra||ccMatch(u.obra,f.obra));
+  const total=estObra.length, vendidos=estObra.filter(u=>u.status==='Vendido').length;
+  const disponiveis=estObra.filter(u=>u.status==='Disponível').length;
+  set('dt-est-total',total||'—'); set('dt-est-vendidos',vendidos||'—'); set('dt-est-disponiveis',disponiveis||'—');
+  const vgv=estObra.reduce((s,u)=>s+(u.venda||0),0);
+  set('dt-est-vgv',vgv?fmt(vgv):'—');
+  renderDtlhOrcTable(pagas,f);
+}
+function renderDtlhOrcTable(pagas,f){
+  const tbody=document.getElementById('dt-orc-body'); if(!tbody) return;
+  const itens=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra));
+  if(!itens.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum orçamento cadastrado</p></div></td></tr>';return;}
+  const vOrcadoTotal=itens.reduce((s,o)=>s+o.valor,0);
+  tbody.innerHTML=itens.map(o=>{
+    const saldo=o.valor; const pct=0;
+    const pctW=Math.round(Math.min(pct,1)*80);
     return `<tr>
-      <td>${r.obra}</td>
-      <td>${r.unidade}</td>
-      <td class="r val-gold">${fmt(r.valor)}</td>
-      <td style="text-align:center"><button onclick="removerEstoque(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px" title="Remover">✕</button></td>
+      <td>${o.obra}</td><td>${o.totalizador||'—'}</td><td>${o.codigo||'—'}</td><td>${o.descricao}</td>
+      <td class="r">${fmt(o.valor)}</td>
+      <td style="text-align:center"><button onclick="removerOrcamento(${DATA.orcamento.indexOf(o)})" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button></td>
     </tr>`;
   }).join('');
+  set('dt-orc-total',fmt(vOrcadoTotal));
 }
 
-function removerEstoque(i) {
-  DATA.estoque.splice(i,1);
-  renderEstoqueTable();
-  renderDtlh();
+// ── ORÇAMENTO ──
+DATA.orcamento = [];
+function adicionarOrcamento(){
+  const obra=document.getElementById('orc-obra').value.trim();
+  const tot=document.getElementById('orc-totalizador').value.trim();
+  const cod=document.getElementById('orc-codigo').value.trim();
+  const desc=document.getElementById('orc-descricao').value.trim();
+  const val=parseBRNum(document.getElementById('orc-valor').value);
+  if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}
+  DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});
+  ['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>document.getElementById(id).value='');
+  renderOrcamentoTable(); renderDtlh();
 }
-
-// DASHBOARD DTLH — FILTERS
-
-function updateDtlhFilters() {
-  const obras = [...new Set([
-    ...DATA.recebidas.map(r=>r.cc),
-    ...DATA.areceber.map(r=>r.cc),
-    ...DATA.pagas.map(r=>r.cc),
-    ...DATA.estoque.map(r=>r.obra)
-  ].filter(Boolean))].sort();
-  const anos = [...new Set([
-    ...DATA.recebidas.map(r=>r.ano),
-    ...DATA.areceber.map(r=>r.ano),
-    ...DATA.pagas.map(r=>r.ano)
-  ].filter(x=>x!=null))].sort();
-  const meses = [...new Set([
-    ...DATA.recebidas.map(r=>r.mes),
-    ...DATA.areceber.map(r=>r.mes),
-    ...DATA.pagas.map(r=>r.mes)
-  ].filter(x=>x!=null))].sort((a,b)=>a-b);
-
-  fillSelect('dt-obra', obras, v=>v, v=>v);
-  fillSelect('dt-ano',  anos,  v=>v, v=>v);
-  fillSelect('dt-mes',  meses, v=>v, v=>MESES_PT[v]);
+function renderOrcamentoTable(){
+  const tbody=document.getElementById('body-orcamento'); if(!tbody) return;
+  const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];
+  const obraList=document.getElementById('orc-obra-list');
+  if(obraList) obraList.innerHTML=obras.map(o=>`<option value="${o}">`).join('');
+  if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item cadastrado</p></div></td></tr>';return;}
+  tbody.innerHTML=DATA.orcamento.map((o,i)=>`<tr>
+    <td>${o.obra}</td><td>${o.totalizador||'—'}</td><td>${o.codigo||'—'}</td><td>${o.descricao}</td>
+    <td class="r val-neg">${fmt(o.valor)}</td>
+    <td style="text-align:center"><button onclick="removerOrcamento(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer">✕</button></td>
+  </tr>`).join('');
 }
-
-function clearDtlhFilters() {
-  ['dt-obra','dt-ano','dt-mes'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
-  document.getElementById('dt-entrega').value = '';
-  renderDtlh();
-}
-
-function getDtF() {
-  const entregaVal = document.getElementById('dt-entrega').value;
-  return {
-    obra: document.getElementById('dt-obra').value,
-    ano:  document.getElementById('dt-ano').value,
-    mes:  document.getElementById('dt-mes').value,
-    comEstoque: document.getElementById('dt-estoque-check').checked,
-    entregaChaves: entregaVal ? new Date(entregaVal + 'T23:59:59') : null
-  };
-}
-
-function applyDtF(arr) {
-  const f = getDtF();
-  return arr.filter(r =>
-    (!f.obra || ccMatch(r.cc||'', f.obra)) &&
-    (!f.ano  || String(r.ano) === f.ano) &&
-    (!f.mes  || String(r.mes) === f.mes)
-  );
-}
-
-// DASHBOARD DTLH — RENDER
-
-function renderDtlh() {
-  const f = getDtF();
-
-  const recebidas = applyDtF(DATA.recebidas);
-  // A Receber: aplica filtros normais + limita por data de entrega das chaves se preenchida
-  const areceberBase = applyDtF(DATA.areceber);
-  const areceber = f.entregaChaves
-    ? areceberBase.filter(r => r.dtVecto && r.dtVecto <= f.entregaChaves)
-    : areceberBase;
-  const pagas = applyDtF(DATA.pagas);
-
-  // Estoque filtrado por obra
-  const estoqueArr = DATA.estoque.filter(r => !f.obra || ccMatch(r.obra, f.obra));
-  const estoqueVal = estoqueArr.reduce((s,r)=>s+r.valor,0);
-
-  // ── Faturamento ──
-  const vRecebido  = recebidas.reduce((s,r)=>s+r.liquido,0);
-  const vInadimpl  = areceber.filter(r=>r.inadimplente).reduce((s,r)=>s+r.liquido,0);
-  const vAReceber  = areceber.filter(r=>!r.inadimplente).reduce((s,r)=>s+r.liquido,0);
-  // Estoque só entra no total se checkbox marcada
-  const vEstoqueNoTotal = f.comEstoque ? estoqueVal : 0;
-  const vFatTotal  = vRecebido + vAReceber + vInadimpl + vEstoqueNoTotal;
-
-  // ── Despesas ──
-  const vPagas     = pagas.reduce((s,r)=>s+r.valor,0);
-  const vAfetacao  = vAReceber * 0.04;
-  const vAfetComis = f.comEstoque ? estoqueVal * 0.12 : 0;
-  // Saldo do orçamento = Orçado − Comprometido (valorObra) da obra
-  const normCodFn  = s => String(s||'').trim().toLowerCase().replace(/\s+/g,'');
-  const itensOrc   = DATA.orcamento.filter(o => !f.obra || ccMatch(o.obra, f.obra));
-  const vOrcado    = itensOrc.reduce((s,o)=>s+o.valor,0);
-  const vComprometido = itensOrc.reduce((s,o)=>{
-    const codOrc = normCodFn(o.codigo);
-    return s + DATA.pagas
-      .filter(p => ccMatch(p.cc||'',o.obra) && normCodFn(p.codItem)===codOrc && codOrc!=='')
-      .reduce((ss,p)=>ss+(p.valorObra||0),0);
-  },0);
-  const vOrcamento = vOrcado - vComprometido;
-  const vDespTotal = vPagas + vAfetacao + vOrcamento + vAfetComis;
-
-  // ── Saldo ──
-  const saldo = vFatTotal - vDespTotal;
-
-  // ── Render KPIs ──
-  const saldoEl = document.getElementById('dt-saldo');
-  saldoEl.textContent = fmt(saldo);
-  saldoEl.className = 'kpi-val ' + (saldo >= 0 ? 'pos' : 'neg');
-  document.getElementById('dt-saldo-sub').textContent =
-    `Faturamento ${fmt(vFatTotal)} − Despesas ${fmt(vDespTotal)}`;
-
-  set('dt-fat-total',   fmt(vFatTotal));
-  set('dt-recebido',    fmt(vRecebido));
-  set('dt-areceber',    fmt(vAReceber));
-  set('dt-inadimplencia', fmt(vInadimpl));
-  set('dt-estoque-val', fmt(estoqueVal));
-
-  set('dt-desp-total',  fmt(vDespTotal));
-  set('dt-pagas',       fmt(vPagas));
-  set('dt-afetacao',    fmt(vAfetacao));
-  set('dt-afet-comissao', f.comEstoque ? fmt(vAfetComis) : '—');
-
-  // Estoque row opacity
-  const estRow = document.getElementById('dt-estoque-row');
-  const afcRow = document.getElementById('dt-afet-comissao-row');
-  if(estRow) estRow.style.opacity = f.comEstoque ? '1' : '0.35';
-  if(afcRow) afcRow.style.opacity = f.comEstoque ? '1' : '0.35';
-
-  // Fat total color
-  const ftEl = document.getElementById('dt-fat-total');
-  if(ftEl) ftEl.className = 'dtlh-group-total pos';
-
-  // ── Tabela Orçamento vs Comprometido ──
-  // Comprometido é acumulado total da obra — não filtra por ano/mês
-  const pagasObra = DATA.pagas.filter(r => !f.obra || ccMatch(r.cc||'', f.obra));
-  renderDtlhOrcTable(pagasObra, f);
-}
-
-function renderDtlhOrcTable(pagas, f) {
-  const itens = DATA.orcamento.filter(o => !f.obra || ccMatch(o.obra, f.obra));
-  const tbody = document.getElementById('dt-orc-body');
-  document.getElementById('dt-orc-count').textContent = itens.length + ' itens';
-
-  if(!itens.length) {
-    tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><p>Cadastre itens na aba Orçamento</p></div></td></tr>';
-    set('dt-orcamento','—');
-    return;
-  }
-
-  const normCod = s => String(s||'').trim().toLowerCase().replace(/\s+/g,'');
-
-  // Pré-calcula comprometido por item — filtra por obra DO ITEM (não do filtro da tela)
-  const calcItem = o => {
-    const codOrc = normCod(o.codigo);
-    const comprometido = DATA.pagas
-      .filter(p => ccMatch(p.cc||'', o.obra) && normCod(p.codItem) === codOrc && codOrc !== '')
-      .reduce((s,p) => s+(p.valorObra||0), 0);
-    const saldo      = o.valor - comprometido;
-    const pct        = o.valor > 0 ? comprometido/o.valor : 0;
-    const disponivel = Math.max(0, saldo);
-    return {comprometido, saldo, pct, disponivel};
-  };
-
-  const pctBar = (pct) => {
-    const w   = Math.min(Math.round(pct*100),100);
-    const col = pct>1?'#C0392B':pct>0.8?'#B7950B':'#1A7A3C';
-    return `<div style="display:flex;align-items:center;gap:6px">
-      <div style="flex:1;height:6px;background:var(--surface2);max-width:80px">
-        <div style="height:6px;width:${w}%;background:${col}"></div>
-      </div>
-      <span style="font-size:11px;color:var(--text3);width:38px;text-align:right">${(pct*100).toFixed(1)}%</span>
-    </div>`;
-  };
-
-  // Agrupa por totalizador
-  const grupos = {};
-  itens.forEach(o => {
-    const t = o.totalizador||'(Sem Totalizador)';
-    if(!grupos[t]) grupos[t]=[];
-    grupos[t].push(o);
-  });
-
-  let html='';
-  let grandOrcado=0, grandComp=0;
-
-  Object.keys(grupos).sort().forEach(tot => {
-    const items = grupos[tot];
-    let totOrcado=0, totComp=0;
-
-    const itemRows = items.map(o => {
-      const {comprometido,saldo,pct,disponivel} = calcItem(o);
-      totOrcado += o.valor; totComp += comprometido;
-      return `<tr>
-        <td style="padding-left:24px;color:var(--text2)">${o.codigo}</td>
-        <td style="color:var(--text2)">${o.descricao||'—'}</td>
-        <td class="r">${fmt(o.valor)}</td>
-        <td class="r val-neg">${fmt(comprometido)}</td>
-        <td class="r ${saldo>=0?'val-pos':'val-neg'}">${fmt(saldo)}</td>
-        <td>${pctBar(pct)}</td>
-        <td class="r val-pos">${fmt(disponivel)}</td>
-      </tr>`;
-    }).join('');
-
-    grandOrcado+=totOrcado; grandComp+=totComp;
-    const totSaldo=totOrcado-totComp;
-    const totPct=totOrcado>0?totComp/totOrcado:0;
-
-    // Linha subtotal do totalizador
-    html += `<tr style="background:#EAF2FB;border-top:2px solid #AED6F1">
-      <td colspan="2"><strong style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--blue)">${tot}</strong></td>
-      <td class="r" style="font-weight:600">${fmt(totOrcado)}</td>
-      <td class="r val-neg" style="font-weight:600">${fmt(totComp)}</td>
-      <td class="r ${totSaldo>=0?'val-pos':'val-neg'}" style="font-weight:600">${fmt(totSaldo)}</td>
-      <td>${pctBar(totPct)}</td>
-      <td class="r val-pos" style="font-weight:600">${fmt(Math.max(0,totSaldo))}</td>
-    </tr>`;
-    html += itemRows;
-  });
-
-  // Linha grand total
-  const grandSaldo=grandOrcado-grandComp;
-  const grandPct=grandOrcado>0?grandComp/grandOrcado:0;
-  html += `<tr style="background:var(--surface2);border-top:3px solid var(--border)">
-    <td colspan="2"><strong>TOTAL GERAL</strong></td>
-    <td class="r" style="font-weight:700">${fmt(grandOrcado)}</td>
-    <td class="r val-neg" style="font-weight:700">${fmt(grandComp)}</td>
-    <td class="r ${grandSaldo>=0?'val-pos':'val-neg'}" style="font-weight:700">${fmt(grandSaldo)}</td>
-    <td>${pctBar(grandPct)}</td>
-    <td class="r val-pos" style="font-weight:700">${fmt(Math.max(0,grandSaldo))}</td>
-  </tr>`;
-
-  tbody.innerHTML = html;
-
-  // Aviso de lançamentos sem match — usa pagas da(s) obra(s) do orçamento
-  const obrasOrc = [...new Set(itens.map(o=>o.obra))];
-  const pagasDeObra = DATA.pagas.filter(p => obrasOrc.some(ob => ccMatch(p.cc||'', ob)));
-  const codigos = new Set(itens.map(o => normCod(o.codigo)));
-  const semMatch = pagasDeObra.filter(p => {
-    const c = normCod(p.codItem);
-    return c === '' || !codigos.has(c);
-  });
-  const valorSemMatch = semMatch.reduce((s,p)=>s+(p.valorObra||0),0);
-  let avisoEl = document.getElementById('dt-orc-aviso');
-  if(!avisoEl){
-    avisoEl = document.createElement('div');
-    avisoEl.id = 'dt-orc-aviso';
-    avisoEl.style.cssText = 'margin-top:8px;padding:10px 16px;font-size:12px;border-left:3px solid';
-    const tblCard = document.getElementById('dt-orc-body').closest('.tbl-card');
-    tblCard.parentNode.insertBefore(avisoEl, tblCard.nextSibling);
-  }
-  if(semMatch.length && valorSemMatch > 0){
-    avisoEl.style.borderColor='#B7950B';avisoEl.style.background='#FEF9E7';
-    avisoEl.style.color='#7D6608';avisoEl.style.display='block';
-    avisoEl.innerHTML=`⚠ <strong>${semMatch.length} lançamento(s)</strong> de Contas Pagas com <strong>Vlr Aprop Obra = ${fmt(valorSemMatch)}</strong> não vinculados a nenhum item do orçamento (código ausente ou sem correspondência).`;
-  } else {
-    if(avisoEl) avisoEl.style.display='none';
-  }
-  set('dt-orcamento', fmt(grandSaldo));
-  const orcEl = document.getElementById('dt-orcamento');
-  if(orcEl) orcEl.className = 'dtlh-item-val '+(grandSaldo>=0?'':'neg');
-}
-
-// ORÇAMENTO
-
-if(!DATA.orcamento) DATA.orcamento = [];
-
-function adicionarOrcamento() {
-  const obra        = document.getElementById('orc-obra').value.trim();
-  const totalizador = document.getElementById('orc-totalizador').value.trim().toUpperCase();
-  const codigo      = document.getElementById('orc-codigo').value.trim();
-  const descricao   = document.getElementById('orc-descricao').value.trim();
-  const valor       = parseBRNum(document.getElementById('orc-valor').value);
-  if(!obra || !totalizador || !codigo || !valor) { alert('Preencha Obra, Totalizador, Código e Valor.'); return; }
-  const existe = DATA.orcamento.find(o => ccMatch(o.obra,obra) && o.codigo.trim()===codigo);
-  if(existe) { alert(`Código "${codigo}" já existe nesta obra.`); return; }
-  DATA.orcamento.push({ obra:normCC(obra), totalizador, codigo, descricao, valor });
-  document.getElementById('orc-totalizador').value='';
-  document.getElementById('orc-codigo').value='';
-  document.getElementById('orc-descricao').value='';
-  document.getElementById('orc-valor').value='';
-  renderOrcamentoTable();
-  renderDtlh();
-}
-
-function renderOrcamentoTable() {
-  const tbody = document.getElementById('body-orcamento');
-  const total = DATA.orcamento.reduce((s,r)=>s+r.valor,0);
-  document.getElementById('count-orcamento').textContent = DATA.orcamento.length+' itens';
-  document.getElementById('total-orcamento').textContent = fmt(total);
-
-  // Autocomplete obras e totalizadores
-  const obras = [...new Set([...DATA.pagas,...DATA.recebidas,...DATA.areceber].map(r=>r.cc).filter(Boolean))];
-  document.getElementById('orc-obra-list').innerHTML = obras.map(o=>`<option value="${o}">`).join('');
-  const tots = [...new Set(DATA.orcamento.map(r=>r.totalizador).filter(Boolean))].sort();
-  document.getElementById('orc-tot-list').innerHTML = tots.map(t=>`<option value="${t}">`).join('');
-
-  if(!DATA.orcamento.length){
-    tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item cadastrado</p></div></td></tr>';
-    return;
-  }
-
-  // Agrupa por totalizador
-  const grupos = {};
-  DATA.orcamento.forEach(r => {
-    const t = r.totalizador||'(Sem Totalizador)';
-    if(!grupos[t]) grupos[t]=[];
-    grupos[t].push(r);
-  });
-
-  let html = '';
-  Object.keys(grupos).sort().forEach(tot => {
-    const items = grupos[tot];
-    const totTotal = items.reduce((s,r)=>s+r.valor,0);
-    const idx = DATA.orcamento.indexOf(items[0]);
-    // Linha do totalizador
-    html += `<tr style="background:var(--surface2)">
-      <td colspan="3"><strong style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--text)">${tot}</strong></td>
-      <td class="r" style="font-weight:600">${fmt(totTotal)}</td>
-      <td></td>
-    </tr>`;
-    items.forEach(r => {
-      const i = DATA.orcamento.indexOf(r);
-      html += `<tr>
-        <td style="padding-left:28px">${r.obra}</td>
-        <td>${r.totalizador}</td>
-        <td><strong>${r.codigo}</strong></td>
-        <td>${r.descricao||'—'}</td>
-        <td class="r">${fmt(r.valor)}</td>
-        <td style="text-align:center"><button onclick="removerOrcamento(${i})" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:14px" title="Remover">✕</button></td>
-      </tr>`;
-    });
-  });
-  tbody.innerHTML = html;
-}
-
-function removerOrcamento(i) {
-  DATA.orcamento.splice(i,1);
-  renderOrcamentoTable();
-  renderDtlh();
-}
-
-// ── Import Excel/CSV ────────────────────────────────
-function importarOrcamento(input) {
-  const file = input.files[0];
-  if(!file) return;
-  const statusEl = document.getElementById('status-orc-import');
-  statusEl.textContent = 'Lendo arquivo…';
-
-  const reader = new FileReader();
-  const isCsv = file.name.toLowerCase().endsWith('.csv');
-
-  reader.onload = e => {
-    try {
-      let rows = [];
-      if(isCsv) {
-        rows = parseTSV(e.target.result);
-        if(!rows.length) {
-          // tenta com vírgula
-          const lines = e.target.result.trim().split(/\r?\n/).filter(l=>l.trim());
-          const headers = lines[0].split(',').map(h=>h.trim());
-          rows = lines.slice(1).map(line=>{
-            const cols=line.split(',');
-            const row={};
-            headers.forEach((h,i)=>{row[h]=(cols[i]||'').trim();});
-            return row;
-          });
-        }
-      } else {
-        const wb = XLSX.read(e.target.result, {type:'array'});
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json(ws, {defval:''});
-      }
-
-      if(!rows.length) { statusEl.textContent='Nenhuma linha encontrada.'; return; }
-
-      let adicionados=0, duplicados=0, erros=0;
-      rows.forEach(r => {
-        const obra        = normCC(String(findCol(r,['obra','Obra','OBRA'])||'').trim());
-        const totalizador = String(findCol(r,['totalizador','Totalizador','TOTALIZADOR','item totalizador'])||'').trim().toUpperCase();
-        const codigo      = String(findCol(r,['codigo','Codigo','Código','CODIGO','cod','cod.'])||'').trim();
-        const descricao   = String(findCol(r,['descricao','Descricao','Descrição','DESCRICAO','desc'])||'').trim();
-        const valor       = parseBRNum(findCol(r,['valor','Valor','VALOR','valor orcado','valor orçado'])||0);
-
-        if(!obra||!codigo||!valor){ erros++; return; }
-        if(!totalizador){ erros++; return; }
-        const existe = DATA.orcamento.find(o=>ccMatch(o.obra,obra)&&o.codigo.trim()===codigo);
-        if(existe){ duplicados++; return; }
-        DATA.orcamento.push({obra, totalizador, codigo, descricao, valor});
-        adicionados++;
+function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
+function importarOrcamento(input){
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:''});
+      rows.forEach(r=>{
+        const obra=String(r['Obra']||r['obra']||'').trim();
+        const desc=String(r['Descrição']||r['Descricao']||r['descricao']||'').trim();
+        const val=parseBRNum(String(r['Valor']||r['valor']||'0'));
+        if(obra&&desc&&val) DATA.orcamento.push({obra,totalizador:String(r['Totalizador']||'').trim(),codigo:String(r['Código']||r['Codigo']||'').trim(),descricao:desc,valor:val});
       });
-
-      renderOrcamentoTable();
-      renderDtlh();
-      statusEl.style.color='var(--green)';
-      statusEl.textContent = `✓ ${adicionados} itens importados${duplicados?` · ${duplicados} duplicados ignorados`:''}${erros?` · ${erros} erros`:''}`;
-    } catch(err) {
-      statusEl.style.color='var(--brand)';
-      statusEl.textContent = 'Erro: '+err.message;
-    }
+      renderOrcamentoTable(); renderDtlh();
+      alert(`✓ ${DATA.orcamento.length} itens carregados.`);
+    }catch(err){alert('Erro ao importar: '+err.message);}
   };
-
-  if(isCsv) reader.readAsText(file,'UTF-8');
-  else       reader.readAsArrayBuffer(file);
-  input.value='';
+  reader.readAsArrayBuffer(file); input.value='';
 }
-
-// ── Baixar Modelo ───────────────────────────────────
-function baixarModeloOrcamento() {
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([
-    ['obra','totalizador','codigo','descricao','valor'],
-    ['RESIDENCIAL PRIME','ESTRUTURA','01.001','Fundação',150000],
-    ['RESIDENCIAL PRIME','ESTRUTURA','01.002','Pilares e Vigas',280000],
-    ['RESIDENCIAL PRIME','ACABAMENTO','02.001','Revestimento Cerâmico',95000],
-  ]);
-  ws['!cols'] = [{wch:22},{wch:18},{wch:10},{wch:30},{wch:12}];
-  XLSX.utils.book_append_sheet(wb,ws,'Modelo');
+function baixarModeloOrcamento(){
+  const wb=XLSX.utils.book_new();
+  const ws=XLSX.utils.aoa_to_sheet([['Obra','Totalizador','Código','Descrição','Valor'],['Exemplo Obra','01','1.1.1','Fundação',150000]]);
+  XLSX.utils.book_append_sheet(wb,ws,'Orçamento');
   XLSX.writeFile(wb,'Modelo_Orcamento_Solucione.xlsx');
 }
-
-// ── Exportar Orçamento ──────────────────────────────
-function exportarOrcamento() {
-  if(!DATA.orcamento.length){ alert('Nenhum item para exportar.'); return; }
-  const wb = XLSX.utils.book_new();
-  const rows = DATA.orcamento.map(r=>({
-    'Obra':r.obra, 'Totalizador':r.totalizador, 'Código':r.codigo,
-    'Descrição':r.descricao, 'Valor Orçado':r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})
-  }));
-  const ws = XLSX.utils.json_to_sheet(rows,{raw:false});
-  ws['!cols']=[{wch:22},{wch:18},{wch:10},{wch:30},{wch:14}];
+function exportarOrcamento(){
+  if(!DATA.orcamento.length){alert('Nenhum item para exportar.');return;}
+  const wb=XLSX.utils.book_new();
+  const rows=DATA.orcamento.map(o=>({'Obra':o.obra,'Totalizador':o.totalizador||'','Código':o.codigo||'','Descrição':o.descricao,'Valor':(o.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}));
+  const ws=XLSX.utils.json_to_sheet(rows,{raw:false});
   XLSX.utils.book_append_sheet(wb,ws,'Orçamento');
-  XLSX.writeFile(wb,'Solucione_Orcamento.xlsx');
+  XLSX.writeFile(wb,`Solucione_Orcamento_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
 }
-function debugOrcamento() {
-  const normCod = s => String(s||'').trim().toLowerCase().replace(/\s+/g,'');
 
-  // Pega todas as obras do orçamento
-  const obrasOrc = [...new Set(DATA.orcamento.map(o=>o.obra))];
-
-  // Todos os lançamentos de pagas com valorObra > 0
-  const pagasComValor = DATA.pagas.filter(p => (p.valorObra||0) > 0);
-  const pagasDaObra   = DATA.pagas.filter(p => obrasOrc.some(ob => ccMatch(p.cc||'', ob)));
-
-  // Código específico que falhou
-  const codTeste = '00.000.012.002';
-  const codNorm  = normCod(codTeste);
-  const matchesCod = DATA.pagas.filter(p => normCod(p.codItem) === codNorm);
-  const matchesCodObra = DATA.pagas.filter(p => normCod(p.codItem) === codNorm && obrasOrc.some(ob => ccMatch(p.cc||'', ob)));
-
-  let msg = '══ DIAGNÓSTICO ORÇAMENTO ══\n\n';
-  msg += `Obras no orçamento: ${obrasOrc.join(' | ')}\n\n`;
-  msg += `Total lançamentos em DATA.pagas: ${DATA.pagas.length}\n`;
-  msg += `Com Vlr Aprop Obra > 0: ${pagasComValor.length} → Total: R$ ${pagasComValor.reduce((s,p)=>s+(p.valorObra||0),0).toLocaleString('pt-BR',{minimumFractionDigits:2})}\n`;
-  msg += `Que batem com obra do orçamento (cc match): ${pagasDaObra.length}\n\n`;
-
-  msg += `── Código "${codTeste}" ──\n`;
-  msg += `Lançamentos com este código (sem filtro de obra): ${matchesCod.length}\n`;
-  if(matchesCod.length){
-    matchesCod.forEach((p,i) => {
-      msg += `  [${i+1}] cc="${p.cc}" | codItem="${p.codItem}" | valorObra=${p.valorObra} | normCod="${normCod(p.codItem)}"\n`;
-    });
-  }
-  msg += `Lançamentos com este código E obra ok: ${matchesCodObra.length}\n`;
-  if(matchesCodObra.length){
-    let somaObra = 0;
-    matchesCodObra.forEach((p,i) => {
-      somaObra += (p.valorObra||0);
-      msg += `  [${i+1}] cc="${p.cc}" | valorObra=${p.valorObra} | tipo="${p.tipo}"\n`;
-    });
-    msg += `  → SOMA valorObra: ${somaObra.toLocaleString('pt-BR',{minimumFractionDigits:2})}\n`;
-  }
-  msg += '\n';
-
-  // Mostra os cc únicos das pagas vs obras do orçamento
-  const ccsUnicos = [...new Set(DATA.pagas.map(p=>p.cc))].filter(Boolean);
-  msg += `CCs únicos nas pagas (${ccsUnicos.length}):\n`;
-  ccsUnicos.forEach(cc => { msg += `  "${cc}"\n`; });
-
-  msg += `\nObras no orçamento (normalizadas):\n`;
-  obrasOrc.forEach(o => { msg += `  "${o}"\n`; });
-
-  // Amostra dos codItems das pagas
-  const codItemsUnicos = [...new Set(DATA.pagas.map(p=>p.codItem).filter(Boolean))].slice(0,30);
-  msg += `\nCódigos únicos nas pagas (primeiros 30):\n`;
-  codItemsUnicos.forEach(c => { msg += `  "${c}" → norm:"${normCod(c)}"\n`; });
-
-  console.log(msg);
-  alert(msg);
-}
 </script>
 <div class="page" id="page-csv">
   <div class="sec-title">CSV Analítico de Apropriações</div>
