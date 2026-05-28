@@ -354,7 +354,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
         <select class="filter-select" id="fcsv-ano" onchange="renderCSVTable()"><option value="">Todos os anos</option></select>
         <select class="filter-select" id="fcsv-mes" onchange="renderCSVTable()"><option value="">Todos os meses</option></select>
         <select class="filter-select" id="fcsv-cc" onchange="renderCSVTable()"><option value="">Todos os CCs</option></select>
-        <select class="filter-select" id="fcsv-conta" onchange="renderCSVTable()"><option value="">Todas as contas</option></select>
+        <select class="filter-select" id="fcsv-tipo" onchange="renderCSVTable()"><option value="">Todos os tipos</option><option value="FATURAMENTO">Faturamento</option><option value="DESCONTO">Desconto Concedido</option><option value="PAGAMENTO">Pagamento</option></select>
         <button class="btn-ghost" onclick="clearCSVFilters()">✕</button>
       </div>
     </div>
@@ -615,6 +615,16 @@ function findColKey(row, candidates) {
   return { foundKey: null, value: '' };
 }
 
+// Finds exact column name match (case-insensitive trim), falls back to findColKey
+function findColExact(row, exactNames, fallbackCandidates) {
+  const keys = Object.keys(row);
+  for (const name of exactNames) {
+    const key = keys.find(k => k.trim().toLowerCase() === name.trim().toLowerCase());
+    if (key !== undefined) return { foundKey: key, value: (row[key]||'').trim() };
+  }
+  return findColKey(row, fallbackCandidates||exactNames);
+}
+
 // PARSE — CSV ANALÍTICO DE APROPRIAÇÕES
 
 function processCSVText(txt) {
@@ -627,7 +637,7 @@ function processCSVText(txt) {
   const mData = {
     data:        findColKey(first, ['Data','data','dt','Data Mov','DataMov']),
     complemento: findColKey(first, ['Complemento','complemento','Descricao','descricao','Histórico','historico']),
-    valor:       findColKey(first, ['Valor','valor']),
+    valor:       findColExact(first, ['Valor'], ['Valor','valor']),
     cc:          findColKey(first, ['Nome Centro de Custo','NomeCentroCusto','nome centro de custo','centro de custo','Nome CC','NomeCC']),
     conta:       findColKey(first, ['Conta','conta','Plano de Contas','plano de contas']),
   };
@@ -643,7 +653,7 @@ function processCSVText(txt) {
   const novos = rows.map(r => {
     const data        = parseDateBR((findColKey(r, ['Data','data','dt','Data Mov','DataMov'])).value);
     const complemento = (findColKey(r, ['Complemento','complemento','Descricao','descricao','Histórico','historico'])).value;
-    const valor       = parseBRNum((findColKey(r, ['Valor','valor'])).value);
+    const valor       = parseBRNum((findColExact(r, ['Valor'], ['Valor','valor'])).value);
     const cc          = normCC((findColKey(r, ['Nome Centro de Custo','NomeCentroCusto','nome centro de custo','centro de custo','Nome CC','NomeCC'])).value);
     const conta       = (findColKey(r, ['Conta','conta','Plano de Contas','plano de contas'])).value;
 
@@ -680,7 +690,7 @@ function limparCSV() {
 }
 
 function clearCSVFilters() {
-  ['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-tipo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderCSVTable();
 }
 
@@ -690,22 +700,20 @@ function renderCSVTable() {
   const anos  = [...new Set(arr.map(r=>r.ano).filter(x=>x!=null))].sort();
   const meses = [...new Set(arr.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
   const ccs   = [...new Set(arr.map(r=>r.cc).filter(Boolean))].sort();
-  const contas= [...new Set(arr.map(r=>r.conta).filter(Boolean))].sort();
-  fillSelect('fcsv-ano',  anos,  v=>v, v=>v);
-  fillSelect('fcsv-mes',  meses, v=>v, v=>MESES_PT[v]);
-  fillSelect('fcsv-cc',   ccs,   v=>v, v=>v);
-  fillSelect('fcsv-conta',contas,v=>v, v=>v);
+  fillSelect('fcsv-ano', anos,  v=>v, v=>v);
+  fillSelect('fcsv-mes', meses, v=>v, v=>MESES_PT[v]);
+  fillSelect('fcsv-cc',  ccs,   v=>v, v=>v);
 
-  const fAno   = document.getElementById('fcsv-ano')?.value||'';
-  const fMes   = document.getElementById('fcsv-mes')?.value||'';
-  const fCC    = document.getElementById('fcsv-cc')?.value||'';
-  const fConta = document.getElementById('fcsv-conta')?.value||'';
+  const fAno  = document.getElementById('fcsv-ano')?.value||'';
+  const fMes  = document.getElementById('fcsv-mes')?.value||'';
+  const fCC   = document.getElementById('fcsv-cc')?.value||'';
+  const fTipo = document.getElementById('fcsv-tipo')?.value||'';
 
   const filtered = arr.filter(r=>
-    (!fAno   || String(r.ano)===fAno) &&
-    (!fMes   || String(r.mes)===fMes) &&
-    (!fCC    || ccMatch(r.cc||'',fCC)) &&
-    (!fConta || r.conta===fConta)
+    (!fAno  || String(r.ano)===fAno) &&
+    (!fMes  || String(r.mes)===fMes) &&
+    (!fCC   || ccMatch(r.cc||'',fCC)) &&
+    (!fTipo || r.tipo===fTipo)
   );
 
   document.getElementById('count-csv').textContent = filtered.length+' de '+arr.length+' registros';
