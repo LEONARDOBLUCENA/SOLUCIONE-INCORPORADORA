@@ -221,7 +221,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <button class="btn-ghost" onclick="clearDashFilters()">✕ Limpar</button>
   </div>
 
-  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
+  <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
 
     <div class="kpi-card c-green">
       <div class="kpi-label">Faturamento Bruto</div>
@@ -249,6 +249,12 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <div class="kpi-label">Resultado (Fat. Líq. − Pago)</div>
       <div class="kpi-val" id="d-kpi-resultado">—</div>
       <div class="kpi-sub" id="d-kpi-resultado-sub">—</div>
+    </div>
+
+    <div class="kpi-card c-gold">
+      <div class="kpi-label">Total de Registros</div>
+      <div class="kpi-val" id="d-kpi-total-reg" style="font-size:22px">—</div>
+      <div class="kpi-sub" id="d-kpi-total-reg-sub">no período filtrado</div>
     </div>
 
   </div>
@@ -285,7 +291,11 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <div class="chart-subtitle">Faturamento Líquido − Pagamentos por mês (verde = superávit, vermelho = déficit)</div>
       <canvas id="ch-resultado-caixa"></canvas>
     </div>
-
+    <div class="chart-card">
+      <div class="chart-title">Pagamentos por Conta (Plano de Contas)</div>
+      <div class="chart-subtitle">Distribuição dos pagamentos por categoria</div>
+      <canvas id="ch-caixapermuta"></canvas>
+    </div>
   </div>
 
   <div class="tbl-card">
@@ -461,7 +471,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
         <select class="filter-select" id="fcsv-ano" onchange="renderCSVTable()"><option value="">Todos os anos</option></select>
         <select class="filter-select" id="fcsv-mes" onchange="renderCSVTable()"><option value="">Todos os meses</option></select>
         <select class="filter-select" id="fcsv-cc" onchange="renderCSVTable()"><option value="">Todos os CCs</option></select>
-        <select class="filter-select" id="fcsv-tipo" onchange="renderCSVTable()"><option value="">Todos os tipos</option><option value="FATURAMENTO">Faturamento</option><option value="DESCONTO">Desconto Concedido</option><option value="PAGAMENTO">Pagamento</option></select>
+        <select class="filter-select" id="fcsv-conta" onchange="renderCSVTable()"><option value="">Todas as contas</option></select>
         <button class="btn-ghost" onclick="clearCSVFilters()">✕</button>
       </div>
     </div>
@@ -484,7 +494,14 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
   </div>
 </div>
-  <div cla'Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+<script>
+
+// STATE
+
+const DATA = { csv:[] };
+const CHARTS = {};
+const MESES_PT  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_SH  = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 
 // NAV
@@ -579,7 +596,6 @@ function tipoFaturamento(acrescimos) {
 
 window.addEventListener('load', () => {
   wirePaste('paste-csv',  processCSVText,    'status-csv');
-  wirePaste('paste-areceber', processAReceberText, 'status-areceber');
   // Dashboard Geral filters
   ['d-ano','d-mes','d-cc'].forEach(id => {
     const el = document.getElementById(id);
@@ -659,15 +675,6 @@ function findColKey(row, candidates) {
   return { foundKey: null, value: '' };
 }
 
-function findColExact(row, exactNames, fallbackCandidates) {
-  const keys = Object.keys(row);
-  for (const name of exactNames) {
-    const key = keys.find(k => k.trim().toLowerCase() === name.trim().toLowerCase());
-    if (key !== undefined) return { foundKey: key, value: (row[key]||'').trim() };
-  }
-  return findColKey(row, fallbackCandidates||exactNames);
-}
-
 // PARSE — CSV ANALÍTICO DE APROPRIAÇÕES
 
 function processCSVText(txt) {
@@ -680,9 +687,9 @@ function processCSVText(txt) {
   const mData = {
     data:        findColKey(first, ['Data','data','dt','Data Mov','DataMov']),
     complemento: findColKey(first, ['Complemento','complemento','Descricao','descricao','Histórico','historico']),
-    valor:       findColExact(first, ['Valor'], ['Valor','valor']),
+    valor:       findColKey(first, ['Valor','valor']),
     cc:          findColKey(first, ['Nome Centro de Custo','NomeCentroCusto','nome centro de custo','centro de custo','Nome CC','NomeCC']),
-    conta:       findColExact(first, ['Conta','Plano de Contas'], ['Conta','conta','Plano de Contas','plano de contas']),
+    conta:       findColKey(first, ['Conta','conta','Plano de Contas','plano de contas']),
   };
 
   renderDiag('diag-csv', allHeaders, [
@@ -696,14 +703,14 @@ function processCSVText(txt) {
   const novos = rows.map(r => {
     const data        = parseDateBR((findColKey(r, ['Data','data','dt','Data Mov','DataMov'])).value);
     const complemento = (findColKey(r, ['Complemento','complemento','Descricao','descricao','Histórico','historico'])).value;
-    const valor       = parseBRNum((findColExact(r, ['Valor'], ['Valor','valor'])).value);
+    const valor       = parseBRNum((findColKey(r, ['Valor','valor'])).value);
     const cc          = normCC((findColKey(r, ['Nome Centro de Custo','NomeCentroCusto','nome centro de custo','centro de custo','Nome CC','NomeCC'])).value);
-    const conta       = (findColExact(r, ['Conta','Plano de Contas'], ['Conta','conta','Plano de Contas','plano de contas'])).value;
+    const conta       = (findColKey(r, ['Conta','conta','Plano de Contas','plano de contas'])).value;
 
     // Classificação: Recebimento = faturamento, Desconto Concedido = desconto, resto = pagamento
     const compUpper = complemento.toUpperCase();
     let tipo;
-    if(compUpper.includes('RECEBIMENTO') || compUpper.includes('A RECEBER')) tipo = 'FATURAMENTO';
+    if(compUpper.includes('RECEBIMENTO')) tipo = 'FATURAMENTO';
     else if(compUpper.includes('DESCONTO CONCEDIDO')) tipo = 'DESCONTO';
     else tipo = 'PAGAMENTO';
 
@@ -733,7 +740,7 @@ function limparCSV() {
 }
 
 function clearCSVFilters() {
-  ['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-tipo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  ['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderCSVTable();
 }
 
@@ -743,20 +750,22 @@ function renderCSVTable() {
   const anos  = [...new Set(arr.map(r=>r.ano).filter(x=>x!=null))].sort();
   const meses = [...new Set(arr.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b);
   const ccs   = [...new Set(arr.map(r=>r.cc).filter(Boolean))].sort();
-  fillSelect('fcsv-ano', anos,  v=>v, v=>v);
-  fillSelect('fcsv-mes', meses, v=>v, v=>MESES_PT[v]);
-  fillSelect('fcsv-cc',  ccs,   v=>v, v=>v);
+  const contas= [...new Set(arr.map(r=>r.conta).filter(Boolean))].sort();
+  fillSelect('fcsv-ano',  anos,  v=>v, v=>v);
+  fillSelect('fcsv-mes',  meses, v=>v, v=>MESES_PT[v]);
+  fillSelect('fcsv-cc',   ccs,   v=>v, v=>v);
+  fillSelect('fcsv-conta',contas,v=>v, v=>v);
 
-  const fAno  = document.getElementById('fcsv-ano')?.value||'';
-  const fMes  = document.getElementById('fcsv-mes')?.value||'';
-  const fCC   = document.getElementById('fcsv-cc')?.value||'';
-  const fTipo = document.getElementById('fcsv-tipo')?.value||'';
+  const fAno   = document.getElementById('fcsv-ano')?.value||'';
+  const fMes   = document.getElementById('fcsv-mes')?.value||'';
+  const fCC    = document.getElementById('fcsv-cc')?.value||'';
+  const fConta = document.getElementById('fcsv-conta')?.value||'';
 
   const filtered = arr.filter(r=>
-    (!fAno  || String(r.ano)===fAno) &&
-    (!fMes  || String(r.mes)===fMes) &&
-    (!fCC   || ccMatch(r.cc||'',fCC)) &&
-    (!fTipo || r.tipo===fTipo)
+    (!fAno   || String(r.ano)===fAno) &&
+    (!fMes   || String(r.mes)===fMes) &&
+    (!fCC    || ccMatch(r.cc||'',fCC)) &&
+    (!fConta || r.conta===fConta)
   );
 
   document.getElementById('count-csv').textContent = filtered.length+' de '+arr.length+' registros';
@@ -801,14 +810,6 @@ function exportExcelCSV() {
 }
 
 
-
-function clearAReceberFilters(){
-  ['fa-ano','fa-mes','fa-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  const ci=document.getElementById('fa-cliente');if(ci)ci.value='';
-  renderAReceberTable();
-}
-
-
 // EXPORT EXCEL
 
 function exportExcel(key) {
@@ -816,7 +817,8 @@ function exportExcel(key) {
   const fmtDate = d => d ? d.toLocaleDateString('pt-BR') : '';
   const fmtNum  = v => (v||0).toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
 
-  let rows = [];
+  let rows = [];));
+  }
 
   if(!rows.length){ alert('Nenhum dado para exportar.'); return; }
 
@@ -883,6 +885,8 @@ function renderDashboard() {
   resEl.className = 'kpi-val '+(resultado>=0?'pos':'neg');
   set('d-kpi-resultado-sub', resultado>=0?'▲ Superávit':'▼ Déficit');
 
+  set('d-kpi-total-reg', csvF.length.toLocaleString('pt-BR'));
+  set('d-kpi-total-reg-sub', csvF.length === DATA.csv.length ? 'total de registros' : `de ${DATA.csv.length} registros`);
 
   renderCharts(csvF);
   renderPlanoTable(csvF);
@@ -1024,14 +1028,11 @@ function restoreJSON(input) {
       if(!payload.data) throw new Error('Formato inválido');
 
       // Reidrata datas
-      DATA.csv = (payload.data.csv||[]).map(r=>({...r,
-        data: r.data ? new Date(r.data) : null
-      }));
+      DATA.csv = (payload.data.csv||[]).map(r=>({...r, data: r.data ? new Date(r.data) : null}));
       DATA.estoque   = payload.data.estoque   || [];
       DATA.orcamento = payload.data.orcamento || [];
 
       renderCSVTable();
-      renderAReceberTable();
       renderEstoqueTable();
       renderOrcamentoTable();
       updateDashFilters();
@@ -1052,6 +1053,33 @@ function restoreJSON(input) {
 
 // PLANO FINANCEIRO TABLE
 
+function renderPlanoTable(csv) {
+  const pagRows = csv.filter(r=>r.tipo==='PAGAMENTO');
+  const contas={};
+  pagRows.forEach(r=>{
+    const c=r.conta||'(Sem conta)';
+    if(!contas[c])contas[c]={total:0,n:0};
+    contas[c].total+=r.valor;
+    contas[c].n++;
+  });
+  const total=Object.values(contas).reduce((s,c)=>s+c.total,0);
+  const sorted=Object.entries(contas).sort((a,b)=>b[1].total-a[1].total);
+  set('d-plano-count',sorted.length+' contas');
+  if(!sorted.length){
+    document.getElementById('d-plano-body').innerHTML='<tr><td colspan="4"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>';
+    return;
+  }
+  document.getElementById('d-plano-body').innerHTML=sorted.map(([nome,d])=>{
+    const pct=total>0?d.total/total:0;
+    const w=Math.round(pct*80);
+    return`<tr>
+      <td>${nome}</td>
+      <td class="r val-neg">${fmt(d.total)}</td>
+      <td><div class="pct-bar-wrap"><div class="pct-bar-bg"><div class="pct-bar-fill" style="width:${w}px"></div></div><span class="pct-txt">${(pct*100).toFixed(1)}%</span></div></td>
+      <td class="r">${d.n}</td>
+    </tr>`;
+  }).join('');
+}
 
 // ESTOQUE
 
@@ -1159,10 +1187,8 @@ function renderDtlh() {
 
   const csvFiltered = applyDtF(DATA.csv);
   const recebidas = csvFiltered.filter(r=>r.tipo==='FATURAMENTO');
-  const pagasCsv  = csvFiltered.filter(r=>r.tipo==='PAGAMENTO');
-  // A Receber: aplica filtros normais + limita por data de entrega das chaves se preenchida
   const areceber = [];
-  const pagas = pagasCsv;
+  const pagas = csvFiltered.filter(r=>r.tipo==='PAGAMENTO');
 
   // Estoque filtrado por obra
   const estoqueArr = DATA.estoque.filter(r => !f.obra || ccMatch(r.obra, f.obra));
@@ -1170,8 +1196,8 @@ function renderDtlh() {
 
   // ── Faturamento ──
   const vRecebido  = recebidas.reduce((s,r)=>s+r.valor,0);
-  const vInadimpl  = 0;
-  const vAReceber  = 0;
+  const vInadimpl  = areceber.filter(r=>r.inadimplente).reduce((s,r)=>s+r.liquido,0);
+  const vAReceber  = areceber.filter(r=>!r.inadimplente).reduce((s,r)=>s+r.liquido,0);
   // Estoque só entra no total se checkbox marcada
   const vEstoqueNoTotal = f.comEstoque ? estoqueVal : 0;
   const vFatTotal  = vRecebido + vAReceber + vInadimpl + vEstoqueNoTotal;
