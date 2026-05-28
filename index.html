@@ -428,7 +428,7 @@ function processCSVText(txt) {
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
   setStatus('status-csv',`+${novos.length} registros — total: ${DATA.csv.length}.`,true);
-  renderCSVTable(); updateDashFilters(); updateDtlhFilters(); renderDashboard(); renderDtlh();
+  renderCSVTable(); updateDashFilters(); updateDtlhFilters(); updateFluxoAnos(); renderDashboard(); renderDtlh(); renderFluxo();
 }
 function limparCSV() {
   document.getElementById('paste-csv').value='';
@@ -437,7 +437,7 @@ function limparCSV() {
   document.getElementById('count-csv').textContent='0 registros';
   const d=document.getElementById('diag-csv'); if(d){d.style.display='none';d.innerHTML='';}
   setStatus('status-csv','','');
-  renderDashboard(); renderDtlh();
+  updateFluxoAnos(); renderFluxo(); renderDashboard(); renderDtlh();
 }
 function clearCSVFilters() {
   ['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-tipo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -582,6 +582,123 @@ function restoreJSON(input) {
   reader.readAsText(file); input.value='';
 }
 
+// ── FLUXO DE CAIXA ──
+function updateFluxoAnos() {
+  const anos = [...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort();
+  fillSelect('fc-ano', anos, v=>v, v=>v);
+}
+
+function renderFluxo() {
+  const anoSel = document.getElementById('fc-ano')?.value || '';
+  const thead = document.getElementById('thead-fluxo');
+  const tbody = document.getElementById('tbody-fluxo');
+  const tfoot = document.getElementById('tfoot-fluxo');
+  if(!thead||!tbody||!tfoot) return;
+
+  const meses = [0,1,2,3,4,5,6,7,8,9,10,11];
+  const MESES_ABR = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+  // Filter by year
+  const dados = DATA.csv.filter(r => !anoSel || String(r.ano) === anoSel);
+
+  // Build conta → tipo → mes → total
+  const contas = {};
+  dados.forEach(r => {
+    const conta = r.conta || '(Sem conta)';
+    const tipo  = r.tipo;
+    if(!contas[conta]) contas[conta] = { FATURAMENTO:{}, DESCONTO:{}, PAGAMENTO:{} };
+    if(!contas[conta][tipo][r.mes]) contas[conta][tipo][r.mes] = 0;
+    contas[conta][tipo][r.mes] += r.valor;
+  });
+
+  if(!Object.keys(contas).length) {
+    tbody.innerHTML = '<tr><td colspan="14"><div class="empty-state"><p>Nenhum dado para o período selecionado</p></div></td></tr>';
+    thead.innerHTML = ''; tfoot.innerHTML = '';
+    document.getElementById('fc-badge').textContent = '—';
+    return;
+  }
+
+  // Header
+  thead.innerHTML = `<tr>
+    <th style="min-width:220px;text-align:left">Conta</th>
+    ${meses.map(m=>`<th class="r" style="min-width:90px">${MESES_ABR[m]}</th>`).join('')}
+    <th class="r" style="min-width:100px;background:var(--surface-2,#f8f8f8)"><strong>Total</strong></th>
+  </tr>`;
+
+  // Separate faturamento contas vs pagamento contas
+  const fatContas = Object.entries(contas)
+    .filter(([c,d]) => Object.keys(d.FATURAMENTO).length || Object.keys(d.DESCONTO).length)
+    .sort((a,b)=>a[0].localeCompare(b[0]));
+  const pagContas = Object.entries(contas)
+    .filter(([c,d]) => Object.keys(d.PAGAMENTO).length)
+    .sort((a,b)=>a[0].localeCompare(b[0]));
+
+  const fmt2 = v => v === 0 ? '<span style="color:#bbb">—</span>' : 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+  let rows = '';
+
+  // FATURAMENTOS
+  if(fatContas.length) {
+    rows += `<tr style="background:var(--brand-light,#D5F5E3)"><td colspan="14" style="padding:6px 12px;font-weight:700;font-size:12px;color:var(--brand,#1B6B35);letter-spacing:.05em">▶ FATURAMENTOS</td></tr>`;
+    let totalFatMes = Array(12).fill(0);
+    fatContas.forEach(([conta, d]) => {
+      const vals = meses.map(m => (d.FATURAMENTO[m]||0) - (d.DESCONTO[m]||0));
+      const total = vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i) => totalFatMes[i] += v);
+      rows += `<tr>
+        <td style="padding-left:16px">${conta}</td>
+        ${vals.map(v=>`<td class="r" style="font-size:12px">${fmt2(v)}</td>`).join('')}
+        <td class="r" style="font-weight:600;background:var(--surface-2,#f8f8f8)">${fmt2(total)}</td>
+      </tr>`;
+    });
+    const totalFat = totalFatMes.reduce((s,v)=>s+v,0);
+    rows += `<tr style="background:#e8f5e9;font-weight:700">
+      <td>Total Faturamento</td>
+      ${totalFatMes.map(v=>`<td class="r">${fmt2(v)}</td>`).join('')}
+      <td class="r" style="background:var(--surface-2,#f8f8f8)">${fmt2(totalFat)}</td>
+    </tr>`;
+  }
+
+  // PAGAMENTOS
+  if(pagContas.length) {
+    rows += `<tr style="background:var(--danger-light,#FADBD8)"><td colspan="14" style="padding:6px 12px;font-weight:700;font-size:12px;color:var(--danger,#C0392B);letter-spacing:.05em">▶ PAGAMENTOS</td></tr>`;
+    let totalPagMes = Array(12).fill(0);
+    pagContas.forEach(([conta, d]) => {
+      const vals = meses.map(m => d.PAGAMENTO[m]||0);
+      const total = vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i) => totalPagMes[i] += v);
+      rows += `<tr>
+        <td style="padding-left:16px">${conta}</td>
+        ${vals.map(v=>`<td class="r" style="font-size:12px">${fmt2(v)}</td>`).join('')}
+        <td class="r" style="font-weight:600;background:var(--surface-2,#f8f8f8)">${fmt2(total)}</td>
+      </tr>`;
+    });
+    const totalPag = totalPagMes.reduce((s,v)=>s+v,0);
+    rows += `<tr style="background:#fdecea;font-weight:700">
+      <td>Total Pagamentos</td>
+      ${totalPagMes.map(v=>`<td class="r">${fmt2(v)}</td>`).join('')}
+      <td class="r" style="background:var(--surface-2,#f8f8f8)">${fmt2(totalPag)}</td>
+    </tr>`;
+  }
+
+  tbody.innerHTML = rows;
+
+  // Footer — Resultado
+  const fatVals = meses.map(m => dados.filter(r=>r.tipo==='FATURAMENTO'||r.tipo==='DESCONTO').reduce((s,r)=>r.mes===m?s+(r.tipo==='FATURAMENTO'?r.valor:-r.valor):s,0));
+  const pagVals = meses.map(m => dados.filter(r=>r.tipo==='PAGAMENTO'&&r.mes===m).reduce((s,r)=>s+r.valor,0));
+  const resVals = meses.map((m,i) => fatVals[i] - pagVals[i]);
+  const resTotal = resVals.reduce((s,v)=>s+v,0);
+  tfoot.innerHTML = `<tr style="border-top:2px solid var(--border);font-weight:700;background:var(--surface-2,#f8f8f8)">
+    <td>Resultado do Período</td>
+    ${resVals.map(v=>`<td class="r" style="color:${v>=0?'var(--brand,#1B6B35)':'var(--danger,#C0392B)'}">${fmt2(v)}</td>`).join('')}
+    <td class="r" style="color:${resTotal>=0?'var(--brand,#1B6B35)':'var(--danger,#C0392B)'}">${fmt2(resTotal)}</td>
+  </tr>`;
+
+  const nContas = Object.keys(contas).length;
+  document.getElementById('fc-badge').textContent = nContas + (nContas===1?' conta':' contas');
+}
+
+
 </script>
 <script>
 
@@ -706,7 +823,29 @@ function renderOrcamentoTable(){
   const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];
   const obraList=document.getElementById('orc-obra-list');
   if(obraList) obraList.innerHTML=obras.map(o=>`<option value="${o}">`).join('');
-  if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item cadastrado</p></div></td></tr>';return;}
+  if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item cadastrado</p></div>
+
+  <div class="tbl-card" style="margin-top:28px">
+    <div class="tbl-head">
+      <div class="tbl-title">Fluxo de Caixa por Conta</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="filter-label">Ano</span>
+        <select class="filter-select" id="fc-ano" onchange="renderFluxo()" style="width:90px"><option value="">Todos</option></select>
+        <span class="tbl-badge" id="fc-badge">—</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table id="tbl-fluxo" style="min-width:900px">
+        <thead id="thead-fluxo"></thead>
+        <tbody id="tbody-fluxo">
+          <tr><td colspan="14"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>
+        </tbody>
+        <tfoot id="tfoot-fluxo"></tfoot>
+      </table>
+    </div>
+  </div>
+
+</td></tr>';return;}
   tbody.innerHTML=DATA.orcamento.map((o,i)=>`<tr>
     <td>${o.obra}</td><td>${o.totalizador||'—'}</td><td>${o.codigo||'—'}</td><td>${o.descricao}</td>
     <td class="r val-neg">${fmt(o.valor)}</td>
