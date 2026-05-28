@@ -222,7 +222,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <button class="btn-ghost" onclick="clearDashFilters()">✕ Limpar</button>
   </div>
 
-  <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="kpi-grid" style="grid-template-columns:repeat(3,1fr)">
 
     <div class="kpi-card c-green">
       <div class="kpi-label">Faturamento Bruto</div>
@@ -250,12 +250,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <div class="kpi-label">Resultado (Fat. Líq. − Pago)</div>
       <div class="kpi-val" id="d-kpi-resultado">—</div>
       <div class="kpi-sub" id="d-kpi-resultado-sub">—</div>
-    </div>
-
-    <div class="kpi-card c-gold">
-      <div class="kpi-label">Total de Registros</div>
-      <div class="kpi-val" id="d-kpi-total-reg" style="font-size:22px">—</div>
-      <div class="kpi-sub" id="d-kpi-total-reg-sub">no período filtrado</div>
     </div>
 
   </div>
@@ -292,34 +286,10 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <div class="chart-subtitle">Faturamento Líquido − Pagamentos por mês (verde = superávit, vermelho = déficit)</div>
       <canvas id="ch-resultado-caixa"></canvas>
     </div>
-    <div class="chart-card">
-      <div class="chart-title">Pagamentos por Conta (Plano de Contas)</div>
-      <div class="chart-subtitle">Distribuição dos pagamentos por categoria</div>
-      <canvas id="ch-caixapermuta"></canvas>
-    </div>
+
   </div>
 
-  <div class="tbl-card">
-    <div class="tbl-head">
-      <div class="tbl-title">Pagamentos por Conta (Plano de Contas)</div>
-      <span class="tbl-badge" id="d-plano-count">0 contas</span>
-    </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Conta</th>
-            <th class="r">Total Pago (R$)</th>
-            <th>% do Total</th>
-            <th class="r">Qtd.</th>
-          </tr>
-        </thead>
-        <tbody id="d-plano-body">
-          <tr><td colspan="4"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+
 </div>
 <div class="page" id="page-csv">
   <div class="sec-title">CSV Analítico de Apropriações</div>
@@ -639,7 +609,7 @@ function processCSVText(txt) {
     complemento: findColKey(first, ['Complemento','complemento','Descricao','descricao','Histórico','historico']),
     valor:       findColExact(first, ['Valor'], ['Valor','valor']),
     cc:          findColKey(first, ['Nome Centro de Custo','NomeCentroCusto','nome centro de custo','centro de custo','Nome CC','NomeCC']),
-    conta:       findColKey(first, ['Conta','conta','Plano de Contas','plano de contas']),
+    conta:       findColExact(first, ['Conta','Plano de Contas'], ['Conta','conta','Plano de Contas','plano de contas']),
   };
 
   renderDiag('diag-csv', allHeaders, [
@@ -655,7 +625,7 @@ function processCSVText(txt) {
     const complemento = (findColKey(r, ['Complemento','complemento','Descricao','descricao','Histórico','historico'])).value;
     const valor       = parseBRNum((findColExact(r, ['Valor'], ['Valor','valor'])).value);
     const cc          = normCC((findColKey(r, ['Nome Centro de Custo','NomeCentroCusto','nome centro de custo','centro de custo','Nome CC','NomeCC'])).value);
-    const conta       = (findColKey(r, ['Conta','conta','Plano de Contas','plano de contas'])).value;
+    const conta       = (findColExact(r, ['Conta','Plano de Contas'], ['Conta','conta','Plano de Contas','plano de contas'])).value;
 
     // Classificação: Recebimento = faturamento, Desconto Concedido = desconto, resto = pagamento
     const compUpper = complemento.toUpperCase();
@@ -995,11 +965,8 @@ function renderDashboard() {
   resEl.className = 'kpi-val '+(resultado>=0?'pos':'neg');
   set('d-kpi-resultado-sub', resultado>=0?'▲ Superávit':'▼ Déficit');
 
-  set('d-kpi-total-reg', csvF.length.toLocaleString('pt-BR'));
-  set('d-kpi-total-reg-sub', csvF.length === DATA.csv.length ? 'total de registros' : `de ${DATA.csv.length} registros`);
 
   renderCharts(csvF);
-  renderPlanoTable(csvF);
 }
 function set(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
 
@@ -1094,17 +1061,7 @@ function renderCharts(csv) {
     });
   }
 
-  // 6 — Donut: pagamentos por conta
-  destroyChart('ch-caixapermuta');
-  if(pagRows.length){
-    const contas=[...new Set(pagRows.map(r=>r.conta).filter(Boolean))].slice(0,8);
-    const vals=contas.map(c=>pagRows.filter(r=>r.conta===c).reduce((s,r)=>s+r.valor,0));
-    CHARTS['ch-caixapermuta']=new Chart(document.getElementById('ch-caixapermuta'),{
-      type:'doughnut',
-      data:{labels:contas,datasets:[{data:vals,backgroundColor:PAL,borderWidth:2,borderColor:'#fff'}]},
-      options:{responsive:true,plugins:{legend:{position:'bottom',labels:{font:{size:11}}},tooltip:{callbacks:{label:ctx=>' '+fmt(ctx.raw)}}}}
-    });
-  }
+
 }
 
 // BACKUP / RESTORE JSON
@@ -1174,33 +1131,6 @@ function restoreJSON(input) {
 
 // PLANO FINANCEIRO TABLE
 
-function renderPlanoTable(csv) {
-  const pagRows = csv.filter(r=>r.tipo==='PAGAMENTO');
-  const contas={};
-  pagRows.forEach(r=>{
-    const c=r.conta||'(Sem conta)';
-    if(!contas[c])contas[c]={total:0,n:0};
-    contas[c].total+=r.valor;
-    contas[c].n++;
-  });
-  const total=Object.values(contas).reduce((s,c)=>s+c.total,0);
-  const sorted=Object.entries(contas).sort((a,b)=>b[1].total-a[1].total);
-  set('d-plano-count',sorted.length+' contas');
-  if(!sorted.length){
-    document.getElementById('d-plano-body').innerHTML='<tr><td colspan="4"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>';
-    return;
-  }
-  document.getElementById('d-plano-body').innerHTML=sorted.map(([nome,d])=>{
-    const pct=total>0?d.total/total:0;
-    const w=Math.round(pct*80);
-    return`<tr>
-      <td>${nome}</td>
-      <td class="r val-neg">${fmt(d.total)}</td>
-      <td><div class="pct-bar-wrap"><div class="pct-bar-bg"><div class="pct-bar-fill" style="width:${w}px"></div></div><span class="pct-txt">${(pct*100).toFixed(1)}%</span></div></td>
-      <td class="r">${d.n}</td>
-    </tr>`;
-  }).join('');
-}
 
 // ESTOQUE
 
