@@ -377,11 +377,11 @@ function processCSVText(txt){
     const cc=normCC(findColExact(r,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']).value);
     const conta=findColExact(r,['Conta','Plano de Contas'],['Conta','conta']).value;
     const cu=complemento.toUpperCase(),contaU=conta.toUpperCase();
+    // Classificação por complemento (padrão)
     let tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
-    // Conta "Desconto Obtido" ou "Reembolso" → reduz despesas (DESCONTO_OBTIDO)
-    // Conta "Desconto Concedido" → fica no faturamento (DESCONTO), não mexe
-    if(contaU.includes('DESCONTO OBTIDO')||contaU.includes('REEMBOLSO')) tipo='DESCONTO_OBTIDO';
-    const valorFinal = tipo==='DESCONTO_OBTIDO' ? -valor : valor;
+    // Reembolso e Desconto Obtido → despesa com sinal negativo
+    let valorFinal=valor;
+    if(contaU.includes('REEMBOLSO')||contaU.includes('DESCONTO OBTIDO')){tipo='PAGAMENTO';valorFinal=-valor;}
     return{data,complemento,valor:valorFinal,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
