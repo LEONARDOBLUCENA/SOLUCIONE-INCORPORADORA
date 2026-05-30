@@ -186,6 +186,11 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 .form-group label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)}
 .form-input{border:1px solid var(--border);background:var(--bg);padding:7px 12px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;min-width:160px}
 .form-input:focus{border-color:var(--brand)}
+
+  #tbl-fluxo th, #tbl-fluxo td { padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+  #tbl-fluxo thead th { background: var(--surface-2, #f5f5f5); font-weight: 600; position: sticky; top: 0; }
+  #tbl-fluxo tbody tr:hover { background: rgba(0,0,0,0.02); }
+  #tbl-fluxo tfoot tr { font-weight: 700; }
 </style>
 </head>
 <body>
@@ -199,6 +204,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <button class="nav-tab active" data-tab="dash" onclick="goTab(this)">Dashboard</button>
     <button class="nav-tab" data-tab="dtlh" onclick="goTab(this)">Dashboard Resumo Exec.</button>
     <button class="nav-tab" data-tab="csv" onclick="goTab(this)">CSV Analítico de Apropriações</button>
+    <button class="nav-tab" data-tab="fluxo" onclick="goTab(this)">Fluxo de Caixa</button>
     <button class="nav-tab" data-tab="estoque" onclick="goTab(this)">Estoque</button>
     <button class="nav-tab" data-tab="orcamento" onclick="goTab(this)">Orçamento</button>
   </div>
@@ -281,11 +287,34 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <canvas id="ch-caixapermuta"></canvas>
     </div>
   </div>
+</div>
 
-<div style="overflow-x:auto"><table id="tbl-fluxo" style="min-width:960px;border-collapse:collapse;width:100%"><thead id="thead-fluxo"></thead><tbody id="tbody-fluxo"><tr><td colspan="14"><div class="empty-state"><p>Carregue dados no CSV para visualizar</p></div></td></tr></tbody><tfoot id="tfoot-fluxo"></tfoot></table></div>
-  </div>
+<div class="page" id="page-fluxo">
+  <div class="sec-title">Fluxo de Caixa</div>
+  <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
+  <div class="tbl-card">
+    <div class="tbl-head">
+      <div class="tbl-title">Fluxo de Caixa por Conta</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="filter-label">Obra</span>
+        <select class="filter-select" id="fc-obra" onchange="renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
+        <span class="filter-label">Ano</span>
+        <select class="filter-select" id="fc-ano" onchange="renderFluxo()" style="width:90px"><option value="">Todos</option></select>
+        <span class="tbl-badge" id="fc-badge">—</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto;font-size:12px">
+      <table id="tbl-fluxo" style="width:100%;border-collapse:collapse;min-width:900px">
+        <thead id="thead-fluxo"></thead>
+        <tbody id="tbody-fluxo">
+          <tr><td colspan="14"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>
+        </tbody>
+        <tfoot id="tfoot-fluxo"></tfoot>
+      </table>
+    </div>
   </div>
 </div>
+
 <div class="page" id="page-csv">
   <div class="sec-title">CSV Analítico de Apropriações</div>
   <div class="sec-sub">Cole aqui os dados do relatório analítico exportado do ERP</div>
