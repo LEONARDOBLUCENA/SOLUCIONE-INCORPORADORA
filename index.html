@@ -379,9 +379,9 @@ function processCSVText(txt){
     const cu=complemento.toUpperCase(),contaU=conta.toUpperCase();
     // Classificação por complemento (padrão)
     let tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
-    // Reembolso e Desconto Obtido → despesa com sinal negativo
+    // Contas específicas com valor negativo em pagamentos
     let valorFinal=valor;
-    if(contaU.includes('REEMBOLSO')||contaU.includes('DESCONTO OBTIDO')){tipo='PAGAMENTO';valorFinal=-valor;}
+    if(conta.includes('2020299')||conta.includes('2010498')){tipo='PAGAMENTO';valorFinal=-valor;}
     return{data,complemento,valor:valorFinal,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
