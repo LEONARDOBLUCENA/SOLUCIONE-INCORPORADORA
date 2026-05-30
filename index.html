@@ -377,7 +377,10 @@ function processCSVText(txt){
     const cc=normCC(findColExact(r,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']).value);
     const conta=findColExact(r,['Conta','Plano de Contas'],['Conta','conta']).value;
     const cu=complemento.toUpperCase();
-    const tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
+    let tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
+    // Contas de desconto obtido dentro de despesas — valor negativo (reduz total de pagamentos)
+    const isDescontoObtido = tipo==='PAGAMENTO' && conta.toUpperCase().includes('DESCONTO');
+    if(isDescontoObtido) tipo='DESCONTO_OBTIDO';
     return{data,complemento,valor,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
@@ -397,7 +400,7 @@ function renderCSVTable(){
   document.getElementById('count-csv').textContent=fil.length+' de '+arr.length+' registros';
   const tbody=document.getElementById('body-csv');
   if(!fil.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum registro</p></div></td></tr>';return;}
-  tbody.innerHTML=fil.map(r=>{const tc=r.tipo==='FATURAMENTO'?'bg-green':r.tipo==='DESCONTO'?'bg-gold':'bg-red';const vc=r.tipo==='FATURAMENTO'?'val-pos':r.tipo==='DESCONTO'?'val-gold':'val-neg';return'<tr><td>'+(r.data?r.data.toLocaleDateString('pt-BR'):'—')+'</td><td>'+(r.cc||'—')+'</td><td>'+(r.conta||'—')+'</td><td class="r '+vc+'">'+fmt(r.valor)+'</td></tr>';}).join('');
+  tbody.innerHTML=fil.map(r=>{const tc=r.tipo==='FATURAMENTO'?'bg-green':r.tipo==='DESCONTO'?'bg-gold':r.tipo==='DESCONTO_OBTIDO'?'bg-green':'bg-red';const vc=r.tipo==='FATURAMENTO'?'val-pos':r.tipo==='DESCONTO'?'val-gold':r.tipo==='DESCONTO_OBTIDO'?'val-pos':'val-neg';return'<tr><td>'+(r.data?r.data.toLocaleDateString('pt-BR'):'—')+'</td><td>'+(r.cc||'—')+'</td><td>'+(r.conta||'—')+'</td><td class="r '+vc+'">'+fmt(r.valor)+'</td></tr>';}).join('');
 }
 function exportExcelCSV(){if(!DATA.csv.length){alert('Nenhum dado.');return;}const fd=d=>d?d.toLocaleDateString('pt-BR'):'',fn=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});const rows=DATA.csv.map(r=>({'Data':fd(r.data),'Complemento':r.complemento||'','CC':r.cc||'','Conta':r.conta||'','Tipo':r.tipo||'','Valor':fn(r.valor)}));const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});ws['!cols']=Object.keys(rows[0]).map(c=>({wch:Math.max(c.length,...rows.map(r=>String(r[c]||'').length))+2}));XLSX.utils.book_append_sheet(wb,ws,'CSV');XLSX.writeFile(wb,'Solucione_CSV_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');}
 
@@ -493,8 +496,11 @@ function applyF(arr){
   );
 }
 function renderDashboard(){
-  const csvF=applyF(DATA.csv),fat=csvF.filter(r=>r.tipo==='FATURAMENTO'),dsc=csvF.filter(r=>r.tipo==='DESCONTO'),pag=csvF.filter(r=>r.tipo==='PAGAMENTO');
-  const tFB=fat.reduce((s,r)=>s+r.valor,0),tD=dsc.reduce((s,r)=>s+r.valor,0),tFL=tFB-tD,tP=pag.reduce((s,r)=>s+r.valor,0),res=tFL-tP;
+  const csvF=applyF(DATA.csv),fat=csvF.filter(r=>r.tipo==='FATURAMENTO'),dsc=csvF.filter(r=>r.tipo==='DESCONTO');
+  const pag=csvF.filter(r=>r.tipo==='PAGAMENTO');
+  const dscObt=csvF.filter(r=>r.tipo==='DESCONTO_OBTIDO');
+  const tFB=fat.reduce((s,r)=>s+r.valor,0),tD=dsc.reduce((s,r)=>s+r.valor,0),tFL=tFB-tD;
+  const tP=pag.reduce((s,r)=>s+r.valor,0)-dscObt.reduce((s,r)=>s+r.valor,0),res=tFL-tP;
   set('d-kpi-recebido',fmt(tFB));set('d-kpi-recebido-n',fat.length+' lan\u00e7amentos');set('d-kpi-desconto',tD>0?'\u2212 '+fmt(tD):fmt(0));set('d-kpi-fat-liquido',fmt(tFL));set('d-kpi-pago',fmt(tP));set('d-kpi-pago-n',pag.length+' lan\u00e7amentos');
   const resEl=document.getElementById('d-kpi-resultado');if(resEl){resEl.textContent=fmt(Math.abs(res));resEl.className='kpi-val '+(res>=0?'pos':'neg');}
   set('d-kpi-resultado-sub',res>=0?'\u25b2 Super\u00e1vit':'\u25bc D\u00e9ficit');
@@ -504,7 +510,7 @@ function monthKeys(arrs){const keys=new Set();arrs.forEach(a=>a.forEach(r=>{if(r
 function renderCharts(csv){
   const pag=csv.filter(r=>r.tipo==='PAGAMENTO'),fat=csv.filter(r=>r.tipo==='FATURAMENTO'),dsc=csv.filter(r=>r.tipo==='DESCONTO');
   const lbl=monthKeys([csv]),ln=lbl.map(l=>l.label),yFmt={ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}},leg={position:'top',labels:{font:{size:11}}};
-  destroyChart('ch-mensal-pago');if(pag.length)CHARTS['ch-mensal-pago']=new Chart(document.getElementById('ch-mensal-pago'),{type:'bar',data:{labels:ln,datasets:[{label:'Pagamentos',data:lbl.map(l=>pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#C0392B',borderRadius:2}]},options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}});
+  destroyChart('ch-mensal-pago');if(pag.length)CHARTS['ch-mensal-pago']=new Chart(document.getElementById('ch-mensal-pago'),{type:'bar',data:{labels:ln,datasets:[{label:'Pagamentos',data:lbl.map(l=>{const pagB=pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);const dscO=csv.filter(r=>r.tipo==='DESCONTO_OBTIDO'&&r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);return pagB-dscO;}),backgroundColor:'#C0392B',borderRadius:2}]},options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}});
   destroyChart('ch-mensal-fat');if(fat.length||dsc.length)CHARTS['ch-mensal-fat']=new Chart(document.getElementById('ch-mensal-fat'),{type:'bar',data:{labels:ln,datasets:[{label:'Recebimentos',data:lbl.map(l=>fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#1A7A3C',borderRadius:2},{label:'Descontos',data:lbl.map(l=>dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0)),backgroundColor:'#B7950B',borderRadius:2}]},options:{responsive:true,plugins:{legend:leg},scales:{y:yFmt}}});
   destroyChart('ch-cc');if(pag.length){const ccs=[...new Set(pag.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc']=new Chart(document.getElementById('ch-cc'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Pago',data:ccs.map(c=>pag.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
   destroyChart('ch-cc-fat');if(fat.length){const ccs=[...new Set(fat.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc-fat']=new Chart(document.getElementById('ch-cc-fat'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Recebido',data:ccs.map(c=>fat.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
@@ -518,16 +524,16 @@ function renderFluxo(){
   fillSelect('fc-ano',[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort(),v=>v,v=>v);
   const dados=DATA.csv.filter(r=>(!obraSel||ccMatch(r.cc||'',obraSel))&&(!anoSel||String(r.ano)===anoSel));
   const contas={};
-  dados.forEach(r=>{const c=r.conta||'(Sem conta)';if(!contas[c])contas[c]={FATURAMENTO:Array(12).fill(0),DESCONTO:Array(12).fill(0),PAGAMENTO:Array(12).fill(0)};if(r.mes!=null)contas[c][r.tipo][r.mes]+=r.valor;});
+  dados.forEach(r=>{const c=r.conta||'(Sem conta)';if(!contas[c])contas[c]={FATURAMENTO:Array(12).fill(0),DESCONTO:Array(12).fill(0),PAGAMENTO:Array(12).fill(0),DESCONTO_OBTIDO:Array(12).fill(0)};if(r.mes!=null)contas[c][r.tipo][r.mes]+=r.valor;});
   const nomes=Object.keys(contas);
   if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="14"><div class="empty-state"><p>Nenhum dado para o per\u00edodo</p></div></td></tr>';set('fc-badge','\u2014');return;}
   thead.innerHTML='<tr style="background:#f5f5f5"><th style="text-align:left;padding:8px 12px;min-width:200px">Conta</th>'+MESES_ABR.map(m=>'<th class="r" style="padding:6px 8px;min-width:75px;font-size:11px">'+m+'</th>').join('')+'<th class="r" style="padding:6px 10px;min-width:90px;background:#ececec">Total</th></tr>';
   const f2=v=>v===0?'<span style="color:#ccc;font-size:10px">\u2014</span>':(v<0?'<span style="color:#C0392B">'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}));
   let rows='';
-  const fatN=nomes.filter(c=>contas[c].FATURAMENTO.some(v=>v>0)||contas[c].DESCONTO.some(v=>v>0)).sort(),pagN=nomes.filter(c=>contas[c].PAGAMENTO.some(v=>v>0)).sort();
+  const fatN=nomes.filter(c=>contas[c].FATURAMENTO.some(v=>v>0)||contas[c].DESCONTO.some(v=>v>0)).sort(),pagN=nomes.filter(c=>contas[c].PAGAMENTO.some(v=>v>0)||contas[c].DESCONTO_OBTIDO.some(v=>v>0)).sort();
   const tFM=Array(12).fill(0),tPM=Array(12).fill(0);
   if(fatN.length){rows+='<tr style="background:#D5F5E3"><td colspan="14" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35">\u25b6 FATURAMENTOS</td></tr>';fatN.forEach(c=>{const vals=Array.from({length:12},(_,i)=>contas[c].FATURAMENTO[i]-contas[c].DESCONTO[i]);const tot=vals.reduce((s,v)=>s+v,0);vals.forEach((v,i)=>tFM[i]+=v);rows+='<tr><td style="padding:5px 6px 5px 16px;font-size:11px">'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';});rows+='<tr style="background:#c8e6c9;font-weight:700"><td style="padding:5px 12px;font-size:11px">Total Faturamento</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tFM.reduce((s,v)=>s+v,0))+'</td></tr>';}
-  if(pagN.length){rows+='<tr style="background:#FADBD8"><td colspan="14" style="padding:5px 12px;font-weight:700;font-size:11px;color:#C0392B">\u25b6 PAGAMENTOS</td></tr>';pagN.forEach(c=>{const vals=contas[c].PAGAMENTO.slice();const tot=vals.reduce((s,v)=>s+v,0);vals.forEach((v,i)=>tPM[i]+=v);rows+='<tr><td style="padding:5px 6px 5px 16px;font-size:11px">'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';});rows+='<tr style="background:#ffcdd2;font-weight:700"><td style="padding:5px 12px;font-size:11px">Total Pagamentos</td>'+tPM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tPM.reduce((s,v)=>s+v,0))+'</td></tr>';}
+  if(pagN.length){rows+='<tr style="background:#FADBD8"><td colspan="14" style="padding:5px 12px;font-weight:700;font-size:11px;color:#C0392B">\u25b6 PAGAMENTOS</td></tr>';pagN.forEach(c=>{const vals=contas[c].PAGAMENTO.map((v,i)=>v-contas[c].DESCONTO_OBTIDO[i]);const tot=vals.reduce((s,v)=>s+v,0);vals.forEach((v,i)=>tPM[i]+=v);rows+='<tr><td style="padding:5px 6px 5px 16px;font-size:11px">'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';});rows+='<tr style="background:#ffcdd2;font-weight:700"><td style="padding:5px 12px;font-size:11px">Total Pagamentos</td>'+tPM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tPM.reduce((s,v)=>s+v,0))+'</td></tr>';}
   tbody.innerHTML=rows;
   const rv=tFM.map((v,i)=>v-tPM[i]),rt=rv.reduce((s,v)=>s+v,0);
   tfoot.innerHTML='<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="padding:6px 12px;font-size:11px">Resultado do Per\u00edodo</td>'+rv.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt>=0?'#1B6B35':'#C0392B')+'">'+f2(rt)+'</td></tr>';
