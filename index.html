@@ -191,6 +191,17 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   #tbl-fluxo thead th { background: var(--surface-2, #f5f5f5); font-weight: 600; position: sticky; top: 0; }
   #tbl-fluxo tbody tr:hover { background: rgba(0,0,0,0.02); }
   #tbl-fluxo tfoot tr { font-weight: 700; }
+
+  .multi-drop-wrap{position:relative;display:inline-block}
+  .multi-drop-btn{cursor:pointer;text-align:left;min-width:140px;background:var(--surface,#fff);border:1px solid var(--border,#ddd);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--text,#222)}
+  .multi-drop-btn.active{border-color:var(--brand);color:var(--brand);font-weight:600}
+  .multi-drop-list{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:200;background:#fff;border:1px solid var(--border,#ddd);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:170px;max-height:260px;overflow-y:auto;padding:6px 0}
+  .multi-drop-list.open{display:block}
+  .multi-drop-item{display:flex;align-items:center;gap:8px;padding:7px 14px;cursor:pointer;font-size:13px;user-select:none}
+  .multi-drop-item:hover{background:var(--brand-light,#D5F5E3)}
+  .multi-drop-item input{accent-color:var(--brand,#1B6B35);width:15px;height:15px;cursor:pointer}
+  .multi-drop-divider{height:1px;background:var(--border,#eee);margin:4px 0}
+
 </style>
 </head>
 <body>
@@ -221,8 +232,14 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 
   <div class="filters-bar">
     <span class="filter-label">Filtrar</span>
-    <select class="filter-select" id="d-ano"><option value="">Todos os anos</option></select>
-    <select class="filter-select" id="d-mes"><option value="">Todos os meses</option></select>
+    <div class="multi-drop-wrap" id="wrap-d-ano">
+      <button class="filter-select multi-drop-btn" onclick="toggleDrop('wrap-d-ano')" type="button" id="btn-d-ano">Todos os anos ▾</button>
+      <div class="multi-drop-list" id="list-d-ano"></div>
+    </div>
+    <div class="multi-drop-wrap" id="wrap-d-mes">
+      <button class="filter-select multi-drop-btn" onclick="toggleDrop('wrap-d-mes')" type="button" id="btn-d-mes">Todos os meses ▾</button>
+      <div class="multi-drop-list" id="list-d-mes"></div>
+    </div>
     <select class="filter-select" id="d-cc"><option value="">Todos os centros de custo</option></select>
     <button class="btn-ghost" onclick="clearDashFilters()">✕ Limpar</button>
   </div>
@@ -384,10 +401,97 @@ function renderCSVTable(){
 }
 function exportExcelCSV(){if(!DATA.csv.length){alert('Nenhum dado.');return;}const fd=d=>d?d.toLocaleDateString('pt-BR'):'',fn=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});const rows=DATA.csv.map(r=>({'Data':fd(r.data),'Complemento':r.complemento||'','CC':r.cc||'','Conta':r.conta||'','Tipo':r.tipo||'','Valor':fn(r.valor)}));const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});ws['!cols']=Object.keys(rows[0]).map(c=>({wch:Math.max(c.length,...rows.map(r=>String(r[c]||'').length))+2}));XLSX.utils.book_append_sheet(wb,ws,'CSV');XLSX.writeFile(wb,'Solucione_CSV_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');}
 
-function updateDashFilters(){fillSelect('d-ano',[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort(),v=>v,v=>v);fillSelect('d-mes',[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b),v=>v,v=>MESES_PT[v]);fillSelect('d-cc',[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort(),v=>v,v=>v);}
-function clearDashFilters(){['d-ano','d-mes','d-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderDashboard();}
+function updateDashFilters(){
+  fillMultiDrop('wrap-d-ano','btn-d-ano','list-d-ano',[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort(),v=>v,v=>String(v));
+  fillMultiDrop('wrap-d-mes','btn-d-mes','list-d-mes',[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b),v=>v,v=>MESES_PT[v]);
+  fillSelect('d-cc',[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort(),v=>v,v=>v);
+}
+function fillMultiDrop(wrapId,btnId,listId,values,vFn,lFn){
+  const list=document.getElementById(listId);if(!list)return;
+  const checked=getMultiDrop(wrapId);
+  const allDiv=document.createElement('div');
+  allDiv.className='multi-drop-item';
+  allDiv.innerHTML='<input type="checkbox" id="chk-all-'+wrapId+'">&nbsp;<label style="cursor:pointer">Selecionar todos</label>';
+  allDiv.addEventListener('click',function(e){if(e.target.tagName!=='INPUT')toggleAllMultiDrop(wrapId,btnId,listId);});
+  list.innerHTML='';
+  list.appendChild(allDiv);
+  const div=document.createElement('div');div.className='multi-drop-divider';list.appendChild(div);
+  values.forEach(v=>{
+    const val=String(vFn(v)),lbl=lFn(v),chk=checked.size===0||checked.has(val);
+    const item=document.createElement('div');item.className='multi-drop-item';
+    item.innerHTML='<input type="checkbox" value="'+val+'" '+(chk?'checked':'')+' id="chk-'+wrapId+'-'+val+'"><label for="chk-'+wrapId+'-'+val+'" style="cursor:pointer">'+lbl+'</label>';
+    item.querySelector('input').addEventListener('change',function(){onMultiDropChange(wrapId,btnId,listId);});
+    list.appendChild(item);
+  });
+  updateMultiDropBtn(wrapId,btnId,listId,lFn);
+  document.getElementById('chk-all-'+wrapId).checked=checked.size===0;
+}
+function getMultiDrop(wrapId){
+  const list=document.getElementById('list-'+wrapId.replace('wrap-',''));
+  if(!list)return new Set();
+  const checked=new Set();
+  list.querySelectorAll('input[type=checkbox][value]').forEach(cb=>{if(cb.checked)checked.add(cb.value);});
+  // if all checked treat as none (= show all)
+  const total=list.querySelectorAll('input[type=checkbox][value]').length;
+  return checked.size===total?new Set():checked;
+}
+function onMultiDropChange(wrapId,btnId,listId){
+  const list=document.getElementById(listId);
+  const total=list.querySelectorAll('input[value]').length;
+  const checked=list.querySelectorAll('input[value]:checked').length;
+  document.getElementById('chk-all-'+wrapId).checked=checked===total;
+  updateMultiDropBtn(wrapId,btnId,listId);
+  renderDashboard();
+}
+function toggleAllMultiDrop(wrapId,btnId,listId){
+  const list=document.getElementById(listId);
+  const allChk=document.getElementById('chk-all-'+wrapId);
+  const newState=!allChk.checked;
+  allChk.checked=newState;
+  list.querySelectorAll('input[value]').forEach(cb=>cb.checked=newState);
+  updateMultiDropBtn(wrapId,btnId,listId);
+  renderDashboard();
+}
+function updateMultiDropBtn(wrapId,btnId,listId,lFn){
+  const btn=document.getElementById(btnId);if(!btn)return;
+  const list=document.getElementById(listId);
+  const items=list.querySelectorAll('input[value]:checked');
+  const total=list.querySelectorAll('input[value]').length;
+  if(items.length===0||items.length===total){
+    btn.textContent=(wrapId.includes('ano')?'Todos os anos':'Todos os meses')+' ▾';
+    btn.classList.remove('active');
+  } else {
+    const labels=[...items].map(cb=>{const lbl=cb.parentElement.querySelector('label');return lbl?lbl.textContent:cb.value;});
+    btn.textContent=labels.join(', ')+' ▾';
+    btn.classList.add('active');
+  }
+}
+function toggleDrop(wrapId){
+  document.querySelectorAll('.multi-drop-list').forEach(l=>{if(l.id!=='list-'+wrapId.replace('wrap-',''))l.classList.remove('open');});
+  document.getElementById('list-'+wrapId.replace('wrap-','')).classList.toggle('open');
+}
+document.addEventListener('click',e=>{if(!e.target.closest('.multi-drop-wrap'))document.querySelectorAll('.multi-drop-list').forEach(l=>l.classList.remove('open'));});
+function clearDashFilters(){
+  ['wrap-d-ano','wrap-d-mes'].forEach(wrapId=>{
+    const list=document.getElementById('list-'+wrapId.replace('wrap-',''));
+    if(list)list.querySelectorAll('input[type=checkbox]').forEach(cb=>cb.checked=true);
+    const btn=document.getElementById('btn-'+wrapId.replace('wrap-',''));
+    if(btn){btn.textContent=(wrapId.includes('ano')?'Todos os anos':'Todos os meses')+' ▾';btn.classList.remove('active');}
+  });
+  const cc=document.getElementById('d-cc');if(cc)cc.value='';
+  renderDashboard();
+}
 function getF(){return{ano:document.getElementById('d-ano')?.value||'',mes:document.getElementById('d-mes')?.value||'',cc:document.getElementById('d-cc')?.value||''};}
-function applyF(arr){const f=getF();return arr.filter(r=>(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes)&&(!f.cc||ccMatch(r.cc||'',f.cc)));}
+function applyF(arr){
+  const anos=getMultiDrop('wrap-d-ano');
+  const meses=getMultiDrop('wrap-d-mes');
+  const cc=document.getElementById('d-cc')?.value||'';
+  return arr.filter(r=>
+    (anos.size===0||anos.has(String(r.ano)))&&
+    (meses.size===0||meses.has(String(r.mes)))&&
+    (!cc||ccMatch(r.cc||'',cc))
+  );
+}
 function renderDashboard(){
   const csvF=applyF(DATA.csv),fat=csvF.filter(r=>r.tipo==='FATURAMENTO'),dsc=csvF.filter(r=>r.tipo==='DESCONTO'),pag=csvF.filter(r=>r.tipo==='PAGAMENTO');
   const tFB=fat.reduce((s,r)=>s+r.valor,0),tD=dsc.reduce((s,r)=>s+r.valor,0),tFL=tFB-tD,tP=pag.reduce((s,r)=>s+r.valor,0),res=tFL-tP;
