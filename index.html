@@ -378,8 +378,9 @@ function processCSVText(txt){
     const conta=findColExact(r,['Conta','Plano de Contas'],['Conta','conta']).value;
     const cu=complemento.toUpperCase(),contaU=conta.toUpperCase();
     let tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
-    // Contas que reduzem despesas: Desconto Obtido e Reembolso — sempre DESCONTO_OBTIDO
-    if(contaU.includes('DESCONTO')||contaU.includes('REEMBOLSO')) tipo='DESCONTO_OBTIDO';
+    // Conta "Desconto Obtido" ou "Reembolso" → reduz despesas (DESCONTO_OBTIDO)
+    // Conta "Desconto Concedido" → fica no faturamento (DESCONTO), não mexe
+    if(contaU.includes('DESCONTO OBTIDO')||contaU.includes('REEMBOLSO')) tipo='DESCONTO_OBTIDO';
     return{data,complemento,valor,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
