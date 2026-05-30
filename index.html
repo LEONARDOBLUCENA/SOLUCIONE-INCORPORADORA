@@ -282,6 +282,16 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
   </div>
 
+<div style="overflow-x:auto"><table id="tbl-fluxo" style="min-width:960px;border-collapse:collapse;width:100%"><thead id="thead-fluxo"></thead><tbody id="tbody-fluxo"><tr><td colspan="14"><div class="empty-state"><p>Carregue dados no CSV para visualizar</p></div></td></tr></tbody><tfoot id="tfoot-fluxo"></tfoot></table></div>
+  </div>
+  </div>
+</div>
+<div class="page" id="page-csv">
+  <div class="sec-title">CSV Analítico de Apropriações</div>
+  <div class="sec-sub">Cole aqui os dados do relatório analítico exportado do ERP</div>
+  <div class="paste-section"><div class="paste-instructions"><strong>Como usar:</strong> Exporte o relatório no ERP, selecione a tabela com cabeçalho, copie Ctrl+C, cole abaixo Ctrl+V.<br>Colunas: <strong>Data · Valor · Nome Centro de Custo · Conta</strong></div><textarea class="paste-box" id="paste-csv" placeholder="Clique aqui e cole com Ctrl+V"></textarea><div class="paste-actions"><button class="btn-secondary" onclick="limparCSV()">&#10005; Limpar</button><button class="btn-primary" style="margin-left:8px" onclick="exportExcelCSV()">&#8595; Exportar Excel</button><span class="paste-status" id="status-csv"></span></div></div>
+  <div id="diag-csv" style="display:none;margin-bottom:20px"></div>
+  <div class="tbl-card"><div class="tbl-head"><div class="tbl-title">Lançamentos Processados</div><span class="tbl-badge" id="count-csv">0 registros</span></div><div style="padding:10px 20px 0;border-bottom:1px solid var(--border)"><div class="inline-filters"><span class="filter-label">Filtrar</span><select class="filter-select" id="fcsv-ano" onchange="renderCSVTable()"><option value="">Todos os anos</option></select><select class="filter-select" id="fcsv-mes" onchange="renderCSVTable()"><option value="">Todos os meses</option></select><select class="filter-select" id="fcsv-cc" onchange="renderCSVTable()"><option value="">Todos os CCs</option></select><select class="filter-select" id="fcsv-conta" onchange="renderCSVTable()"><option value="">Todas as contas</option></select><button class="btn-ghost" onclick="clearCSVFilters()">&#10005;</button></div></div><div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Centro de Custo</th><th>Conta</th><th class="r">Valor (R$)</th></tr></thead><tbody id="body-csv"><tr><td colspan="4"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr></tbody></table></div></div>
 </div>
 
 <script>
@@ -329,18 +339,19 @@ function processCSVText(txt){
   renderCSVTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();}
-function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-tipo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
+function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
 function renderCSVTable(){
   const arr=DATA.csv;
   fillSelect('fcsv-ano',[...new Set(arr.map(r=>r.ano).filter(x=>x!=null))].sort(),v=>v,v=>v);
   fillSelect('fcsv-mes',[...new Set(arr.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b),v=>v,v=>MESES_PT[v]);
   fillSelect('fcsv-cc',[...new Set(arr.map(r=>r.cc).filter(Boolean))].sort(),v=>v,v=>v);
-  const fA=document.getElementById('fcsv-ano')?.value||'',fM=document.getElementById('fcsv-mes')?.value||'',fC=document.getElementById('fcsv-cc')?.value||'',fT=document.getElementById('fcsv-tipo')?.value||'';
-  const fil=arr.filter(r=>(!fA||String(r.ano)===fA)&&(!fM||String(r.mes)===fM)&&(!fC||ccMatch(r.cc||'',fC))&&(!fT||r.tipo===fT));
+  fillSelect('fcsv-conta',[...new Set(arr.map(r=>r.conta).filter(Boolean))].sort(),v=>v,v=>v);
+  const fA=document.getElementById('fcsv-ano')?.value||'',fM=document.getElementById('fcsv-mes')?.value||'',fC=document.getElementById('fcsv-cc')?.value||'',fK=document.getElementById('fcsv-conta')?.value||'';
+  const fil=arr.filter(r=>(!fA||String(r.ano)===fA)&&(!fM||String(r.mes)===fM)&&(!fC||ccMatch(r.cc||'',fC))&&(!fK||r.conta===fK));
   document.getElementById('count-csv').textContent=fil.length+' de '+arr.length+' registros';
   const tbody=document.getElementById('body-csv');
   if(!fil.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum registro</p></div></td></tr>';return;}
-  tbody.innerHTML=fil.map(r=>{const tc=r.tipo==='FATURAMENTO'?'bg-green':r.tipo==='DESCONTO'?'bg-gold':'bg-red';const vc=r.tipo==='FATURAMENTO'?'val-pos':r.tipo==='DESCONTO'?'val-gold':'val-neg';return'<tr><td>'+(r.data?r.data.toLocaleDateString('pt-BR'):'—')+'</td><td>'+(r.complemento||'—')+'</td><td>'+(r.cc||'—')+'</td><td>'+(r.conta||'—')+'</td><td><span class="badge '+tc+'">'+r.tipo+'</span></td><td class="r '+vc+'">'+fmt(r.valor)+'</td></tr>';}).join('');
+  tbody.innerHTML=fil.map(r=>{const tc=r.tipo==='FATURAMENTO'?'bg-green':r.tipo==='DESCONTO'?'bg-gold':'bg-red';const vc=r.tipo==='FATURAMENTO'?'val-pos':r.tipo==='DESCONTO'?'val-gold':'val-neg';return'<tr><td>'+(r.data?r.data.toLocaleDateString('pt-BR'):'—')+'</td><td>'+(r.cc||'—')+'</td><td>'+(r.conta||'—')+'</td><td class="r '+vc+'">'+fmt(r.valor)+'</td></tr>';}).join('');
 }
 function exportExcelCSV(){if(!DATA.csv.length){alert('Nenhum dado.');return;}const fd=d=>d?d.toLocaleDateString('pt-BR'):'',fn=v=>(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});const rows=DATA.csv.map(r=>({'Data':fd(r.data),'Complemento':r.complemento||'','CC':r.cc||'','Conta':r.conta||'','Tipo':r.tipo||'','Valor':fn(r.valor)}));const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});ws['!cols']=Object.keys(rows[0]).map(c=>({wch:Math.max(c.length,...rows.map(r=>String(r[c]||'').length))+2}));XLSX.utils.book_append_sheet(wb,ws,'CSV');XLSX.writeFile(wb,'Solucione_CSV_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');}
 
@@ -404,56 +415,13 @@ function applyDtF(arr){const f=getDtF();return arr.filter(r=>(!f.obra||ccMatch(r
 function renderDtlh(){const f=getDtF(),csvDt=applyDtF(DATA.csv),rec=csvDt.filter(r=>r.tipo==='FATURAMENTO'),pag=csvDt.filter(r=>r.tipo==='PAGAMENTO');const vRec=rec.reduce((s,r)=>s+r.valor,0),vPag=pag.reduce((s,r)=>s+r.valor,0),vRes=vRec-vPag,vOrc=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra)).reduce((s,o)=>s+o.valor,0);set('dt-kpi-recebido',fmt(vRec));set('dt-kpi-pago',fmt(vPag));set('dt-kpi-orcado',fmt(vOrc));set('dt-kpi-areceber',fmt(0));set('dt-kpi-inadimpl',fmt(0));set('dt-kpi-potencial',fmt(vRec));const resEl=document.getElementById('dt-kpi-resultado');if(resEl){resEl.textContent=fmt(Math.abs(vRes));resEl.className='dtlh-kpi-main-val '+(vRes>=0?'pos':'neg');}const estObra=DATA.estoque.filter(u=>!f.obra||ccMatch(u.obra,f.obra));set('dt-est-total',estObra.length||'—');set('dt-est-vendidos',estObra.filter(u=>u.status==='Vendido').length||'—');set('dt-est-disponiveis',estObra.filter(u=>u.status==='Disponível').length||'—');const vgv=estObra.reduce((s,u)=>s+(u.venda||0),0);set('dt-est-vgv',vgv?fmt(vgv):'—');renderDtlhOrcTable(pag,f);}
 function renderDtlhOrcTable(pagas,f){const tbody=document.getElementById('dt-orc-body');if(!tbody)return;const itens=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra));if(!itens.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum orçamento</p></div></td></tr>';return;}tbody.innerHTML=itens.map(o=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+DATA.orcamento.indexOf(o)+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');set('dt-orc-total',fmt(itens.reduce((s,o)=>s+o.valor,0)));}
 function adicionarOrcamento(){const obra=document.getElementById('orc-obra').value.trim(),tot=document.getElementById('orc-totalizador').value.trim(),cod=document.getElementById('orc-codigo').value.trim(),desc=document.getElementById('orc-descricao').value.trim(),val=parseBRNum(document.getElementById('orc-valor').value);if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderOrcamentoTable();renderDtlh();}
-function renderOrcamentoTable(){const tbody=document.getElementById('body-orcamento');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('orc-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item</p>
-  <div class="tbl-card" style="margin-top:28px">
-    <div class="tbl-head">
-      <div class="tbl-title">Fluxo de Caixa por Conta</div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span class="filter-label">Obra</span>
-        <select class="filter-select" id="fc-obra" onchange="renderFluxo()" style="min-width:160px"><option value="">Todas as obras</option></select>
-        <span class="filter-label">Ano</span>
-        <select class="filter-select" id="fc-ano" onchange="renderFluxo()" style="width:90px"><option value="">Todos</option></select>
-        <span class="tbl-badge" id="fc-badge">—</span>
-      </div>
-    </div>
-    <div style="overflow-x:auto">
-      <table id="tbl-fluxo" style="min-width:960px;border-collapse:collapse;width:100%">
-        <thead id="thead-fluxo"></thead>
-        <tbody id="tbody-fluxo"><tr><td colspan="14"><div class="empty-state"><p>Carregue dados no CSV para visualizar</p></div></td></tr></tbody>
-        <tfoot id="tfoot-fluxo"></tfoot>
-      </table>
-    </div>
-  </div>
-</div>
+function renderOrcamentoTable(){const tbody=document.getElementById('body-orcamento');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('orc-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item</p></div></td></tr>';return;}tbody.innerHTML=DATA.orcamento.map((o,i)=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r val-neg">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
+function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
+function importarOrcamento(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});rows.forEach(r=>{const obra=String(r['Obra']||r['obra']||'').trim(),desc=String(r['Descrição']||r['Descricao']||'').trim(),val=parseBRNum(String(r['Valor']||r['valor']||'0'));if(obra&&desc&&val)DATA.orcamento.push({obra,totalizador:String(r['Totalizador']||'').trim(),codigo:String(r['Código']||r['Codigo']||'').trim(),descricao:desc,valor:val});});renderOrcamentoTable();renderDtlh();alert(DATA.orcamento.length+' itens.');}catch(err){alert('Erro: '+err.message);}};reader.readAsArrayBuffer(file);input.value='';}
+function baixarModeloOrcamento(){const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet([['Obra','Totalizador','Código','Descrição','Valor'],['Ex Obra','01','1.1','Fundação',150000]]);XLSX.utils.book_append_sheet(wb,ws,'Orçamento');XLSX.writeFile(wb,'Modelo_Orcamento_Solucione.xlsx');}
+function exportarOrcamento(){if(!DATA.orcamento.length){alert('Nenhum item.');return;}const rows=DATA.orcamento.map(o=>({'Obra':o.obra,'Totalizador':o.totalizador||'','Código':o.codigo||'','Descrição':o.descricao,'Valor':(o.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}));const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});XLSX.utils.book_append_sheet(wb,ws,'Orçamento');XLSX.writeFile(wb,'Solucione_Orcamento_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');}
 
-<div class="page" id="page-csv">
-  <div class="sec-title">CSV Analítico de Apropriações</div>
-  <div class="sec-sub">Cole aqui os dados do relatório analítico exportado do ERP</div>
-  <div class="paste-section">
-    <div class="paste-instructions"><strong>Como usar:</strong> Exporte o relatório no ERP, selecione a tabela com cabeçalho, copie Ctrl+C, cole abaixo Ctrl+V.<br>Colunas: <strong>Data · Complemento · Valor · Nome Centro de Custo · Conta</strong></div>
-    <textarea class="paste-box" id="paste-csv" placeholder="Clique aqui e cole com Ctrl+V"></textarea>
-    <div class="paste-actions">
-      <button class="btn-secondary" onclick="limparCSV()">&#10005; Limpar</button>
-      <button class="btn-primary" style="margin-left:8px" onclick="exportExcelCSV()">&#8595; Exportar Excel</button>
-      <span class="paste-status" id="status-csv"></span>
-    </div>
-  </div>
-  <div id="diag-csv" style="display:none;margin-bottom:20px"></div>
-  <div class="tbl-card">
-    <div class="tbl-head"><div class="tbl-title">Lançamentos Processados</div><span class="tbl-badge" id="count-csv">0 registros</span></div>
-    <div style="padding:10px 20px 0;border-bottom:1px solid var(--border)">
-      <div class="inline-filters">
-        <span class="filter-label">Filtrar</span>
-        <select class="filter-select" id="fcsv-ano" onchange="renderCSVTable()"><option value="">Todos os anos</option></select>
-        <select class="filter-select" id="fcsv-mes" onchange="renderCSVTable()"><option value="">Todos os meses</option></select>
-        <select class="filter-select" id="fcsv-cc" onchange="renderCSVTable()"><option value="">Todos os CCs</option></select>
-        <select class="filter-select" id="fcsv-tipo" onchange="renderCSVTable()"><option value="">Todos os tipos</option><option value="FATURAMENTO">Faturamento</option><option value="DESCONTO">Desconto Concedido</option><option value="PAGAMENTO">Pagamento</option></select>
-        <button class="btn-ghost" onclick="clearCSVFilters()">&#10005;</button>
-      </div>
-    </div>
-    <div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Complemento</th><th>Centro de Custo</th><th>Conta</th><th>Tipo</th><th class="r">Valor (R$)</th></tr></thead><tbody id="body-csv"><tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr></tbody></table></div>
-  </div>
-</div>
+</script>
 <div class="page" id="page-estoque">
   <div class="sec-title">Estoque</div>
   <div class="sec-sub">Cadastre as unidades disponíveis por obra para cálculo de Estoque e Afetação + Comissão</div>
