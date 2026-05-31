@@ -339,7 +339,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 </div>
 
 <script>
-const DATA={csv:[],estoque:[],orcamento:[]};
+const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{}};
 const CHARTS={};
 const MESES_PT=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -538,15 +538,15 @@ function renderFluxo(){
   tfoot.innerHTML='<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="padding:6px 12px;font-size:11px">Resultado do Per\u00edodo</td>'+rv.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt>=0?'#1B6B35':'#C0392B')+'">'+f2(rt)+'</td></tr>';
   set('fc-badge',nomes.length+(nomes.length===1?' conta':' contas'));
 }
-function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
-function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();alert('Restaurado! '+DATA.csv.length+' registros CSV.');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
+function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
+function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();alert('Restaurado! '+DATA.csv.length+' registros CSV.');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 </script>
 <script>
 function adicionarEstoque(){const obra=document.getElementById('est-obra').value.trim(),unidade=document.getElementById('est-unidade').value.trim(),status=document.getElementById('est-status')?.value||'Disponível',valor=parseBRNum(document.getElementById('est-valor').value);if(!obra||!unidade){alert('Preencha Obra e Unidade.');return;}DATA.estoque.push({obra,unidade,status,area:0,venda:valor});['est-unidade','est-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderEstoqueTable();}
 function renderEstoqueTable(){const tbody=document.getElementById('body-estoque');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('est-obra');if(ol){const cur=ol.value;ol.innerHTML='<option value="">Selecione a obra</option>'+obras.map(o=>'<option value="'+o+'"'+(o===cur?' selected':'')+'>'+o+'</option>').join('');}if(!DATA.estoque.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhuma unidade</p></div></td></tr>';return;}tbody.innerHTML=DATA.estoque.map((r,i)=>'<tr><td>'+r.obra+'</td><td>'+r.unidade+'</td><td><span class="badge '+(r.status==='Disponível'?'bg-green':r.status==='Vendido'?'bg-red':'bg-gold')+'">'+r.status+'</span></td><td class="r">'+(r.area?r.area.toLocaleString('pt-BR',{minimumFractionDigits:2})+'m²':'—')+'</td><td class="r">'+(r.venda?fmt(r.venda):'—')+'</td><td style="text-align:center"><button onclick="removerEstoque('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
 function removerEstoque(i){DATA.estoque.splice(i,1);renderEstoqueTable();}
-function updateDtlhFilters(){fillSelect('dt-obra',[...new Set([...DATA.csv.map(r=>r.cc),...DATA.estoque.map(r=>r.obra)].filter(Boolean))].sort(),v=>v,v=>v);fillSelect('dt-ano',[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort(),v=>v,v=>v);fillSelect('dt-mes',[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b),v=>v,v=>MESES_PT[v]);}
+function updateDtlhFilters(){renderOrcamentoTable();fillSelect('dt-obra',[...new Set([...DATA.csv.map(r=>r.cc),...DATA.estoque.map(r=>r.obra)].filter(Boolean))].sort(),v=>v,v=>v);fillSelect('dt-ano',[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort(),v=>v,v=>v);fillSelect('dt-mes',[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b),v=>v,v=>MESES_PT[v]);}
 function clearDtlhFilters(){['dt-obra','dt-ano','dt-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderDtlh();}
 function getDtF(){return{obra:document.getElementById('dt-obra')?.value||'',ano:document.getElementById('dt-ano')?.value||'',mes:document.getElementById('dt-mes')?.value||''};}
 function applyDtF(arr){const f=getDtF();return arr.filter(r=>(!f.obra||ccMatch(r.cc||'',f.obra))&&(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes));}
@@ -563,11 +563,18 @@ function renderDtlh(){
   const recebidoRows=fatRows.filter(r=>{const cu=(r.complemento||'').toUpperCase();return !cu.includes('A RECEBER');});
   const vRecebido=recebidoRows.reduce((s,r)=>s+r.valor,0)-dscRows.reduce((s,r)=>s+r.valor,0);
 
-  // Valor A Receber = complemento contém "A RECEBER" com data futura
+  // Entrega das chaves: limita A Receber até essa data se preenchida
+  const entregaVal=document.getElementById('dt-entrega')?.value;
+  const entregaDate=entregaVal?new Date(entregaVal+'T00:00:00'):null;
+  const limiteAReceber=entregaDate||null;
+
+  // Valor A Receber = complemento contém "A RECEBER" com data futura (até entrega se definida)
   const aReceberRows=fatRows.filter(r=>{
     const cu=(r.complemento||'').toUpperCase();
     if(!cu.includes('A RECEBER')) return false;
-    return !r.data || r.data >= hoje;
+    if(r.data && r.data < hoje) return false; // inadimplente
+    if(limiteAReceber && r.data && r.data > limiteAReceber) return false; // além da entrega
+    return true;
   });
   const vAReceber=aReceberRows.reduce((s,r)=>s+r.valor,0);
 
@@ -630,12 +637,97 @@ function renderDtlh(){
   renderDtlhOrcTable(pagRows,f);
 }
 function renderDtlhOrcTable(pagas,f){const tbody=document.getElementById('dt-orc-body');if(!tbody)return;const itens=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra));if(!itens.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum orçamento</p></div></td></tr>';return;}tbody.innerHTML=itens.map(o=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+DATA.orcamento.indexOf(o)+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');set('dt-orc-total',fmt(itens.reduce((s,o)=>s+o.valor,0)));}
-function adicionarOrcamento(){const obra=document.getElementById('orc-obra').value.trim(),tot=document.getElementById('orc-totalizador').value.trim(),cod=document.getElementById('orc-codigo').value.trim(),desc=document.getElementById('orc-descricao').value.trim(),val=parseBRNum(document.getElementById('orc-valor').value);if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderOrcamentoTable();renderDtlh();}
-function renderOrcamentoTable(){const tbody=document.getElementById('body-orcamento');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('orc-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item</p></div></td></tr>';return;}tbody.innerHTML=DATA.orcamento.map((o,i)=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r val-neg">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
+// DATA.orcamento agora: [{obra, descricao, meses:{0:val, 1:val, ...}}]
+
+function processarOrcamento(){
+  const obra=document.getElementById('orc-obra-sel')?.value;
+  const mes=parseInt(document.getElementById('orc-mes-sel')?.value);
+  const ano=parseInt(document.getElementById('orc-ano-sel')?.value);
+  const txt=document.getElementById('paste-orc')?.value||'';
+  if(!obra){alert('Selecione a obra.');return;}
+  if(!txt.trim()){alert('Cole os dados do Excel primeiro.');return;}
+  const lines=txt.trim().split('\n').map(l=>l.replace(/\r$/,'').trim()).filter(l=>l);
+  let count=0;
+  lines.forEach(line=>{
+    const parts=line.split('\t');
+    if(parts.length<2) return;
+    const desc=parts[0].trim();
+    const val=parseBRNum(parts[parts.length-1].trim());
+    if(!desc) return;
+    const key=obra+'|||'+desc;
+    if(!DATA.orcamentoMensal) DATA.orcamentoMensal={};
+    if(!DATA.orcamentoMensal[key]) DATA.orcamentoMensal[key]={obra,descricao:desc,anos:{}};
+    if(!DATA.orcamentoMensal[key].anos[ano]) DATA.orcamentoMensal[key].anos[ano]={};
+    DATA.orcamentoMensal[key].anos[ano][mes]=val;
+    count++;
+  });
+  document.getElementById('paste-orc').value='';
+  renderOrcamentoTable();
+  alert(count+' itens processados para '+MESES_PT[mes]+'/'+ano+'.');
+}
+
+function limparOrcamento(){
+  if(!confirm('Limpar todo o orçamento?')) return;
+  DATA.orcamentoMensal={};
+  renderOrcamentoTable();
+}
+
+function renderOrcamentoTable(){
+  if(!DATA.orcamentoMensal) DATA.orcamentoMensal={};
+  // Populate obra select with CSV obras
+  const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
+  const obraSel=document.getElementById('orc-obra-sel');
+  if(obraSel){const cur=obraSel.value;obraSel.innerHTML='<option value="">Selecione a obra</option>'+obras.map(o=>'<option value="'+o+'"'+(o===cur?' selected':'')+'>'+o+'</option>').join('');}
+  const filtroSel=document.getElementById('orc-filtro-obra');
+  if(filtroSel){const cur=filtroSel.value;filtroSel.innerHTML='<option value="">Todas as obras</option>'+obras.map(o=>'<option value="'+o+'"'+(o===cur?' selected':'')+'>'+o+'</option>').join('');}
+
+  const filtroObra=document.getElementById('orc-filtro-obra')?.value||'';
+  const thead=document.getElementById('thead-orc-mensal');
+  const tbody=document.getElementById('tbody-orc-mensal');
+  if(!thead||!tbody) return;
+
+  const entries=Object.values(DATA.orcamentoMensal).filter(e=>!filtroObra||ccMatch(e.obra,filtroObra));
+  if(!entries.length){
+    thead.innerHTML='';
+    tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado de orçamento ainda</p></div></td></tr>';
+    set('orc-badge','—');return;
+  }
+
+  // Collect all anos/meses
+  const anoMeses=new Set();
+  entries.forEach(e=>Object.entries(e.anos).forEach(([ano,mMap])=>Object.keys(mMap).forEach(m=>anoMeses.add(ano+'-'+m))));
+  const cols=[...anoMeses].sort((a,b)=>{const[aa,am]=a.split('-').map(Number),[ba,bm]=b.split('-').map(Number);return aa!==ba?aa-ba:am-bm;});
+
+  thead.innerHTML='<tr style="background:#f5f5f5"><th style="text-align:left;padding:8px 12px;min-width:180px">Descrição</th>'+cols.map(c=>{const[a,m]=c.split('-').map(Number);return'<th class="r" style="padding:6px 10px;min-width:90px;font-size:11px">'+MESES_ABR[m]+'/'+a+'</th>';}).join('')+'<th class="r" style="padding:6px 10px;background:#ececec;min-width:90px">Total</th></tr>';
+
+  // Group by obra
+  const obraGroups={};
+  entries.forEach(e=>{if(!obraGroups[e.obra])obraGroups[e.obra]=[];obraGroups[e.obra].push(e);});
+
+  let rows='';
+  const totais=Array(cols.length).fill(0);
+  Object.entries(obraGroups).forEach(([obra,items])=>{
+    rows+='<tr style="background:#D5F5E3"><td colspan="'+(cols.length+2)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35">'+obra+'</td></tr>';
+    const obraTotais=Array(cols.length).fill(0);
+    items.sort((a,b)=>a.descricao.localeCompare(b.descricao)).forEach(e=>{
+      const vals=cols.map((c,ci)=>{const[a,m]=c.split('-').map(Number);const v=(e.anos[a]&&e.anos[a][m])||0;obraTotais[ci]+=v;totais[ci]+=v;return v;});
+      const tot=vals.reduce((s,v)=>s+v,0);
+      rows+='<tr><td style="padding:5px 6px 5px 16px;font-size:11px">'+e.descricao+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:11px">'+fmt(tot)+'</td></tr>';
+    });
+    const obraTot=obraTotais.reduce((s,v)=>s+v,0);
+    rows+='<tr style="background:#e8f5e9;font-weight:700"><td style="padding:5px 12px;font-size:11px">Total '+obra+'</td>'+obraTotais.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+fmt(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+fmt(obraTot)+'</td></tr>';
+  });
+
+  const grandTot=totais.reduce((s,v)=>s+v,0);
+  rows+='<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="padding:6px 12px">Total Geral</td>'+totais.map(v=>'<td class="r" style="padding:4px 8px">'+fmt(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px">'+fmt(grandTot)+'</td></tr>';
+  tbody.innerHTML=rows;
+  set('orc-badge',entries.length+' itens');
+}
+
 function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
-function importarOrcamento(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});rows.forEach(r=>{const obra=String(r['Obra']||r['obra']||'').trim(),desc=String(r['Descrição']||r['Descricao']||'').trim(),val=parseBRNum(String(r['Valor']||r['valor']||'0'));if(obra&&desc&&val)DATA.orcamento.push({obra,totalizador:String(r['Totalizador']||'').trim(),codigo:String(r['Código']||r['Codigo']||'').trim(),descricao:desc,valor:val});});renderOrcamentoTable();renderDtlh();alert(DATA.orcamento.length+' itens.');}catch(err){alert('Erro: '+err.message);}};reader.readAsArrayBuffer(file);input.value='';}
-function baixarModeloOrcamento(){const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet([['Obra','Totalizador','Código','Descrição','Valor'],['Ex Obra','01','1.1','Fundação',150000]]);XLSX.utils.book_append_sheet(wb,ws,'Orçamento');XLSX.writeFile(wb,'Modelo_Orcamento_Solucione.xlsx');}
-function exportarOrcamento(){if(!DATA.orcamento.length){alert('Nenhum item.');return;}const rows=DATA.orcamento.map(o=>({'Obra':o.obra,'Totalizador':o.totalizador||'','Código':o.codigo||'','Descrição':o.descricao,'Valor':(o.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}));const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});XLSX.utils.book_append_sheet(wb,ws,'Orçamento');XLSX.writeFile(wb,'Solucione_Orcamento_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');}
+function importarOrcamento(input){}
+function baixarModeloOrcamento(){}
+function exportarOrcamento(){}
 
 </script>
 <div class="page" id="page-estoque">
@@ -840,74 +932,61 @@ function exportarOrcamento(){if(!DATA.orcamento.length){alert('Nenhum item.');re
 
 <div class="page" id="page-orcamento">
   <div class="sec-title">Orçamento</div>
-  <div class="sec-sub">Cadastre o orçamento por item de cada obra — ou importe via Excel</div>
+  <div class="sec-sub">Cole os dados do Excel por obra e mês — a tabela se expande automaticamente</div>
 
   <div class="estoque-form">
-    <div class="estoque-form-title">Adicionar Item de Orçamento</div>
-    <div class="form-row">
+    <div class="estoque-form-title">Colar dados do orçamento</div>
+    <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
       <div class="form-group">
         <label>Obra</label>
-        <input class="form-input" id="orc-obra" placeholder="Nome da obra" list="orc-obra-list">
-        <datalist id="orc-obra-list"></datalist>
+        <select class="form-input" id="orc-obra-sel" style="min-width:200px"><option value="">Selecione a obra</option></select>
       </div>
       <div class="form-group">
-        <label>Item Totalizador <span style="color:var(--brand)">*</span></label>
-        <input class="form-input" id="orc-totalizador" placeholder="Ex: ESTRUTURA" style="min-width:160px" list="orc-tot-list">
-        <datalist id="orc-tot-list"></datalist>
+        <label>Mês</label>
+        <select class="form-input" id="orc-mes-sel" style="min-width:130px">
+          <option value="0">Janeiro</option><option value="1">Fevereiro</option>
+          <option value="2">Março</option><option value="3">Abril</option>
+          <option value="4">Maio</option><option value="5">Junho</option>
+          <option value="6">Julho</option><option value="7">Agosto</option>
+          <option value="8">Setembro</option><option value="9">Outubro</option>
+          <option value="10">Novembro</option><option value="11">Dezembro</option>
+        </select>
       </div>
       <div class="form-group">
-        <label>Código Item</label>
-        <input class="form-input" id="orc-codigo" placeholder="Ex: 01.001" style="min-width:120px">
+        <label>Ano</label>
+        <select class="form-input" id="orc-ano-sel" style="width:100px">
+          <option value="2024">2024</option><option value="2025">2025</option>
+          <option value="2026" selected>2026</option><option value="2027">2027</option>
+        </select>
       </div>
-      <div class="form-group" style="min-width:220px">
-        <label>Descrição do Item</label>
-        <input class="form-input" id="orc-descricao" placeholder="Ex: Fundação">
+      <div class="form-group" style="flex:1;min-width:200px">
+        <label>Cole aqui os dados do Excel (Descrição &nbsp;Valor)</label>
+        <textarea class="paste-box" id="paste-orc" rows="3" placeholder="Selecione no Excel as colunas Descrição e Valor, copie e cole aqui" style="height:70px"></textarea>
       </div>
-      <div class="form-group">
-        <label>Valor Orçado (R$)</label>
-        <input class="form-input" id="orc-valor" placeholder="Ex: 150000" style="min-width:140px">
+      <div class="form-group" style="justify-content:flex-end">
+        <button class="btn-primary" onclick="processarOrcamento()">+ Processar</button>
+        <button class="btn-secondary" style="margin-left:8px" onclick="limparOrcamento()">✕ Limpar tudo</button>
       </div>
-      <div class="form-group" style="justify-content:flex-end;gap:8px;flex-direction:row;align-items:flex-end">
-        <button class="btn-primary" onclick="adicionarOrcamento()">+ Adicionar</button>
-      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">
+      Cole 2 colunas do Excel: <strong>Descrição</strong> e <strong>Valor</strong>. Se o mês já existir para essa obra, os valores serão substituídos.
     </div>
   </div>
 
-  
-  <div style="background:var(--blue-light);border:1px solid #A9CCE3;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-    <div style="flex:1;min-width:200px">
-      <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:3px">Importar do Excel</div>
-      <div style="font-size:11px;color:var(--text3)">Planilha com colunas: <strong>obra · totalizador · codigo · descricao · valor</strong></div>
-    </div>
-    <button class="btn-primary" style="background:var(--blue)" onclick="document.getElementById('orc-import-input').click()">⬆ Importar Excel</button>
-    <input type="file" id="orc-import-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importarOrcamento(this)">
-    <button class="btn-secondary" onclick="baixarModeloOrcamento()">⬇ Baixar Modelo</button>
-    <span id="status-orc-import" style="font-size:12px;color:var(--text3)"></span>
-  </div>
-
-  <div class="tbl-card">
+  <div class="tbl-card" style="margin-top:16px">
     <div class="tbl-head">
-      <div class="tbl-title">Itens Cadastrados</div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <span class="tbl-badge" id="count-orcamento">0 itens</span>
-        <span class="tbl-badge" id="total-orcamento" style="background:var(--blue-light);color:var(--blue)">R$ 0,00</span>
-        <button class="btn-export" onclick="exportarOrcamento()">⬇ Exportar Excel</button>
+      <div class="tbl-title">Orçamento por Item</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="filter-label">Obra</span>
+        <select class="filter-select" id="orc-filtro-obra" onchange="renderOrcamentoTable()" style="min-width:160px"><option value="">Todas as obras</option></select>
+        <span class="tbl-badge" id="orc-badge">—</span>
       </div>
     </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Obra</th>
-            <th>Totalizador</th>
-            <th>Código</th>
-            <th>Descrição</th>
-            <th class="r">Valor Orçado (R$)</th>
-            <th style="width:60px;text-align:center">Ação</th>
-          </tr>
-        </thead>
-        <tbody id="body-orcamento">
-          <tr><td colspan="6"><div class="empty-state"><p>Nenhum item cadastrado</p></div></td></tr>
+    <div style="overflow-x:auto">
+      <table id="tbl-orcamento-mensal" style="width:100%;border-collapse:collapse;min-width:600px">
+        <thead id="thead-orc-mensal"></thead>
+        <tbody id="tbody-orc-mensal">
+          <tr><td colspan="3"><div class="empty-state"><p>Nenhum dado de orçamento ainda</p></div></td></tr>
         </tbody>
       </table>
     </div>
