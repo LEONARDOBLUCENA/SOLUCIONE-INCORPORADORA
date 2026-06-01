@@ -1268,19 +1268,36 @@ function renderOrcamentoTable(){
       if(!e.codigo) return false;
       return allCodes.some(c=>c!==e.codigo && c.startsWith(e.codigo));
     };
+    // Collect child values into each totalizador
+    const totMap={};
     sorted.forEach(e=>{
-      const tot_flag=isTotalizador(e);
+      if(!isTotalizador(e)){
+        // find parent totalizadores and add values
+        sorted.filter(t=>isTotalizador(t)&&e.codigo&&e.codigo.startsWith(t.codigo)&&e.codigo!==t.codigo).forEach(t=>{
+          if(!totMap[t.codigo]) totMap[t.codigo]=Array(cols.length).fill(0);
+          cols.forEach((c,ci)=>{const[a,m]=c.split('-').map(Number);totMap[t.codigo][ci]+=(e.anos[a]&&e.anos[a][m])||0;});
+        });
+      }
+    });
+
+    // Only render totalizadores
+    sorted.filter(e=>isTotalizador(e)).forEach(e=>{
       const nivel=e.codigo?(e.codigo.split('.').length-1):0;
       const indent=12+(nivel*16);
-      const vals=cols.map((c,ci)=>{const[a,m]=c.split('-').map(Number);const v=(e.anos[a]&&e.anos[a][m])||0;if(!tot_flag){obraTotais[ci]+=v;totais[ci]+=v;}return v;});
+      const vals=cols.map((c,ci)=>{
+        // use summed children values if available, else own value
+        const childVal=totMap[e.codigo]?totMap[e.codigo][ci]:0;
+        const[a,m]=c.split('-').map(Number);
+        const ownVal=(e.anos[a]&&e.anos[a][m])||0;
+        const v=childVal||ownVal;
+        obraTotais[ci]+=v; totais[ci]+=v;
+        return v;
+      });
       const rowTot=vals.reduce((s,v)=>s+v,0);
-      if(tot_flag){
-        rows+='<tr style="background:#f0f7f0;font-weight:700"><td style="padding:5px 6px 5px '+indent+'px;font-size:11px">'
-+'<span style="color:var(--brand);margin-right:6px;font-size:10px;font-weight:700">'+(e.codigo||'—')+'</span>'+e.descricao+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px;font-weight:700">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:700;background:#e8f5e9">'+fmt(rowTot)+'</td></tr>';
-      } else {
-        rows+='<tr><td style="padding:5px 6px 5px '+indent+'px;font-size:11px">'
-+'<span style="color:#999;margin-right:6px;font-size:10px">'+(e.codigo||'—')+'</span>'+e.descricao+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:11px">'+fmt(rowTot)+'</td></tr>';
-      }
+      rows+='<tr style="background:#f0f7f0"><td style="padding:6px 8px 6px '+indent+'px;font-size:11px;font-weight:700">'
++'<span style="color:var(--brand);margin-right:6px;font-size:10px">'+(e.codigo||'')+'</span>'+e.descricao+'</td>'
++vals.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px;font-weight:700">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')
++'<td class="r" style="padding:5px 8px;font-weight:700;background:#e8f5e9">'+fmt(rowTot)+'</td></tr>';
     });
     const obraTot=obraTotais.reduce((s,v)=>s+v,0);
     rows+='<tr style="background:#e8f5e9;font-weight:700"><td style="padding:5px 12px;font-size:11px">Total '+obra+'</td>'+obraTotais.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+fmt(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+fmt(obraTot)+'</td></tr>';
