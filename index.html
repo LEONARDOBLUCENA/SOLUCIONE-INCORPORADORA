@@ -651,12 +651,24 @@ function processarOrcamento(){
   lines.forEach(line=>{
     const parts=line.split('\t');
     if(parts.length<2) return;
-    const desc=parts[0].trim();
-    const val=parseBRNum(parts[parts.length-1].trim());
+    let codigo='', desc='', val=0;
+    if(parts.length>=3){
+      // 3 cols: Código | Descrição | Valor
+      codigo=parts[0].trim();
+      desc=parts[1].trim();
+      val=parseBRNum(parts[parts.length-1].trim());
+    } else {
+      // 2 cols: Descrição | Valor
+      desc=parts[0].trim();
+      val=parseBRNum(parts[1].trim());
+    }
     if(!desc) return;
-    const key=obra+'|||'+desc;
+    const key=obra+'|||'+(codigo||desc);
     if(!DATA.orcamentoMensal) DATA.orcamentoMensal={};
-    if(!DATA.orcamentoMensal[key]) DATA.orcamentoMensal[key]={obra,descricao:desc,anos:{}};
+    if(!DATA.orcamentoMensal[key]) DATA.orcamentoMensal[key]={obra,codigo,descricao:desc,anos:{}};
+    // Update codigo/desc if changed
+    DATA.orcamentoMensal[key].codigo=codigo;
+    DATA.orcamentoMensal[key].descricao=desc;
     if(!DATA.orcamentoMensal[key].anos[ano]) DATA.orcamentoMensal[key].anos[ano]={};
     DATA.orcamentoMensal[key].anos[ano][mes]=val;
     count++;
@@ -709,10 +721,28 @@ function renderOrcamentoTable(){
   Object.entries(obraGroups).forEach(([obra,items])=>{
     rows+='<tr style="background:#D5F5E3"><td colspan="'+(cols.length+2)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35">'+obra+'</td></tr>';
     const obraTotais=Array(cols.length).fill(0);
-    items.sort((a,b)=>a.descricao.localeCompare(b.descricao)).forEach(e=>{
-      const vals=cols.map((c,ci)=>{const[a,m]=c.split('-').map(Number);const v=(e.anos[a]&&e.anos[a][m])||0;obraTotais[ci]+=v;totais[ci]+=v;return v;});
-      const tot=vals.reduce((s,v)=>s+v,0);
-      rows+='<tr><td style="padding:5px 6px 5px 16px;font-size:11px">'+e.descricao+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:11px">'+fmt(tot)+'</td></tr>';
+    // Sort by código, then render with hierarchy
+    const sorted=items.slice().sort((a,b)=>{
+      const ca=a.codigo||a.descricao, cb=b.codigo||b.descricao;
+      return ca.localeCompare(cb,undefined,{numeric:true});
+    });
+    // Identify totalizadores: items whose codigo is a prefix of other items' codigos
+    const allCodes=sorted.map(e=>e.codigo).filter(Boolean);
+    const isTotalizador=e=>{
+      if(!e.codigo) return false;
+      return allCodes.some(c=>c!==e.codigo && c.startsWith(e.codigo));
+    };
+    sorted.forEach(e=>{
+      const tot_flag=isTotalizador(e);
+      const nivel=e.codigo?(e.codigo.split('.').length-1):0;
+      const indent=12+(nivel*16);
+      const vals=cols.map((c,ci)=>{const[a,m]=c.split('-').map(Number);const v=(e.anos[a]&&e.anos[a][m])||0;if(!tot_flag){obraTotais[ci]+=v;totais[ci]+=v;}return v;});
+      const rowTot=vals.reduce((s,v)=>s+v,0);
+      if(tot_flag){
+        rows+='<tr style="background:#f0f7f0;font-weight:700"><td style="padding:5px 6px 5px '+indent+'px;font-size:11px">'+(e.codigo?'<span style="color:var(--brand);margin-right:6px;font-size:10px">'+e.codigo+'</span>':'')+e.descricao+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px;font-weight:700">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:700;background:#e8f5e9">'+fmt(rowTot)+'</td></tr>';
+      } else {
+        rows+='<tr><td style="padding:5px 6px 5px '+indent+'px;font-size:11px">'+(e.codigo?'<span style="color:#999;margin-right:6px;font-size:10px">'+e.codigo+'</span>':'')+e.descricao+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:11px">'+fmt(rowTot)+'</td></tr>';
+      }
     });
     const obraTot=obraTotais.reduce((s,v)=>s+v,0);
     rows+='<tr style="background:#e8f5e9;font-weight:700"><td style="padding:5px 12px;font-size:11px">Total '+obra+'</td>'+obraTotais.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+fmt(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+fmt(obraTot)+'</td></tr>';
@@ -955,13 +985,13 @@ function exportarOrcamento(){}
       <div class="form-group">
         <label>Ano</label>
         <select class="form-input" id="orc-ano-sel" style="width:100px">
-          <option value="2024">2024</option><option value="2025">2025</option>
+          <option value="2023">2023</option><option value="2024">2024</option><option value="2025">2025</option>
           <option value="2026" selected>2026</option><option value="2027">2027</option>
         </select>
       </div>
       <div class="form-group" style="flex:1;min-width:200px">
         <label>Cole aqui os dados do Excel (Descrição &nbsp;Valor)</label>
-        <textarea class="paste-box" id="paste-orc" rows="3" placeholder="Selecione no Excel as colunas Descrição e Valor, copie e cole aqui" style="height:70px"></textarea>
+        <textarea class="paste-box" id="paste-orc" rows="3" placeholder="Selecione no Excel as colunas Código, Descrição e Valor, copie e cole aqui" style="height:70px"></textarea>
       </div>
       <div class="form-group" style="justify-content:flex-end">
         <button class="btn-primary" onclick="processarOrcamento()">+ Processar</button>
@@ -969,7 +999,7 @@ function exportarOrcamento(){}
       </div>
     </div>
     <div style="font-size:11px;color:var(--text3);margin-top:6px">
-      Cole 2 colunas do Excel: <strong>Descrição</strong> e <strong>Valor</strong>. Se o mês já existir para essa obra, os valores serão substituídos.
+      Cole 3 colunas do Excel: <strong>Código</strong>, <strong>Descrição</strong> e <strong>Valor</strong>. Códigos mais curtos são totalizadores (ex: 01 agrupa 01.001). Se o mês já existir, os valores são substituídos.
     </div>
   </div>
 
