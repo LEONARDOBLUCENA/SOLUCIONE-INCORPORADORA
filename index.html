@@ -718,7 +718,7 @@ function renderOrcamentoTable(){
 
     const obraTot=obraTotais.reduce((s,v)=>s+v,0);
     totais.forEach((v,i)=>totais[i]+=obraTotais[i]);
-    rows+='<tr style="background:#c8e6c9;font-weight:700"><td style="padding:5px 12px;font-size:11px;position:sticky;left:0;background:#c8e6c9;box-shadow:2px 0 4px rgba(0,0,0,.08)">Total '+obra+'</td>'+obraTotais.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+fmt(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+fmt(obraTot)+'</td></tr>';
+    // Total obra row removed — redundant with Total do Mês
   });
 
   const grandTot=totais.reduce((s,v)=>s+v,0);
