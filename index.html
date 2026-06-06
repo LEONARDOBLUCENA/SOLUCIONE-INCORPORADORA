@@ -694,31 +694,43 @@ function renderOrcamentoTable(){
           +'</td>'+vals.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')
           +'<td class="r" style="padding:5px 8px;font-weight:700;background:#c8e6c9">'+fmt(rowTot)+'</td></tr>';
       } else if(isTot){
-        const vals=cols.map((c,ci)=>{const sub=totFilhoMap[e.codigo]?totFilhoMap[e.codigo][ci]:null;const[a,m]=c.split('-').map(Number);return sub!==null?sub:((e.anos[a]&&e.anos[a][m])||0);});
-        const rowTot=vals.reduce((s,v)=>s+v,0);
+        const mensalVals=cols.map((c,ci)=>{const sub=totFilhoMap[e.codigo]?totFilhoMap[e.codigo][ci]:null;const[a,m]=c.split('-').map(Number);return sub!==null?sub:((e.anos[a]&&e.anos[a][m])||0);});
+        const rowTot=mensalVals.reduce((s,v)=>s+v,0);
+        let runSum=0; const accumVals=mensalVals.map(v=>{runSum+=v;return runSum;});
+        const custo=e.custo||0;
         rows+='<tr style="background:#f5f5f5;font-weight:600">'
           +'<td style="'+SD+';background:#f5f5f5;padding:5px 8px 5px '+pad+'px;font-size:11px">'
           +'<span style="color:var(--brand);margin-right:6px;font-size:10px">'+e.codigo+'</span>'+e.descricao
-          +'</td>'+vals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')
-          +'<td class="r" style="padding:4px 8px;background:#ececec;font-size:11px">'+fmt(rowTot)+'</td></tr>';
+          +'</td>'+mensalVals.map((v,i)=>
+            '<td class="r" style="padding:3px 6px;font-size:11px;border-left:1px solid #e0e0e0">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>'
+            +'<td class="r" style="padding:3px 6px;font-size:11px;color:#1a5276">'+(accumVals[i]===0?'<span style="color:#ccc">—</span>':fmt(accumVals[i]))+'</td>'
+          ).join('')
+          +'<td class="r" style="padding:3px 8px;background:#ececec;font-size:11px">'+(custo?fmt(custo):fmt(rowTot))+'</td></tr>';
       } else {
-        const vals=cols.map((c,ci)=>{const[a,m]=c.split('-').map(Number);return(e.anos[a]&&e.anos[a][m])||0;});
-        const rowTot=vals.reduce((s,v)=>s+v,0);
+        const mensalVals=cols.map((c,ci)=>{const[a,m]=c.split('-').map(Number);return(e.anos[a]&&e.anos[a][m])||0;});
+        const rowTot=mensalVals.reduce((s,v)=>s+v,0);
+        let runSum=0; const accumVals=mensalVals.map(v=>{runSum+=v;return runSum;});
+        const custo=e.custo||0;
         rows+='<tr>'
           +'<td style="'+SD+';background:#fff;padding:4px 8px 4px '+pad+'px;font-size:11px;color:#444">'
           +'<span style="color:#aaa;margin-right:6px;font-size:10px">'+e.codigo+'</span>'+e.descricao
-          +'</td>'+vals.map(v=>'<td class="r" style="padding:3px 8px;font-size:11px">'+(v===0?'<span style="color:#ddd">—</span>':fmt(v))+'</td>').join('')
-          +'<td class="r" style="padding:3px 8px;background:#fafafa;font-size:11px">'+(rowTot===0?'—':fmt(rowTot))+'</td></tr>';
+          +'</td>'+mensalVals.map((v,i)=>
+            '<td class="r" style="padding:3px 6px;font-size:11px;border-left:1px solid #f0f0f0">'+(v===0?'<span style="color:#ddd">—</span>':fmt(v))+'</td>'
+            +'<td class="r" style="padding:3px 6px;font-size:11px;color:#1a5276">'+(accumVals[i]===0?'<span style="color:#ddd">—</span>':fmt(accumVals[i]))+'</td>'
+          ).join('')
+          +'<td class="r" style="padding:3px 8px;background:#fafafa;font-size:11px">'+(custo?fmt(custo):(rowTot===0?'—':fmt(rowTot)))+'</td></tr>';
       }
     });
 
     const obraTot=obraTotais.reduce((s,v)=>s+v,0);
     totais.forEach((v,i)=>totais[i]+=obraTotais[i]);
-    rows+='<tr style="background:#c8e6c9;font-weight:700"><td style="padding:5px 12px;font-size:11px;position:sticky;left:0;background:#c8e6c9;box-shadow:2px 0 4px rgba(0,0,0,.08)">Total '+obra+'</td>'+obraTotais.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+fmt(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+fmt(obraTot)+'</td></tr>';
+    let rs=0; const obraAcc=obraTotais.map(v=>{rs+=v;return rs;});
+    rows+='<tr style="background:#c8e6c9;font-weight:700"><td style="padding:5px 12px;font-size:11px;position:sticky;left:0;background:#c8e6c9;box-shadow:2px 0 4px rgba(0,0,0,.08)">Total '+obra+'</td>'+obraTotais.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:11px;border-left:1px solid #a5d6a7">'+fmt(v)+'</td><td class="r" style="padding:4px 6px;font-size:11px;color:#1a5276">'+fmt(obraAcc[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+fmt(obraTot)+'</td></tr>';
   });
 
   const grandTot=totais.reduce((s,v)=>s+v,0);
-  rows+='<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="padding:6px 12px;position:sticky;left:0;background:#f0f0f0;box-shadow:2px 0 4px rgba(0,0,0,.08)">Total Geral</td>'+totais.map(v=>'<td class="r" style="padding:4px 8px">'+fmt(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px">'+fmt(grandTot)+'</td></tr>';
+  let gs=0; const grandAcc=totais.map(v=>{gs+=v;return gs;});
+  rows+='<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="padding:6px 12px;position:sticky;left:0;background:#f0f0f0;box-shadow:2px 0 4px rgba(0,0,0,.08)">Total Geral</td>'+totais.map((v,i)=>'<td class="r" style="padding:4px 6px;border-left:1px solid #ccc">'+fmt(v)+'</td><td class="r" style="padding:4px 6px;color:#1a5276">'+fmt(grandAcc[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px">'+fmt(grandTot)+'</td></tr>';
   tbody.innerHTML=rows;
   set('orc-badge',entries.length+' itens');
 }
@@ -799,7 +811,7 @@ function importarOrcamento(input){
         const descStr=String(desc).trim();
         const key=obraName+'|||'+codigoStr;
         if(!DATA.orcamentoMensal[key]) DATA.orcamentoMensal[key]={obra:obraName,codigo:codigoStr,descricao:descStr,anos:{}};
-        // Read month values
+        // Read monthly values
         Object.entries(colMonthMap).forEach(([ci,{mes,ano}])=>{
           const val=row[parseInt(ci)];
           if(val!==null&&val!==undefined&&val!==''&&!isNaN(parseFloat(val))){
@@ -807,6 +819,16 @@ function importarOrcamento(input){
             DATA.orcamentoMensal[key].anos[ano][mes]=parseFloat(val)||0;
           }
         });
+        // Read acumulado (col 98 = index 97 in 0-based)
+        const acumVal=row[97];
+        if(acumVal!==null&&acumVal!==undefined&&acumVal!==''&&!isNaN(parseFloat(acumVal))){
+          DATA.orcamentoMensal[key].acumulado=parseFloat(acumVal)||0;
+        }
+        // Read custo total (col 6 = index 5)
+        const custoVal=row[5];
+        if(custoVal!==null&&custoVal!==undefined&&!isNaN(parseFloat(custoVal))){
+          DATA.orcamentoMensal[key].custo=parseFloat(custoVal)||0;
+        }
         count++;
       }
       renderOrcamentoTable();
@@ -1024,42 +1046,11 @@ function exportarOrcamento(){}
   <div class="sec-sub">Cole os dados do Excel por obra e mês — a tabela se expande automaticamente</div>
 
   <div class="estoque-form">
-    <div class="estoque-form-title">Colar dados do orçamento</div>
-    <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
-      <div class="form-group">
-        <label>Obra</label>
-        <select class="form-input" id="orc-obra-sel" style="min-width:200px"><option value="">Selecione a obra</option></select>
-      </div>
-      <div class="form-group">
-        <label>Mês</label>
-        <select class="form-input" id="orc-mes-sel" style="min-width:130px">
-          <option value="0">Janeiro</option><option value="1">Fevereiro</option>
-          <option value="2">Março</option><option value="3">Abril</option>
-          <option value="4">Maio</option><option value="5">Junho</option>
-          <option value="6">Julho</option><option value="7">Agosto</option>
-          <option value="8">Setembro</option><option value="9">Outubro</option>
-          <option value="10">Novembro</option><option value="11">Dezembro</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Ano</label>
-        <select class="form-input" id="orc-ano-sel" style="width:100px">
-          <option value="2023">2023</option><option value="2024">2024</option><option value="2025">2025</option>
-          <option value="2026" selected>2026</option><option value="2027">2027</option>
-        </select>
-      </div>
-      <div class="form-group" style="flex:1;min-width:200px">
-        <label>Cole aqui os dados do Excel (Descrição &nbsp;Valor)</label>
-        <textarea class="paste-box" id="paste-orc" rows="3" placeholder="Selecione no Excel as colunas Código, Descrição e Valor, copie e cole aqui" style="height:70px"></textarea>
-      </div>
-      <div class="form-group" style="justify-content:flex-end">
-        <label class="btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">&#128194; Importar Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importarOrcamento(this)"></label>
-        <button class="btn-primary" style="margin-left:8px" onclick="processarOrcamento()">+ Processar colagem</button>
-        <button class="btn-secondary" style="margin-left:8px" onclick="limparOrcamento()">✕ Limpar tudo</button>
-      </div>
-    </div>
-    <div style="font-size:11px;color:var(--text3);margin-top:6px">
-      Cole 3 colunas do Excel: <strong>Código</strong>, <strong>Descrição</strong> e <strong>Valor</strong>. Códigos mais curtos são totalizadores (ex: 01 agrupa 01.001). Se o mês já existir, os valores são substituídos.
+    <div class="estoque-form-title">Importar orçamento</div>
+    <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:center">
+      <label class="btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">&#128194; Importar Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importarOrcamento(this)"></label>
+      <button class="btn-secondary" onclick="limparOrcamento()">✕ Limpar tudo</button>
+      <span style="font-size:11px;color:var(--text3)">Importe o relatório Excel — cada nova importação atualiza os valores mantendo o histórico.</span>
     </div>
   </div>
 
