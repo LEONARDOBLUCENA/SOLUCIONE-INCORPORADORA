@@ -799,12 +799,17 @@ function importarOrcamento(input){
       // Find which column is B (codigo) and C (descricao)
       // Row 14 (dataStart-1) has 'Código' and 'Descrição'
       let codigoCol=-1, descCol=-1, orcadoCol=-1;
-      const headerRow=data[dataStart-1]||[];
-      headerRow.forEach((v,ci)=>{
-        if(v&&String(v).toLowerCase().includes('ódigo')) codigoCol=ci;
-        if(v&&String(v).toLowerCase().includes('escri')) descCol=ci;
-        if(v&&String(v).toLowerCase().includes('custo')) orcadoCol=ci;
-      });
+      // Varre todas as linhas de cabecalho (antes de dataStart) para encontrar as colunas
+      for(let hi=0;hi<dataStart;hi++){
+        const hr=data[hi]||[];
+        hr.forEach((v,ci)=>{
+          if(!v) return;
+          const s=String(v).toLowerCase();
+          if(s.includes('ódigo')) codigoCol=ci;
+          if(s.includes('escri')) descCol=ci;
+          if(s.includes('custo')) orcadoCol=ci;
+        });
+      }
       // Fallback to B=1, C=2, F=5 (0-indexed)
       if(codigoCol<0) codigoCol=1;
       if(descCol<0) descCol=2;
