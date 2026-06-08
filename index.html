@@ -798,15 +798,17 @@ function importarOrcamento(input){
       // Parse data rows: col B=codigo(1), col C=descricao(2)
       // Find which column is B (codigo) and C (descricao)
       // Row 14 (dataStart-1) has 'Código' and 'Descrição'
-      let codigoCol=-1, descCol=-1;
+      let codigoCol=-1, descCol=-1, orcadoCol=-1;
       const headerRow=data[dataStart-1]||[];
       headerRow.forEach((v,ci)=>{
         if(v&&String(v).toLowerCase().includes('ódigo')) codigoCol=ci;
         if(v&&String(v).toLowerCase().includes('escri')) descCol=ci;
+        if(v&&String(v).toLowerCase().includes('custo')) orcadoCol=ci;
       });
-      // Fallback to B=1, C=2 (0-indexed)
+      // Fallback to B=1, C=2, F=5 (0-indexed)
       if(codigoCol<0) codigoCol=1;
       if(descCol<0) descCol=2;
+      if(orcadoCol<0) orcadoCol=5;
 
       if(!DATA.orcamentoMensal) DATA.orcamentoMensal={};
       let count=0;
@@ -833,8 +835,8 @@ function importarOrcamento(input){
         if(acumVal!==null&&acumVal!==undefined&&acumVal!==''&&!isNaN(parseFloat(acumVal))){
           DATA.orcamentoMensal[key].acumulado=parseFloat(acumVal)||0;
         }
-        // Read valor orcado (col F = index 5)
-        const custoVal=row[5];
+        // Read valor orcado (col 'Custo (R$)' detectada dinamicamente, fallback F=5)
+        const custoVal=row[orcadoCol];
         if(custoVal!==null&&custoVal!==undefined&&!isNaN(parseFloat(custoVal))){
           DATA.orcamentoMensal[key].orcado=parseFloat(custoVal)||0;
         }
