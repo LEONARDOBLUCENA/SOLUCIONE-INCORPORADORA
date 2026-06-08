@@ -220,7 +220,73 @@ function updateDtlhFilters(){fillSelect('dt-obra',[...new Set([...DATA.csv.map(r
 function clearDtlhFilters(){['dt-obra','dt-ano','dt-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderDtlh();}
 function getDtF(){return{obra:document.getElementById('dt-obra')?.value||'',ano:document.getElementById('dt-ano')?.value||'',mes:document.getElementById('dt-mes')?.value||''};}
 function applyDtF(arr){const f=getDtF();return arr.filter(r=>(!f.obra||ccMatch(r.cc||'',f.obra))&&(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes));}
-function renderDtlh(){const f=getDtF(),csvDt=applyDtF(DATA.csv),rec=csvDt.filter(r=>r.tipo==='FATURAMENTO'),pag=csvDt.filter(r=>r.tipo==='PAGAMENTO');const vRec=rec.reduce((s,r)=>s+r.valor,0),vPag=pag.reduce((s,r)=>s+r.valor,0),vRes=vRec-vPag,vOrc=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra)).reduce((s,o)=>s+o.valor,0);set('dt-kpi-recebido',fmt(vRec));set('dt-kpi-pago',fmt(vPag));set('dt-kpi-orcado',fmt(vOrc));set('dt-kpi-areceber',fmt(0));set('dt-kpi-inadimpl',fmt(0));set('dt-kpi-potencial',fmt(vRec));const resEl=document.getElementById('dt-kpi-resultado');if(resEl){resEl.textContent=fmt(Math.abs(vRes));resEl.className='dtlh-kpi-main-val '+(vRes>=0?'pos':'neg');}const estObra=DATA.estoque.filter(u=>!f.obra||ccMatch(u.obra,f.obra));set('dt-est-total',estObra.length||'—');set('dt-est-vendidos',estObra.filter(u=>u.status==='Vendido').length||'—');set('dt-est-disponiveis',estObra.filter(u=>u.status==='Disponível').length||'—');const vgv=estObra.reduce((s,u)=>s+(u.venda||0),0);set('dt-est-vgv',vgv?fmt(vgv):'—');renderDtlhOrcTable(pag,f);}
+function renderDtlh(){
+  const f=getDtF(),hoje=new Date();hoje.setHours(0,0,0,0);
+  const csvDt=applyDtF(DATA.csv);
+  const fat=csvDt.filter(r=>r.tipo==='FATURAMENTO');
+  const desc=csvDt.filter(r=>r.tipo==='DESCONTO');
+  const pag=csvDt.filter(r=>r.tipo==='PAGAMENTO');
+
+  // Valor Recebido = FATURAMENTO sem 'A RECEBER' - DESCONTO
+  const vRecebido=fat.filter(r=>!r.complemento||!r.complemento.toUpperCase().includes('A RECEBER')).reduce((s,r)=>s+r.valor,0)
+    -desc.reduce((s,r)=>s+r.valor,0);
+
+  // Valor A Receber = FATURAMENTO com 'A RECEBER' AND data >= hoje
+  const vAReceber=fat.filter(r=>r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')&&r.data&&r.data>=hoje).reduce((s,r)=>s+r.valor,0);
+
+  // Inadimplencia = FATURAMENTO com 'A RECEBER' AND data < hoje
+  const vInadimpl=fat.filter(r=>r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')&&r.data&&r.data<hoje).reduce((s,r)=>s+r.valor,0);
+
+  // Contas Pagas = PAGAMENTO filtrado
+  const vPago=pag.reduce((s,r)=>s+r.valor,0);
+
+  // Estoque = SUM venda das unidades filtradas por obra
+  const estObra=DATA.estoque.filter(u=>!f.obra||ccMatch(u.obra,f.obra));
+  const vEstoque=estObra.reduce((s,u)=>s+(u.venda||0),0);
+
+  // Afetacao = 4% do A Receber
+  const vAfetacao=vAReceber*0.04;
+
+  // Saldo Orcamento = orcado total (top-level) - realizado total (do DATA.orcamentoMensal filtrado por obra)
+  const orcEntries=Object.values(DATA.orcamentoMensal||{}).filter(e=>!f.obra||ccMatch(e.obra,f.obra));
+  const vOrcado=orcEntries.filter(e=>e.codigo&&!e.codigo.includes('.')).reduce((s,e)=>s+(e.orcado||0),0);
+  const vRealizado=orcEntries.reduce((s,e)=>{
+    Object.values(e.anos||{}).forEach(meses=>Object.values(meses).forEach(v=>s+=v));
+    return s;
+  },0);
+  const vSaldoOrc=vOrcado-vRealizado;
+
+  // Afetacao + Comissao = 10% do estoque
+  const vAfetComissao=vEstoque*0.10;
+
+  // Faturamento Total = Recebido + A Receber
+  const vFatTotal=vRecebido+vAReceber;
+
+  // Preencher KPIs
+  set('dt-recebido',fmt(vRecebido));
+  set('dt-areceber',fmt(vAReceber));
+  set('dt-inadimplencia',fmt(vInadimpl));
+  set('dt-estoque-val',vEstoque?fmt(vEstoque):'—');
+  set('dt-fat-total',fmt(vFatTotal));
+  set('dt-pagas',fmt(vPago));
+  set('dt-afetacao',fmt(vAfetacao));
+  set('dt-orcamento',vOrcado?fmt(vSaldoOrc):'—');
+  set('dt-afet-comissao',vEstoque?fmt(vAfetComissao):'—');
+  set('dt-desp-total',fmt(vPago+vAfetacao));
+
+  // Saldo principal
+  const vRes=vFatTotal-vPago;
+  const resEl=document.getElementById('dt-kpi-resultado');
+  if(resEl){resEl.textContent=fmt(Math.abs(vRes));resEl.className='dtlh-kpi-main-val '+(vRes>=0?'pos':'neg');}
+
+  // Contadores estoque
+  set('dt-est-total',estObra.length||'—');
+  set('dt-est-vendidos',estObra.filter(u=>u.status==='Vendido').length||'—');
+  set('dt-est-disponiveis',estObra.filter(u=>u.status==='Disponível').length||'—');
+  set('dt-est-vgv',vEstoque?fmt(vEstoque):'—');
+
+  renderDtlhOrcTable(pag,f);
+}
 function renderDtlhOrcTable(pagas,f){const tbody=document.getElementById('dt-orc-body');if(!tbody)return;const itens=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra));if(!itens.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum orçamento</p></div></td></tr>';return;}tbody.innerHTML=itens.map(o=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+DATA.orcamento.indexOf(o)+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');set('dt-orc-total',fmt(itens.reduce((s,o)=>s+o.valor,0)));}
 function adicionarOrcamento(){const obra=document.getElementById('orc-obra').value.trim(),tot=document.getElementById('orc-totalizador').value.trim(),cod=document.getElementById('orc-codigo').value.trim(),desc=document.getElementById('orc-descricao').value.trim(),val=parseBRNum(document.getElementById('orc-valor').value);if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderOrcamentoTable();renderDtlh();}
 function fPct(r,o){return o?'<span style="font-size:10px;font-weight:600;color:'+(r/o>1?'#C0392B':'#1B6B35')+'">'+(r/o*100).toFixed(1)+'%</span>':'<span style="color:#ccc;font-size:10px">—</span>';}
@@ -545,7 +611,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
         <span class="tbl-badge" id="fc-badge">—</span>
       </div>
     </div>
-    <div style="overflow-x:auto;font-size:12px">
+    <div style="overflow-x:auto;overflow-y:auto;max-height:65vh;font-size:12px">
       <table id="tbl-fluxo" style="width:100%;border-collapse:collapse;min-width:900px">
         <thead id="thead-fluxo"></thead>
         <tbody id="tbody-fluxo">
