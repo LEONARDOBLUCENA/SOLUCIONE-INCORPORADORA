@@ -799,9 +799,10 @@ function importarOrcamento(input){
         }
         if(obraName) break;
       }
-      // Ask user to confirm/override obra name
-      obraName=prompt('Nome da obra para importar (confirme ou altere):',obraName||'');
-      if(!obraName) return;
+      // Usar campo de obra da interface; fallback para nome detectado no arquivo
+      const inputObra=(document.getElementById('orc-import-obra')||{}).value;
+      if(inputObra&&inputObra.trim()) obraName=inputObra.trim();
+      if(!obraName){alert('Preencha o nome da obra antes de importar.');return;}
 
       // Parse data rows: col B=codigo(1), col C=descricao(2)
       // Find which column is B (codigo) and C (descricao)
@@ -1071,10 +1072,14 @@ function exportarOrcamento(){}
 
   <div class="estoque-form">
     <div class="estoque-form-title">Importar orçamento</div>
-    <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:center">
+    <div class="form-row" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">Obra</label>
+        <input type="text" id="orc-import-obra" class="form-input" placeholder="Ex: CASA TERRALTA" style="min-width:220px">
+      </div>
       <label class="btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">&#128194; Importar Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importarOrcamento(this)"></label>
       <button class="btn-secondary" onclick="limparOrcamento()">✕ Limpar tudo</button>
-      <span style="font-size:11px;color:var(--text3)">Importe o relatório Excel — cada nova importação atualiza os valores mantendo o histórico.</span>
+      <span style="font-size:11px;color:var(--text3)">Preencha o nome da obra antes de importar.</span>
     </div>
   </div>
 
