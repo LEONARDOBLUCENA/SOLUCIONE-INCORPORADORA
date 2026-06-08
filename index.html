@@ -223,6 +223,7 @@ function applyDtF(arr){const f=getDtF();return arr.filter(r=>(!f.obra||ccMatch(r
 function renderDtlh(){const f=getDtF(),csvDt=applyDtF(DATA.csv),rec=csvDt.filter(r=>r.tipo==='FATURAMENTO'),pag=csvDt.filter(r=>r.tipo==='PAGAMENTO');const vRec=rec.reduce((s,r)=>s+r.valor,0),vPag=pag.reduce((s,r)=>s+r.valor,0),vRes=vRec-vPag,vOrc=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra)).reduce((s,o)=>s+o.valor,0);set('dt-kpi-recebido',fmt(vRec));set('dt-kpi-pago',fmt(vPag));set('dt-kpi-orcado',fmt(vOrc));set('dt-kpi-areceber',fmt(0));set('dt-kpi-inadimpl',fmt(0));set('dt-kpi-potencial',fmt(vRec));const resEl=document.getElementById('dt-kpi-resultado');if(resEl){resEl.textContent=fmt(Math.abs(vRes));resEl.className='dtlh-kpi-main-val '+(vRes>=0?'pos':'neg');}const estObra=DATA.estoque.filter(u=>!f.obra||ccMatch(u.obra,f.obra));set('dt-est-total',estObra.length||'—');set('dt-est-vendidos',estObra.filter(u=>u.status==='Vendido').length||'—');set('dt-est-disponiveis',estObra.filter(u=>u.status==='Disponível').length||'—');const vgv=estObra.reduce((s,u)=>s+(u.venda||0),0);set('dt-est-vgv',vgv?fmt(vgv):'—');renderDtlhOrcTable(pag,f);}
 function renderDtlhOrcTable(pagas,f){const tbody=document.getElementById('dt-orc-body');if(!tbody)return;const itens=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra));if(!itens.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum orçamento</p></div></td></tr>';return;}tbody.innerHTML=itens.map(o=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+DATA.orcamento.indexOf(o)+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');set('dt-orc-total',fmt(itens.reduce((s,o)=>s+o.valor,0)));}
 function adicionarOrcamento(){const obra=document.getElementById('orc-obra').value.trim(),tot=document.getElementById('orc-totalizador').value.trim(),cod=document.getElementById('orc-codigo').value.trim(),desc=document.getElementById('orc-descricao').value.trim(),val=parseBRNum(document.getElementById('orc-valor').value);if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderOrcamentoTable();renderDtlh();}
+function fPct(r,o){return o?'<span style="font-size:10px;font-weight:600;color:'+(r/o>1?'#C0392B':'#1B6B35')+'">'+(r/o*100).toFixed(1)+'%</span>':'<span style="color:#ccc;font-size:10px">—</span>';}
 function renderOrcamentoTable(){const tbody=document.getElementById('body-orcamento');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('orc-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item</p></div></td></tr>';return;}tbody.innerHTML=DATA.orcamento.map((o,i)=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r val-neg">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
 function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
 function importarOrcamento(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});rows.forEach(r=>{const obra=String(r['Obra']||r['obra']||'').trim(),desc=String(r['Descrição']||r['Descricao']||'').trim(),val=parseBRNum(String(r['Valor']||r['valor']||'0'));if(obra&&desc&&val)DATA.orcamento.push({obra,totalizador:String(r['Totalizador']||'').trim(),codigo:String(r['Código']||r['Codigo']||'').trim(),descricao:desc,valor:val});});renderOrcamentoTable();renderDtlh();alert(DATA.orcamento.length+' itens.');}catch(err){alert('Erro: '+err.message);}};reader.readAsArrayBuffer(file);input.value='';}
@@ -634,7 +635,7 @@ function renderOrcamentoTable(){
   entries.forEach(e=>Object.entries(e.anos).forEach(([ano,mMap])=>Object.keys(mMap).forEach(m=>anoMeses.add(ano+'-'+m))));
   const cols=[...anoMeses].sort((a,b)=>{const[aa,am]=a.split('-').map(Number),[ba,bm]=b.split('-').map(Number);return aa!==ba?aa-ba:am-bm;});
 
-  thead.innerHTML='<tr style="background:#f5f5f5"><th style="text-align:left;padding:8px 12px;min-width:280px;position:sticky;left:0;z-index:3;background:#f5f5f5;box-shadow:none">Código — Descrição</th><th class="r" style="padding:8px 12px;min-width:100px;position:sticky;left:280px;z-index:3;background:#ececec;font-size:11px;box-shadow:2px 0 4px rgba(0,0,0,.08)">Orçado</th>'+cols.map(c=>{const[a,m]=c.split('-').map(Number);return'<th class="r" style="padding:6px 10px;min-width:90px;font-size:11px">'+MESES_ABR[m]+'/'+a+'</th>';}).join('')+'<th class="r" style="padding:6px 10px;background:#ececec;min-width:90px">Total</th></tr>';
+  thead.innerHTML='<tr style="background:#f5f5f5"><th style="text-align:left;padding:8px 12px;min-width:280px;position:sticky;left:0;z-index:3;background:#f5f5f5;box-shadow:none">Código — Descrição</th><th class="r" style="padding:8px 12px;min-width:100px;position:sticky;left:280px;z-index:3;background:#ececec;font-size:11px;box-shadow:none">Orçado</th><th class="r" style="padding:8px 12px;min-width:70px;position:sticky;left:380px;z-index:3;background:#ececec;font-size:11px;box-shadow:2px 0 4px rgba(0,0,0,.08)">% Exec.</th>'+cols.map(c=>{const[a,m]=c.split('-').map(Number);return'<th class="r" style="padding:6px 10px;min-width:90px;font-size:11px">'+MESES_ABR[m]+'/'+a+'</th>';}).join('')+'<th class="r" style="padding:6px 10px;background:#ececec;min-width:90px">Total</th></tr>';
 
   const obraGroups={};
   entries.forEach(e=>{if(!obraGroups[e.obra])obraGroups[e.obra]=[];obraGroups[e.obra].push(e);});
@@ -643,7 +644,7 @@ function renderOrcamentoTable(){
   const totais=Array(cols.length).fill(0);
 
   Object.entries(obraGroups).forEach(([obra,items])=>{
-    rows+='<tr style="background:#D5F5E3"><td colspan="'+(cols.length+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;position:sticky;left:0">'+obra+'</td></tr>';
+    rows+='<tr style="background:#D5F5E3"><td colspan="'+(cols.length+4)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;position:sticky;left:0">'+obra+'</td></tr>';
 
     const sorted=items.slice().sort((a,b)=>(a.codigo||a.descricao).localeCompare(b.codigo||b.descricao,undefined,{numeric:true}));
     const allCodes=sorted.map(e=>e.codigo).filter(Boolean);
@@ -692,7 +693,8 @@ function renderOrcamentoTable(){
           +'<td style="'+SD+';background:#e8f5e9;padding:7px 8px 7px '+pad+'px;font-size:12px;box-shadow:none">'
           +'<span style="color:var(--brand);margin-right:8px;font-size:11px">'+e.codigo+'</span>'+e.descricao.toUpperCase()
           +'</td>'
-          +'<td class="r" style="position:sticky;left:280px;z-index:2;background:#c8e6c9;padding:5px 8px;font-size:11px;box-shadow:2px 0 4px rgba(0,0,0,.07);font-weight:700">'+(e.orcado?fmt(e.orcado):'—')+'</td>'
+          +'<td class="r" style="position:sticky;left:280px;z-index:2;background:#c8e6c9;padding:5px 8px;font-size:11px;box-shadow:none;font-weight:700">'+(e.orcado?fmt(e.orcado):'—')+'</td>'
+          +'<td class="r" style="position:sticky;left:380px;z-index:2;background:#c8e6c9;padding:5px 8px;font-size:11px;box-shadow:2px 0 4px rgba(0,0,0,.07)">'+fPct(rowTot,e.orcado)+'</td>'
           +vals.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')
           +'<td class="r" style="padding:5px 8px;font-weight:700;background:#c8e6c9">'+fmt(rowTot)+'</td></tr>';
       } else if(isTot){
@@ -704,7 +706,8 @@ function renderOrcamentoTable(){
           +'<td style="'+SD+';background:#f5f5f5;padding:5px 8px 5px '+pad+'px;font-size:11px;box-shadow:none">'
           +'<span style="color:var(--brand);margin-right:6px;font-size:10px">'+e.codigo+'</span>'+e.descricao
           +'</td>'
-          +'<td class="r" style="position:sticky;left:280px;z-index:2;background:#ececec;padding:4px 8px;font-size:11px;box-shadow:2px 0 4px rgba(0,0,0,.07)">'+(custo?fmt(custo):'—')+'</td>'
+          +'<td class="r" style="position:sticky;left:280px;z-index:2;background:#ececec;padding:4px 8px;font-size:11px;box-shadow:none">'+(custo?fmt(custo):'—')+'</td>'
+          +'<td class="r" style="position:sticky;left:380px;z-index:2;background:#ececec;padding:4px 8px;font-size:11px;box-shadow:2px 0 4px rgba(0,0,0,.07)">'+fPct(rowTot,custo)+'</td>'
           +mensalVals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px">'+(v===0?'<span style="color:#ccc">—</span>':fmt(v))+'</td>').join('')
           +'<td class="r" style="padding:3px 8px;background:#ececec;font-size:11px">'+fmt(rowTot)+'</td></tr>';
       } else {
@@ -716,7 +719,8 @@ function renderOrcamentoTable(){
           +'<td style="'+SD+';background:#fff;padding:4px 8px 4px '+pad+'px;font-size:11px;color:#444;box-shadow:none">'
           +'<span style="color:#aaa;margin-right:6px;font-size:10px">'+e.codigo+'</span>'+e.descricao
           +'</td>'
-          +'<td class="r" style="position:sticky;left:280px;z-index:2;background:#fafafa;padding:3px 8px;font-size:11px;box-shadow:2px 0 4px rgba(0,0,0,.07)">'+(custo?fmt(custo):'—')+'</td>'
+          +'<td class="r" style="position:sticky;left:280px;z-index:2;background:#fafafa;padding:3px 8px;font-size:11px;box-shadow:none">'+(custo?fmt(custo):'—')+'</td>'
+          +'<td class="r" style="position:sticky;left:380px;z-index:2;background:#fafafa;padding:3px 8px;font-size:11px;box-shadow:2px 0 4px rgba(0,0,0,.07)">'+fPct(rowTot,custo)+'</td>'
           +mensalVals.map(v=>'<td class="r" style="padding:3px 8px;font-size:11px">'+(v===0?'<span style="color:#ddd">—</span>':fmt(v))+'</td>').join('')
           +'<td class="r" style="padding:3px 8px;background:#fafafa;font-size:11px">'+(rowTot===0?'—':fmt(rowTot))+'</td></tr>';
       }
@@ -728,16 +732,19 @@ function renderOrcamentoTable(){
   });
 
   const grandTot=totais.reduce((s,v)=>s+v,0);
+  const grandOrcado=entries.reduce((s,e)=>s+(e.orcado||0),0);
   // Row 1: Total do Mês
   rows+='<tr style="border-top:2px solid #bbb;font-weight:700;background:#e8f5e9"><td style="padding:6px 12px;position:sticky;left:0;background:#e8f5e9;box-shadow:none">Total do Mês</td>'
-    +'<td style="position:sticky;left:280px;background:#e8f5e9;box-shadow:2px 0 4px rgba(0,0,0,.08)"></td>'
+    +'<td class="r" style="position:sticky;left:280px;background:#e8f5e9;padding:5px 8px;font-size:11px;box-shadow:none">'+(grandOrcado?fmt(grandOrcado):'—')+'</td>'
+    +'<td class="r" style="position:sticky;left:380px;background:#e8f5e9;padding:5px 8px;box-shadow:2px 0 4px rgba(0,0,0,.08)">'+fPct(grandTot,grandOrcado)+'</td>'
     +totais.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px">'+fmt(v)+'</td>').join('')
     +'<td class="r" style="padding:5px 8px;background:#c8e6c9">'+fmt(grandTot)+'</td></tr>';
   // Row 2: Total Acumulado (running sum across months)
   let runAcc=0;
   const grandAccVals=totais.map(v=>{runAcc+=v;return runAcc;});
   rows+='<tr style="font-weight:700;background:#1a5276"><td style="padding:6px 12px;color:#fff;position:sticky;left:0;background:#1a5276;box-shadow:none">Total Acumulado</td>'
-    +'<td style="position:sticky;left:280px;background:#1a5276;box-shadow:2px 0 4px rgba(0,0,0,.08)"></td>'
+    +'<td style="position:sticky;left:280px;background:#1a5276;box-shadow:none"></td>'
+    +'<td style="position:sticky;left:380px;background:#1a5276;box-shadow:2px 0 4px rgba(0,0,0,.08)"></td>'
     +grandAccVals.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px;color:#fff">'+fmt(v)+'</td>').join('')
     +'<td class="r" style="padding:5px 8px;color:#fff;background:#154360">'+fmt(runAcc)+'</td></tr>';
   tbody.innerHTML=rows;
