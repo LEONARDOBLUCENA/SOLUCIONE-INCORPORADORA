@@ -233,10 +233,20 @@ function renderDtlh(){
     (!entrega || !r.data || r.data<=entrega)
   ).reduce((s,r)=>s+r.valor,0);
 
-  // Saldo Orcamento = orcado (top-level) - realizado, filtrado por obra
+  // Saldo Orcamento = orcado (top-level) - Total (mesma logica da tabela: soma folhas nos top-levels)
   const orcEntries=Object.values(DATA.orcamentoMensal||{}).filter(e=>!obra||ccMatch(e.obra,obra));
-  const vOrcado=orcEntries.filter(e=>e.codigo&&!e.codigo.includes('.')).reduce((s,e)=>s+(e.orcado||0),0);
-  const vRealizado=orcEntries.reduce((s,e)=>{Object.values(e.anos||{}).forEach(meses=>Object.values(meses).forEach(v=>s+=v));return s;},0);
+  const allOrcCodes=orcEntries.map(e=>e.codigo).filter(Boolean);
+  const isTotOrc=e=>e.codigo&&allOrcCodes.some(c=>c!==e.codigo&&c.startsWith(e.codigo+'.'));
+  const isTopOrc=e=>e.codigo&&!e.codigo.includes('.');
+  // vOrcado: soma orcado dos top-levels
+  const vOrcado=orcEntries.filter(e=>isTopOrc(e)).reduce((s,e)=>s+(e.orcado||0),0);
+  // vRealizado: soma anos de folhas agrupadas por top-level (= coluna Total da tabela)
+  let vRealizado=0;
+  orcEntries.filter(e=>isTopOrc(e)).forEach(top=>{
+    orcEntries.filter(e=>!isTotOrc(e)&&e.codigo&&e.codigo.startsWith(top.codigo+'.')).forEach(folha=>{
+      Object.values(folha.anos||{}).forEach(meses=>Object.values(meses).forEach(v=>vRealizado+=v));
+    });
+  });
   const vSaldoOrc=vOrcado-vRealizado;
 
   // Estoque = soma das unidades filtradas por obra (aba Estoque)
