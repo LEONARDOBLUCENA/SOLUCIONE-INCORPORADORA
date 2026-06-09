@@ -184,23 +184,70 @@ function renderCharts(csv){
   destroyChart('ch-resultado-caixa');if(csv.length){const rd=lbl.map(l=>{const f=fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),d=dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),p=pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);return(f-d)-p;});CHARTS['ch-resultado-caixa']=new Chart(document.getElementById('ch-resultado-caixa'),{type:'bar',data:{labels:ln,datasets:[{label:'Resultado',data:rd,backgroundColor:rd.map(v=>v>=0?'#1A7A3C':'#C0392B'),borderRadius:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}});}
 }
 function renderFluxo(){
-  const obraSel=document.getElementById('fc-obra')?.value||'',anoSel=document.getElementById('fc-ano')?.value||'';
+  const obraSel=document.getElementById('fc-obra')?.value||'';
   const thead=document.getElementById('thead-fluxo'),tbody=document.getElementById('tbody-fluxo'),tfoot=document.getElementById('tfoot-fluxo');
   if(!thead||!tbody||!tfoot)return;
   fillSelect('fc-obra',[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort(),v=>v,v=>v);
-  fillSelect('fc-ano',[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort(),v=>v,v=>v);
-  const dados=DATA.csv.filter(r=>(!obraSel||ccMatch(r.cc||'',obraSel))&&(!anoSel||String(r.ano)===anoSel));
+  const dados=DATA.csv.filter(r=>!obraSel||ccMatch(r.cc||'',obraSel));
+
+  // Colunas dinâmicas: todas as combinações ano-mes presentes nos dados, ordenadas
+  const colSet=new Set();
+  dados.forEach(r=>{if(r.ano!=null&&r.mes!=null)colSet.add(r.ano*100+r.mes);});
+  const colKeys=[...colSet].sort();// cada key = ano*100+mes
+  const colAno=colKeys.map(k=>Math.floor(k/100));
+  const colMes=colKeys.map(k=>k%100);
+  const NC=colKeys.length;
+  const SD='position:sticky;left:0;z-index:2;background:';
+
+  // Acumular por conta e coluna
   const contas={};
-  dados.forEach(r=>{const c=r.conta||'(Sem conta)';if(!contas[c])contas[c]={FATURAMENTO:Array(12).fill(0),DESCONTO:Array(12).fill(0),PAGAMENTO:Array(12).fill(0),DESCONTO_OBTIDO:Array(12).fill(0)};if(r.mes!=null)contas[c][r.tipo][r.mes]+=r.valor;});
+  dados.forEach(r=>{
+    const c=r.conta||'(Sem conta)';
+    if(!contas[c])contas[c]={FAT:Array(NC).fill(0),DESC:Array(NC).fill(0),PAG:Array(NC).fill(0)};
+    const ci=colKeys.indexOf(r.ano*100+r.mes);
+    if(ci<0)return;
+    if(r.tipo==='FATURAMENTO')contas[c].FAT[ci]+=r.valor;
+    else if(r.tipo==='DESCONTO')contas[c].DESC[ci]+=r.valor;
+    else if(r.tipo==='PAGAMENTO')contas[c].PAG[ci]+=r.valor;
+  });
   const nomes=Object.keys(contas);
-  if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="14"><div class="empty-state"><p>Nenhum dado para o per\u00edodo</p></div></td></tr>';set('fc-badge','\u2014');return;}
-  thead.innerHTML='<tr style="background:#f5f5f5"><th style="text-align:left;padding:8px 12px;min-width:200px">Conta</th>'+MESES_ABR.map(m=>'<th class="r" style="padding:6px 8px;min-width:75px;font-size:11px">'+m+'</th>').join('')+'<th class="r" style="padding:6px 10px;min-width:90px;background:#ececec">Total</th></tr>';
-  const f2=v=>v===0?'<span style="color:#ccc;font-size:10px">\u2014</span>':(v<0?'<span style="color:#C0392B">'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';set('fc-badge','—');return;}
+
+  const thSD='text-align:left;padding:8px 12px;min-width:200px;'+SD+'#f5f5f5;top:0';
+  thead.innerHTML='<tr style="background:#f5f5f5">'
+    +'<th style="'+thSD+'">Conta</th>'
+    +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;min-width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
+    +'<th class="r" style="padding:6px 10px;min-width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
+
+  const f2=v=>v===0?'<span style="color:#ccc;font-size:10px">—</span>':(v<0?'<span style="color:#C0392B">'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  const tdS=(bg)=>'style="'+SD+bg+';padding:5px 6px 5px 12px;font-size:11px"';
+  const tdSB=(bg)=>'style="'+SD+bg+';padding:5px 12px;font-size:11px;font-weight:700"';
+
   let rows='';
-  const fatN=nomes.filter(c=>contas[c].FATURAMENTO.some(v=>v!==0)||contas[c].DESCONTO.some(v=>v!==0)).sort(),pagN=nomes.filter(c=>contas[c].PAGAMENTO.some(v=>v!==0)).sort();
-  const tFM=Array(12).fill(0),tPM=Array(12).fill(0);
-  if(fatN.length){rows+='<tr style="background:#D5F5E3"><td colspan="14" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35">\u25b6 FATURAMENTOS</td></tr>';fatN.forEach(c=>{const vals=Array.from({length:12},(_,i)=>contas[c].FATURAMENTO[i]-contas[c].DESCONTO[i]);const tot=vals.reduce((s,v)=>s+v,0);vals.forEach((v,i)=>tFM[i]+=v);rows+='<tr><td style="padding:5px 6px 5px 16px;font-size:11px">'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';});rows+='<tr style="background:#c8e6c9;font-weight:700"><td style="padding:5px 12px;font-size:11px">Total Faturamento</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tFM.reduce((s,v)=>s+v,0))+'</td></tr>';}
-  if(pagN.length){rows+='<tr style="background:#FADBD8"><td colspan="14" style="padding:5px 12px;font-weight:700;font-size:11px;color:#C0392B">\u25b6 PAGAMENTOS</td></tr>';pagN.forEach(c=>{const vals=contas[c].PAGAMENTO.map((v,i)=>v+contas[c].DESCONTO_OBTIDO[i]);const tot=vals.reduce((s,v)=>s+v,0);vals.forEach((v,i)=>tPM[i]+=v);rows+='<tr><td style="padding:5px 6px 5px 16px;font-size:11px">'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';});rows+='<tr style="background:#ffcdd2;font-weight:700"><td style="padding:5px 12px;font-size:11px">Total Pagamentos</td>'+tPM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tPM.reduce((s,v)=>s+v,0))+'</td></tr>';}
+  const tFM=Array(NC).fill(0),tPM=Array(NC).fill(0);
+  const fatN=nomes.filter(c=>contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)).sort();
+  const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)).sort();
+
+  if(fatN.length){
+    rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+2)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ FATURAMENTOS</td></tr>';
+    fatN.forEach(c=>{
+      const vals=contas[c].FAT.map((v,i)=>v-contas[c].DESC[i]);
+      const tot=vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>tFM[i]+=v);
+      rows+='<tr><td '+tdS('#fff')+'>'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';
+    });
+    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Faturamento</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
+  }
+  if(pagN.length){
+    rows+='<tr style="background:#FADBD8"><td colspan="'+(NC+2)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#C0392B;'+SD+'#FADBD8">▶ PAGAMENTOS</td></tr>';
+    pagN.forEach(c=>{
+      const vals=contas[c].PAG;
+      const tot=vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>tPM[i]+=v);
+      rows+='<tr><td '+tdS('#fff')+'>'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';
+    });
+    rows+='<tr style="background:#ffcdd2;font-weight:700"><td '+tdSB('#ffcdd2')+'>Total Pagamentos</td>'+tPM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tPM.reduce((s,v)=>s+v,0))+'</td></tr>';
+  }
   tbody.innerHTML=rows;
   const rv=tFM.map((v,i)=>v-tPM[i]),rt=rv.reduce((s,v)=>s+v,0);
   // Caixa Inicial + Saldo acumulado
@@ -209,9 +256,9 @@ function renderFluxo(){
   const saldo=[];let acc=ci;rv.forEach(v=>{acc+=v;saldo.push(acc);});
   const ciMeses=rv.map((_,i)=>i===0?ci:saldo[i-1]);
   tfoot.innerHTML=
-    '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="padding:6px 12px;font-size:11px">Resultado do Per\u00edodo</td>'+rv.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt>=0?'#1B6B35':'#C0392B')+'">'+f2(rt)+'</td></tr>'+
-    '<tr style="background:#EAF4FB;font-weight:600"><td style="padding:6px 12px;font-size:11px">Caixa Inicial</td>'+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
-    '<tr style="background:#1a5276;font-weight:700"><td style="padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa</td>'+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
+    '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="'+SD+'#f0f0f0;padding:6px 12px;font-size:11px">Resultado do Período</td>'+rv.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt>=0?'#1B6B35':'#C0392B')+'">'+f2(rt)+'</td></tr>'+
+    '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial</td>'+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
+    '<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa</td>'+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
   set('fc-badge',nomes.length+(nomes.length===1?' conta':' contas'));
   renderCaixaInicialCampos();
 }
@@ -690,8 +737,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="filter-label">Obra</span>
         <select class="filter-select" id="fc-obra" onchange="renderCaixaInicialCampos();renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
-        <span class="filter-label">Ano</span>
-        <select class="filter-select" id="fc-ano" onchange="renderFluxo()" style="width:90px"><option value="">Todos</option></select>
         <span class="tbl-badge" id="fc-badge">—</span>
         <button class="btn-export" onclick="exportarFluxo()" style="padding:5px 12px;font-size:11px">&#8595; Excel</button>
       </div>
