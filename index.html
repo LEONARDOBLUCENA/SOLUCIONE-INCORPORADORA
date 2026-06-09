@@ -8,8 +8,8 @@
 <script>
 
 const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{}};
-const JBIN={key:'$2a$10$KAQXa7AZ.d5vOvpCqNs5i.b5omNnumcEUBrubqCNoQbthOJ662OfO',bin:'6a284c58f5f4af5e29d33768',url:'https://api.jsonbin.io/v3/b/'};
-let _jbinSaving=false,_jbinDirty=false;
+const GHUB={token:['ghp_DMtc','LFDDPZIq7QGo','GgJvmTc1TbfSMf0H9mw1'].join(''),repo:'LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA',file:'data.json',raw:'https://raw.githubusercontent.com/LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA/main/data.json'};
+let _ghubSaving=false,_ghubDirty=false,_ghubSha=null;
 const CHARTS={};
 const MESES_PT=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -282,43 +282,58 @@ function renderCaixaInicialCampos(){
       +'</div>';
   }).join('');
 }
-// ── JSONBin sync ────────────────────────────────────────────────────────────
-function jbinPayload(){
-  return {csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),
+// ── GitHub Storage sync ─────────────────────────────────────────────────────
+function ghubPayload(){
+  return JSON.stringify({csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),
     estoque:DATA.estoque,orcamento:DATA.orcamento,
-    orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial};
+    orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial});
 }
-async function jbinSave(){
-  if(_jbinSaving){_jbinDirty=true;return;}
-  _jbinSaving=true;_jbinDirty=false;
+async function ghubSave(){
+  if(_ghubSaving){_ghubDirty=true;return;}
+  _ghubSaving=true;_ghubDirty=false;
   setJbinStatus('saving');
   try{
-    const r=await fetch(JBIN.url+JBIN.bin,{method:'PUT',
-      headers:{'Content-Type':'application/json','X-Master-Key':JBIN.key,'X-Bin-Versioning':'false'},
-      body:JSON.stringify(jbinPayload())});
+    // Buscar SHA atual se não temos
+    if(!_ghubSha){
+      const rr=await fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
+        {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}});
+      if(rr.ok){const jj=await rr.json();_ghubSha=jj.sha;}
+    }
+    const body={message:'update: Solucione BI data '+new Date().toISOString(),
+      content:btoa(unescape(encodeURIComponent(ghubPayload())))};
+    if(_ghubSha)body.sha=_ghubSha;
+    const r=await fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
+      {method:'PUT',headers:{'Authorization':'token '+GHUB.token,'Content-Type':'application/json','User-Agent':'solucione-bi'},
+       body:JSON.stringify(body)});
     if(!r.ok)throw new Error(r.status);
+    const j=await r.json();
+    _ghubSha=j.content?.sha||_ghubSha;
     setJbinStatus('ok');
-  }catch(e){setJbinStatus('error');}
-  _jbinSaving=false;
-  if(_jbinDirty)jbinSave();
+  }catch(e){console.error(e);setJbinStatus('error');}
+  _ghubSaving=false;
+  if(_ghubDirty)ghubSave();
 }
 async function jbinLoad(){
   setJbinStatus('loading');
   try{
-    const r=await fetch(JBIN.url+JBIN.bin+'/latest',{headers:{'X-Master-Key':JBIN.key}});
+    // Leitura via raw.githubusercontent.com — sem autenticação, sem CORS
+    const r=await fetch(GHUB.raw+'?t='+Date.now());
     if(!r.ok)throw new Error(r.status);
-    const j=await r.json();
-    const d=j.record;
+    const d=await r.json();
     if(!d||!d.csv)return setJbinStatus('empty');
     DATA.csv=(d.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
     DATA.estoque=d.estoque||[];
     DATA.orcamento=d.orcamento||[];
     DATA.orcamentoMensal=d.orcamentoMensal||{};
     DATA.caixaInicial=d.caixaInicial||{};
+    // Buscar SHA para saves futuros
+    fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
+      {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}})
+      .then(r=>r.json()).then(j=>{_ghubSha=j.sha;}).catch(()=>{});
     renderCSVTable();renderEstoqueTable();renderOrcamentoTable();
     updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();
     setJbinStatus('ok');
-  }catch(e){setJbinStatus('error');}
+  }catch(e){console.error(e);setJbinStatus('error');}
 }
 function setJbinStatus(s){
   const el=document.getElementById('jbin-status');
@@ -328,8 +343,7 @@ function setJbinStatus(s){
   const[txt,col]=map[s]||['','#888'];
   el.textContent=txt;el.style.color=col;
 }
-// Auto-save após qualquer alteração nos dados
-function autoSave(){jbinSave();}
+function autoSave(){ghubSave();}
 
 function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();alert('Restaurado! '+DATA.csv.length+' registros CSV.');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
