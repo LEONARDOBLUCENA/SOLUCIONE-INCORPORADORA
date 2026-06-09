@@ -214,7 +214,7 @@ function restoreJSON(input){const file=input.files[0];if(!file)return;const read
 <script>
 
 function adicionarEstoque(){const obra=document.getElementById('est-obra').value.trim(),unidade=document.getElementById('est-unidade').value.trim(),status=document.getElementById('est-status').value,area=parseBRNum(document.getElementById('est-area').value),venda=parseBRNum(document.getElementById('est-venda').value);if(!obra||!unidade){alert('Preencha Obra e Unidade.');return;}DATA.estoque.push({obra,unidade,status,area,venda});['est-obra','est-unidade','est-area','est-venda'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderEstoqueTable();}
-function renderEstoqueTable(){const tbody=document.getElementById('body-estoque');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('est-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.estoque.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhuma unidade</p></div></td></tr>';return;}tbody.innerHTML=DATA.estoque.map((r,i)=>'<tr><td>'+r.obra+'</td><td>'+r.unidade+'</td><td><span class="badge '+(r.status==='Disponível'?'bg-green':r.status==='Vendido'?'bg-red':'bg-gold')+'">'+r.status+'</span></td><td class="r">'+(r.area?r.area.toLocaleString('pt-BR',{minimumFractionDigits:2})+'m²':'—')+'</td><td class="r">'+(r.venda?fmt(r.venda):'—')+'</td><td style="text-align:center"><button onclick="removerEstoque('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
+function renderEstoqueTable(){const tbody=document.getElementById('body-estoque');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('est-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');const fObra=document.getElementById('fe-obra')?.value||'';const filtered=DATA.estoque.filter(u=>!fObra||ccMatch(u.obra,fObra));const totalVal=filtered.reduce((s,u)=>s+(u.venda||0),0);set('count-estoque',filtered.length+' unidade'+(filtered.length!==1?'s':''));set('total-estoque',fmt(totalVal));if(!filtered.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhuma unidade</p></div></td></tr>';return;}tbody.innerHTML=filtered.map((r,i)=>'<tr><td>'+r.obra+'</td><td>'+r.unidade+'</td><td><span class="badge '+(r.status==='Disponível'?'bg-green':r.status==='Vendido'?'bg-red':'bg-gold')+'">'+r.status+'</span></td><td class="r">'+(r.area?r.area.toLocaleString('pt-BR',{minimumFractionDigits:2})+'m²':'—')+'</td><td class="r">'+(r.venda?fmt(r.venda):'—')+'</td><td style="text-align:center"><button onclick="removerEstoque('+DATA.estoque.indexOf(r)+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
 function removerEstoque(i){DATA.estoque.splice(i,1);renderEstoqueTable();}
 function updateDtlhFilters(){const cur=document.getElementById('dt-obra')?.value||'';const obras=[...new Set([...DATA.csv.map(r=>r.cc),...Object.values(DATA.orcamentoMensal||{}).map(e=>e.obra)].filter(Boolean))].sort();const el=document.getElementById('dt-obra');if(el){el.innerHTML='<option value="">Todas as obras</option>'+obras.map(o=>'<option value="'+o+'"'+(o===cur?' selected':'')+'>'+o+'</option>').join('');}}
 function clearDtlhFilters(){const el=document.getElementById('dt-obra');if(el)el.value='';renderDtlh();}
@@ -298,6 +298,58 @@ function fPct(r,o){return o?'<span style="font-size:10px;font-weight:600;color:'
 function renderOrcamentoTable(){const tbody=document.getElementById('body-orcamento');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('orc-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item</p></div></td></tr>';return;}tbody.innerHTML=DATA.orcamento.map((o,i)=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r val-neg">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
 function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
 function importarOrcamento(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});rows.forEach(r=>{const obra=String(r['Obra']||r['obra']||'').trim(),desc=String(r['Descrição']||r['Descricao']||'').trim(),val=parseBRNum(String(r['Valor']||r['valor']||'0'));if(obra&&desc&&val)DATA.orcamento.push({obra,totalizador:String(r['Totalizador']||'').trim(),codigo:String(r['Código']||r['Codigo']||'').trim(),descricao:desc,valor:val});});renderOrcamentoTable();renderDtlh();alert(DATA.orcamento.length+' itens.');}catch(err){alert('Erro: '+err.message);}};reader.readAsArrayBuffer(file);input.value='';}
+function exportarEstoque(){
+  const fObra=document.getElementById('fe-obra')?.value||'';
+  const rows=DATA.estoque.filter(u=>!fObra||ccMatch(u.obra,fObra)).map(r=>({'Obra':r.obra,'Unidade':r.unidade,'Status':r.status||'','Área (m²)':r.area||'','Valor (R$)':(r.venda||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}));
+  if(!rows.length){alert('Nenhuma unidade para exportar.');return;}
+  const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});
+  XLSX.utils.book_append_sheet(wb,ws,'Estoque');
+  XLSX.writeFile(wb,'Solucione_Estoque_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
+}
+
+function exportarCSV(){
+  if(!DATA.csv.length){alert('Nenhum lançamento.');return;}
+  const MESES_N=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  const rows=DATA.csv.map(r=>({'Data':r.data?r.data.toLocaleDateString('pt-BR'):'','Complemento':r.complemento||'','Centro de Custo':r.cc||'','Conta':r.conta||'','Tipo':r.tipo||'','Valor (R$)':(r.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}));
+  const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});
+  XLSX.utils.book_append_sheet(wb,ws,'CSV Analítico');
+  XLSX.writeFile(wb,'Solucione_CSV_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
+}
+
+function exportarFluxo(){
+  if(!DATA.csv.length){alert('Nenhum dado.');return;}
+  const anoF=document.getElementById('fc-ano')?.value||'';
+  const rows=[['Conta','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez','Total']];
+  const thead=document.getElementById('thead-fluxo');
+  const tbody=document.getElementById('tbody-fluxo');
+  const tfoot=document.getElementById('tfoot-fluxo');
+  [thead,tbody,tfoot].forEach(t=>{if(!t)return;Array.from(t.querySelectorAll('tr')).forEach(tr=>{const cells=Array.from(tr.querySelectorAll('th,td')).map(c=>c.innerText||c.textContent||'');if(cells.some(c=>c.trim()))rows.push(cells);});});
+  const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb,ws,'Fluxo de Caixa');
+  XLSX.writeFile(wb,'Solucione_Fluxo_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
+}
+
+function exportarOrcamentoXLS(){
+  const entries=Object.values(DATA.orcamentoMensal||{});
+  if(!entries.length){alert('Nenhum dado de orçamento.');return;}
+  const fObra=document.getElementById('orc-filtro-obra')?.value||'';
+  const filt=entries.filter(e=>!fObra||ccMatch(e.obra,fObra));
+  const rows=[['Obra','Código','Descrição','Orçado']];
+  // coletar colunas de meses existentes
+  const colSet=new Set();
+  filt.forEach(e=>Object.entries(e.anos||{}).forEach(([a,meses])=>Object.keys(meses).forEach(m=>colSet.add(a+'-'+m))));
+  const cols=[...colSet].sort();
+  const MESES_N=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  rows[0]=[...rows[0],...cols.map(c=>{const[a,m]=c.split('-').map(Number);return MESES_N[m]+'/'+a;}),'Total'];
+  filt.sort((a,b)=>a.obra.localeCompare(b.obra)||(a.codigo||'').localeCompare(b.codigo||'',undefined,{numeric:true})).forEach(e=>{
+    const vals=cols.map(c=>{const[a,m]=c.split('-').map(Number);return(e.anos[a]&&e.anos[a][m])||0;});
+    rows.push([e.obra,e.codigo||'',e.descricao,(e.orcado||0),...vals,vals.reduce((s,v)=>s+v,0)]);
+  });
+  const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb,ws,'Orçamento');
+  XLSX.writeFile(wb,'Solucione_Orcamento_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
+}
+
 function baixarModeloOrcamento(){const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet([['Obra','Totalizador','Código','Descrição','Valor'],['Ex Obra','01','1.1','Fundação',150000]]);XLSX.utils.book_append_sheet(wb,ws,'Orçamento');XLSX.writeFile(wb,'Modelo_Orcamento_Solucione.xlsx');}
 function exportarOrcamento(){if(!DATA.orcamento.length){alert('Nenhum item.');return;}const rows=DATA.orcamento.map(o=>({'Obra':o.obra,'Totalizador':o.totalizador||'','Código':o.codigo||'','Descrição':o.descricao,'Valor':(o.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}));const wb=XLSX.utils.book_new(),ws=XLSX.utils.json_to_sheet(rows,{raw:false});XLSX.utils.book_append_sheet(wb,ws,'Orçamento');XLSX.writeFile(wb,'Solucione_Orcamento_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');}
 
@@ -614,6 +666,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
         <span class="filter-label">Ano</span>
         <select class="filter-select" id="fc-ano" onchange="renderFluxo()" style="width:90px"><option value="">Todos</option></select>
         <span class="tbl-badge" id="fc-badge">—</span>
+        <button class="btn-export" onclick="exportarFluxo()" style="padding:5px 12px;font-size:11px">&#8595; Excel</button>
       </div>
     </div>
     <div style="overflow-x:auto;overflow-y:auto;max-height:65vh;font-size:12px">
@@ -633,7 +686,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   <div class="sec-sub">Cole aqui os dados do relatório analítico exportado do ERP</div>
   <div class="paste-section"><div class="paste-instructions"><strong>Como usar:</strong> Exporte o relatório no ERP, selecione a tabela com cabeçalho, copie Ctrl+C, cole abaixo Ctrl+V.<br>Colunas: <strong>Data · Valor · Nome Centro de Custo · Conta</strong></div><textarea class="paste-box" id="paste-csv" placeholder="Clique aqui e cole com Ctrl+V"></textarea><div class="paste-actions"><button class="btn-secondary" onclick="limparCSV()">&#10005; Limpar</button><button class="btn-primary" style="margin-left:8px" onclick="exportExcelCSV()">&#8595; Exportar Excel</button><span class="paste-status" id="status-csv"></span></div></div>
   <div id="diag-csv" style="display:none;margin-bottom:20px"></div>
-  <div class="tbl-card"><div class="tbl-head"><div class="tbl-title">Lançamentos Processados</div><span class="tbl-badge" id="count-csv">0 registros</span></div><div style="padding:10px 20px 0;border-bottom:1px solid var(--border)"><div class="inline-filters"><span class="filter-label">Filtrar</span><select class="filter-select" id="fcsv-ano" onchange="renderCSVTable()"><option value="">Todos os anos</option></select><select class="filter-select" id="fcsv-mes" onchange="renderCSVTable()"><option value="">Todos os meses</option></select><select class="filter-select" id="fcsv-cc" onchange="renderCSVTable()"><option value="">Todos os CCs</option></select><select class="filter-select" id="fcsv-conta" onchange="renderCSVTable()"><option value="">Todas as contas</option></select><button class="btn-ghost" onclick="clearCSVFilters()">&#10005;</button></div></div><div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Complemento</th><th>Centro de Custo</th><th>Conta</th><th>Tipo</th><th class="r">Valor (R$)</th></tr></thead><tbody id="body-csv"><tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr></tbody></table></div></div>
+  <div class="tbl-card"><div class="tbl-head"><div class="tbl-title">Lançamentos Processados</div><div style="display:flex;align-items:center;gap:8px"><span class="tbl-badge" id="count-csv">0 registros</span><button class="btn-export" onclick="exportarCSV()" style="padding:5px 12px;font-size:11px">&#8595; Excel</button></div></div><div style="padding:10px 20px 0;border-bottom:1px solid var(--border)"><div class="inline-filters"><span class="filter-label">Filtrar</span><select class="filter-select" id="fcsv-ano" onchange="renderCSVTable()"><option value="">Todos os anos</option></select><select class="filter-select" id="fcsv-mes" onchange="renderCSVTable()"><option value="">Todos os meses</option></select><select class="filter-select" id="fcsv-cc" onchange="renderCSVTable()"><option value="">Todos os CCs</option></select><select class="filter-select" id="fcsv-conta" onchange="renderCSVTable()"><option value="">Todas as contas</option></select><button class="btn-ghost" onclick="clearCSVFilters()">&#10005;</button></div></div><div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Complemento</th><th>Centro de Custo</th><th>Conta</th><th>Tipo</th><th class="r">Valor (R$)</th></tr></thead><tbody id="body-csv"><tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr></tbody></table></div></div>
 </div>
 
 <script>
@@ -968,6 +1021,7 @@ function exportarOrcamento(){}
       <div style="display:flex;align-items:center;gap:10px">
         <span class="tbl-badge" id="count-estoque">0 unidades</span>
         <span class="tbl-badge" id="total-estoque" style="background:var(--brand-light);color:var(--brand)">R$ 0,00</span>
+        <button class="btn-export" onclick="exportarEstoque()" style="padding:5px 12px;font-size:11px">&#8595; Excel</button>
       </div>
     </div>
     <div style="padding:10px 20px 0;border-bottom:1px solid var(--border)">
@@ -1160,6 +1214,7 @@ function exportarOrcamento(){}
         <span class="filter-label">Obra</span>
         <select class="filter-select" id="orc-filtro-obra" onchange="renderOrcamentoTable()" style="min-width:160px"><option value="">Todas as obras</option></select>
         <span class="tbl-badge" id="orc-badge">—</span>
+        <button class="btn-export" onclick="exportarOrcamentoXLS()" style="padding:5px 12px;font-size:11px">&#8595; Excel</button>
       </div>
     </div>
     <div style="overflow-x:auto;overflow-y:auto;max-height:65vh">
