@@ -28,7 +28,7 @@ function setStatus(id,msg,ok){const el=document.getElementById(id);if(!el)return
 function destroyChart(id){if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];}}
 function renderDiag(cid,allH,mappings,first){const el=document.getElementById(cid);if(!el)return;const pills=allH.map(h=>'<span class="diag-pill">'+h+'</span>').join('');const rows=mappings.map(m=>{const raw=first&&m.foundKey!=null?first[m.foundKey]:'';return'<div class="diag-row"><div class="diag-col-name">'+m.label+'</div>'+(m.foundKey?'<span class="diag-col-mapped">\u2192 "'+m.foundKey+'"</span>':'<span class="diag-col-mapped miss">\u2715 N\u00e3o encontrada</span>')+(raw===''||raw==null?'<span class="diag-col-val empty">(vazio)</span>':'<span class="diag-col-val">'+String(raw).slice(0,80)+'</span>')+'</div>';}).join('');el.innerHTML='<div class="diag-box"><div class="diag-grid">'+rows+'</div><div class="diag-all-cols">'+pills+'</div></div>';el.style.display='block';}
 function wirePaste(taId,fn,statusId){const ta=document.getElementById(taId);if(!ta)return;ta.addEventListener('paste',e=>{e.preventDefault();setStatus(statusId,'Processando...',null);const txt=(e.clipboardData||window.clipboardData).getData('text');setTimeout(()=>{fn(txt);ta.value='';},0);});}
-window.addEventListener('load',()=>{wirePaste('paste-csv',processCSVText,'status-csv');['d-ano','d-mes','d-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',renderDashboard);});['dt-obra','dt-ano','dt-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',renderDtlh);});});
+window.addEventListener('load',()=>{wirePaste('paste-csv',processCSVText,'status-csv');['d-ano','d-mes','d-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',renderDashboard);});const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
 
 function processCSVText(txt){
   const rows=parseTSV(txt);
@@ -216,78 +216,37 @@ function restoreJSON(input){const file=input.files[0];if(!file)return;const read
 function adicionarEstoque(){const obra=document.getElementById('est-obra').value.trim(),unidade=document.getElementById('est-unidade').value.trim(),status=document.getElementById('est-status').value,area=parseBRNum(document.getElementById('est-area').value),venda=parseBRNum(document.getElementById('est-venda').value);if(!obra||!unidade){alert('Preencha Obra e Unidade.');return;}DATA.estoque.push({obra,unidade,status,area,venda});['est-obra','est-unidade','est-area','est-venda'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderEstoqueTable();}
 function renderEstoqueTable(){const tbody=document.getElementById('body-estoque');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('est-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.estoque.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhuma unidade</p></div></td></tr>';return;}tbody.innerHTML=DATA.estoque.map((r,i)=>'<tr><td>'+r.obra+'</td><td>'+r.unidade+'</td><td><span class="badge '+(r.status==='Disponível'?'bg-green':r.status==='Vendido'?'bg-red':'bg-gold')+'">'+r.status+'</span></td><td class="r">'+(r.area?r.area.toLocaleString('pt-BR',{minimumFractionDigits:2})+'m²':'—')+'</td><td class="r">'+(r.venda?fmt(r.venda):'—')+'</td><td style="text-align:center"><button onclick="removerEstoque('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
 function removerEstoque(i){DATA.estoque.splice(i,1);renderEstoqueTable();}
-function updateDtlhFilters(){fillSelect('dt-obra',[...new Set([...DATA.csv.map(r=>r.cc),...DATA.estoque.map(r=>r.obra)].filter(Boolean))].sort(),v=>v,v=>v);fillSelect('dt-ano',[...new Set(DATA.csv.map(r=>r.ano).filter(x=>x!=null))].sort(),v=>v,v=>v);fillSelect('dt-mes',[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b),v=>v,v=>MESES_PT[v]);}
-function clearDtlhFilters(){['dt-obra','dt-ano','dt-mes'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderDtlh();}
+function updateDtlhFilters(){const cur=document.getElementById('dt-obra')?.value||'';const obras=[...new Set([...DATA.csv.map(r=>r.cc),...Object.values(DATA.orcamentoMensal||{}).map(e=>e.obra)].filter(Boolean))].sort();const el=document.getElementById('dt-obra');if(el){el.innerHTML='<option value="">Todas as obras</option>'+obras.map(o=>'<option value="'+o+'"'+(o===cur?' selected':'')+'>'+o+'</option>').join('');}}
+function clearDtlhFilters(){const el=document.getElementById('dt-obra');if(el)el.value='';renderDtlh();}
 function getDtF(){return{obra:document.getElementById('dt-obra')?.value||'',ano:document.getElementById('dt-ano')?.value||'',mes:document.getElementById('dt-mes')?.value||''};}
 function applyDtF(arr){const f=getDtF();return arr.filter(r=>(!f.obra||ccMatch(r.cc||'',f.obra))&&(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes));}
 function renderDtlh(){
-  const f=getDtF(),hoje=new Date();hoje.setHours(0,0,0,0);
-  const csvDt=applyDtF(DATA.csv);
-  const fat=csvDt.filter(r=>r.tipo==='FATURAMENTO');
-  const desc=csvDt.filter(r=>r.tipo==='DESCONTO');
-  const pag=csvDt.filter(r=>r.tipo==='PAGAMENTO');
+  const obra=document.getElementById('dt-obra')?.value||'';
 
-  // Valor Recebido = FATURAMENTO sem 'A RECEBER' - DESCONTO
-  const vRecebido=fat.filter(r=>!r.complemento||!r.complemento.toUpperCase().includes('A RECEBER')).reduce((s,r)=>s+r.valor,0)
-    -desc.reduce((s,r)=>s+r.valor,0);
+  // A Receber = todo FATURAMENTO com 'A RECEBER' filtrado por obra
+  const csvFilt=DATA.csv.filter(r=>!obra||ccMatch(r.cc||'',obra));
+  const vAReceber=csvFilt.filter(r=>r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')).reduce((s,r)=>s+r.valor,0);
 
-  // Valor A Receber = FATURAMENTO com 'A RECEBER' AND data >= hoje
-  const vAReceber=fat.filter(r=>r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')&&r.data&&r.data>=hoje).reduce((s,r)=>s+r.valor,0);
-
-  // Inadimplencia = FATURAMENTO com 'A RECEBER' AND data < hoje
-  const vInadimpl=fat.filter(r=>r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')&&r.data&&r.data<hoje).reduce((s,r)=>s+r.valor,0);
-
-  // Contas Pagas = PAGAMENTO filtrado
-  const vPago=pag.reduce((s,r)=>s+r.valor,0);
-
-  // Estoque = SUM venda das unidades filtradas por obra
-  const estObra=DATA.estoque.filter(u=>!f.obra||ccMatch(u.obra,f.obra));
-  const vEstoque=estObra.reduce((s,u)=>s+(u.venda||0),0);
+  // Saldo Orcamento = orcado (top-level) - realizado, filtrado por obra
+  const orcEntries=Object.values(DATA.orcamentoMensal||{}).filter(e=>!obra||ccMatch(e.obra,obra));
+  const vOrcado=orcEntries.filter(e=>e.codigo&&!e.codigo.includes('.')).reduce((s,e)=>s+(e.orcado||0),0);
+  const vRealizado=orcEntries.reduce((s,e)=>{Object.values(e.anos||{}).forEach(meses=>Object.values(meses).forEach(v=>s+=v));return s;},0);
+  const vSaldoOrc=vOrcado-vRealizado;
 
   // Afetacao = 4% do A Receber
   const vAfetacao=vAReceber*0.04;
 
-  // Saldo Orcamento = orcado total (top-level) - realizado total (do DATA.orcamentoMensal filtrado por obra)
-  const orcEntries=Object.values(DATA.orcamentoMensal||{}).filter(e=>!f.obra||ccMatch(e.obra,f.obra));
-  const vOrcado=orcEntries.filter(e=>e.codigo&&!e.codigo.includes('.')).reduce((s,e)=>s+(e.orcado||0),0);
-  const vRealizado=orcEntries.reduce((s,e)=>{
-    Object.values(e.anos||{}).forEach(meses=>Object.values(meses).forEach(v=>s+=v));
-    return s;
-  },0);
-  const vSaldoOrc=vOrcado-vRealizado;
+  // Caixa Disponivel = A Receber - Saldo Orc - Afetacao
+  const vCaixa=vAReceber-vSaldoOrc-vAfetacao;
 
-  // Afetacao + Comissao = 10% do estoque
-  const vAfetComissao=vEstoque*0.10;
-
-  // Faturamento Total = Recebido + A Receber
-  const vFatTotal=vRecebido+vAReceber;
-
-  // Preencher KPIs
-  set('dt-recebido',fmt(vRecebido));
-  set('dt-areceber',fmt(vAReceber));
-  set('dt-inadimplencia',fmt(vInadimpl));
-  set('dt-estoque-val',vEstoque?fmt(vEstoque):'—');
-  set('dt-fat-total',fmt(vFatTotal));
-  set('dt-pagas',fmt(vPago));
-  set('dt-afetacao',fmt(vAfetacao));
+  set('dt-areceber',vAReceber?fmt(vAReceber):'—');
   set('dt-orcamento',vOrcado?fmt(vSaldoOrc):'—');
-  set('dt-afet-comissao',vEstoque?fmt(vAfetComissao):'—');
-  set('dt-desp-total',fmt(vPago+vAfetacao));
-
-  // Saldo principal
-  const vRes=vFatTotal-vPago;
-  const resEl=document.getElementById('dt-kpi-resultado');
-  if(resEl){resEl.textContent=fmt(Math.abs(vRes));resEl.className='dtlh-kpi-main-val '+(vRes>=0?'pos':'neg');}
-
-  // Contadores estoque
-  set('dt-est-total',estObra.length||'—');
-  set('dt-est-vendidos',estObra.filter(u=>u.status==='Vendido').length||'—');
-  set('dt-est-disponiveis',estObra.filter(u=>u.status==='Disponível').length||'—');
-  set('dt-est-vgv',vEstoque?fmt(vEstoque):'—');
-
-  renderDtlhOrcTable(pag,f);
+  set('dt-afetacao',vAReceber?fmt(vAfetacao):'—');
+  const cEl=document.getElementById('dt-caixa-disponivel');
+  if(cEl){cEl.textContent=vOrcado||vAReceber?fmt(vCaixa):'—';}
 }
-function renderDtlhOrcTable(pagas,f){const tbody=document.getElementById('dt-orc-body');if(!tbody)return;const itens=DATA.orcamento.filter(o=>!f.obra||ccMatch(o.obra,f.obra));if(!itens.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum orçamento</p></div></td></tr>';return;}tbody.innerHTML=itens.map(o=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+DATA.orcamento.indexOf(o)+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');set('dt-orc-total',fmt(itens.reduce((s,o)=>s+o.valor,0)));}
+
+function renderDtlhOrcTable(){}
 function adicionarOrcamento(){const obra=document.getElementById('orc-obra').value.trim(),tot=document.getElementById('orc-totalizador').value.trim(),cod=document.getElementById('orc-codigo').value.trim(),desc=document.getElementById('orc-descricao').value.trim(),val=parseBRNum(document.getElementById('orc-valor').value);if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderOrcamentoTable();renderDtlh();}
 function fPct(r,o){return o?'<span style="font-size:10px;font-weight:600;color:'+(r/o>1?'#C0392B':'#1B6B35')+'">'+(r/o*100).toFixed(1)+'%</span>':'<span style="color:#ccc;font-size:10px">—</span>';}
 function renderOrcamentoTable(){const tbody=document.getElementById('body-orcamento');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('orc-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item</p></div></td></tr>';return;}tbody.innerHTML=DATA.orcamento.map((o,i)=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r val-neg">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
@@ -991,144 +950,41 @@ function exportarOrcamento(){}
 </div>
 
 <div class="page" id="page-dtlh">
-  <div class="sec-title">Dashboard Dtlh de Obra</div>
-  <div class="sec-sub">Análise detalhada por empreendimento</div>
+  <div class="sec-title">Resumo Executivo</div>
+  <div class="sec-sub">Visão financeira consolidada por obra</div>
 
-  
   <div class="filters-bar">
-    <span class="filter-label">Filtrar</span>
-    <select class="filter-select" id="dt-obra"><option value="">Todas as obras</option></select>
-    <select class="filter-select" id="dt-ano"><option value="">Todos os anos</option></select>
-    <select class="filter-select" id="dt-mes"><option value="">Todos os meses</option></select>
-    <div class="dtlh-checkbox-wrap" style="margin-left:12px">
-      <input type="checkbox" id="dt-estoque-check" onchange="renderDtlh()">
-      <label for="dt-estoque-check">Considerar Estoque</label>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-left:12px">
-      <label for="dt-entrega" style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);white-space:nowrap">Entrega das Chaves</label>
-      <input type="date" id="dt-entrega" onchange="renderDtlh()"
-        style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;cursor:pointer"
-        title="Se preenchido, considera A Receber somente até esta data">
-      <button onclick="document.getElementById('dt-entrega').value='';renderDtlh()" title="Limpar data" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px">✕</button>
-    </div>
-    <button class="btn-ghost" onclick="clearDtlhFilters()">✕ Limpar</button>
+    <span class="filter-label">Filtrar por obra</span>
+    <select class="filter-select" id="dt-obra" onchange="renderDtlh()"><option value="">Todas as obras</option></select>
+    <button class="btn-ghost" onclick="document.getElementById('dt-obra').value='';renderDtlh()">✕ Limpar</button>
   </div>
 
-  
-  <div class="dtlh-kpi-main" id="dt-saldo-card" style="margin-bottom:16px">
-    <div class="kpi-label">Saldo — Faturamento Total − Despesas</div>
-    <div class="kpi-val" id="dt-saldo">—</div>
-    <div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:6px" id="dt-saldo-sub">—</div>
-  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:20px">
 
-  
-  <div class="dtlh-layout">
-
-    
-    <div class="dtlh-col">
-      <div class="dtlh-kpi-group">
-        <div class="dtlh-group-header">
-          <span class="dtlh-group-title">Faturamento Total</span>
-          <span class="dtlh-group-total pos" id="dt-fat-total">—</span>
-        </div>
-        <div class="dtlh-item">
-          <div class="dtlh-item-left">
-            <span class="dtlh-item-label">Valor Recebido</span>
-            <span class="dtlh-item-sub">Contas Recebidas</span>
-          </div>
-          <span class="dtlh-item-val pos" id="dt-recebido">—</span>
-        </div>
-        <div class="dtlh-item">
-          <div class="dtlh-item-left">
-            <span class="dtlh-item-label">Valor A Receber</span>
-            <span class="dtlh-item-sub">Contas a Receber em dia</span>
-          </div>
-          <span class="dtlh-item-val" id="dt-areceber">—</span>
-        </div>
-        <div class="dtlh-item">
-          <div class="dtlh-item-left">
-            <span class="dtlh-item-label">Inadimplência</span>
-            <span class="dtlh-item-sub">A Receber com vencto. anterior a hoje</span>
-          </div>
-          <span class="dtlh-item-val neg" id="dt-inadimplencia">—</span>
-        </div>
-        <div class="dtlh-item" id="dt-estoque-row">
-          <div class="dtlh-item-left">
-            <span class="dtlh-item-label">Estoque</span>
-            <span class="dtlh-item-sub">Unidades disponíveis (aba Estoque)</span>
-          </div>
-          <span class="dtlh-item-val gold" id="dt-estoque-val">—</span>
-        </div>
-      </div>
+    <div class="kpi-card" style="border-top:3px solid var(--brand)">
+      <div class="kpi-label">A Receber</div>
+      <div class="kpi-val pos" id="dt-areceber">—</div>
+      <div class="kpi-sub">Total a receber pelo filtro</div>
     </div>
 
-    
-    <div class="dtlh-col">
-      <div class="dtlh-kpi-group">
-        <div class="dtlh-group-header">
-          <span class="dtlh-group-title">Despesas</span>
-          <span class="dtlh-group-total neg" id="dt-desp-total">—</span>
-        </div>
-        <div class="dtlh-item">
-          <div class="dtlh-item-left">
-            <span class="dtlh-item-label">Contas Pagas</span>
-            <span class="dtlh-item-sub">Valor aprop fin</span>
-          </div>
-          <span class="dtlh-item-val neg" id="dt-pagas">—</span>
-        </div>
-        <div class="dtlh-item">
-          <div class="dtlh-item-left">
-            <span class="dtlh-item-label">Afetação</span>
-            <span class="dtlh-item-sub">4% do Valor a Receber</span>
-          </div>
-          <span class="dtlh-item-val neg" id="dt-afetacao">—</span>
-        </div>
-        <div class="dtlh-item">
-          <div class="dtlh-item-left">
-            <span class="dtlh-item-label">Saldo do Orçamento</span>
-            <span class="dtlh-item-sub">Disponível após aba Orçamento</span>
-          </div>
-          <span class="dtlh-item-val muted" id="dt-orcamento">—</span>
-        </div>
-        <div class="dtlh-item" id="dt-afet-comissao-row">
-          <div class="dtlh-item-left">
-            <span class="dtlh-item-label">Afetação + Comissão</span>
-            <span class="dtlh-item-sub">12% do Estoque (quando checkbox marcada)</span>
-          </div>
-          <span class="dtlh-item-val gold" id="dt-afet-comissao">—</span>
-        </div>
-      </div>
+    <div class="kpi-card" style="border-top:3px solid var(--blue)">
+      <div class="kpi-label">Saldo do Orçamento</div>
+      <div class="kpi-val" id="dt-orcamento">—</div>
+      <div class="kpi-sub">Orçado − Realizado</div>
     </div>
 
-  </div>
+    <div class="kpi-card" style="border-top:3px solid var(--gold)">
+      <div class="kpi-label">Afetação</div>
+      <div class="kpi-val neg" id="dt-afetacao">—</div>
+      <div class="kpi-sub">4% do A Receber</div>
+    </div>
 
-  
-  <div class="tbl-card" style="margin-top:16px">
-    <div class="tbl-head">
-      <div class="tbl-title">Orçamento por Item</div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span class="tbl-badge" id="dt-orc-count">0 itens</span>
-        <button onclick="debugOrcamento()" style="background:none;border:1px solid var(--gold);color:var(--gold);font-size:11px;padding:3px 10px;cursor:pointer;font-family:'DM Sans',sans-serif">🔍 Diagnóstico</button>
-      </div>
+    <div class="kpi-card" style="border-top:3px solid var(--brand-dark);background:var(--brand-dark)">
+      <div class="kpi-label" style="color:rgba(255,255,255,.6)">Caixa Disponível na Obra</div>
+      <div class="kpi-val" id="dt-caixa-disponivel" style="color:#fff">—</div>
+      <div class="kpi-sub" style="color:rgba(255,255,255,.45)">A Receber − Saldo Orç. − Afetação</div>
     </div>
-    <div class="tbl-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Totalizador / Cód. Item</th>
-            <th>Descrição</th>
-            <th class="r">Orçado (R$)</th>
-            <th class="r">Comprometido (R$)</th>
-            <th class="r">Saldo (R$)</th>
-            <th style="min-width:120px">% Executado</th>
-            <th class="r">Disponível (R$)</th>
-          </tr>
-        </thead>
-        <tbody id="dt-orc-body">
-          <tr><td colspan="7"><div class="empty-state"><p>Cadastre itens na aba Orçamento</p></div></td></tr>
-        </tbody>
-      </table>
-    </div>
+
   </div>
 </div>
 
