@@ -8,6 +8,8 @@
 <script>
 
 const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{}};
+const JBIN={key:'$2a$10$KAQXa7AZ.d5vOvpCqNs5i.b5omNnumcEUBrubqCNoQbthOJ662OfO',bin:'6a284c58f5f4af5e29d33768',url:'https://api.jsonbin.io/v3/b/'};
+let _jbinSaving=false,_jbinDirty=false;
 const CHARTS={};
 const MESES_PT=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -28,7 +30,7 @@ function setStatus(id,msg,ok){const el=document.getElementById(id);if(!el)return
 function destroyChart(id){if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];}}
 function renderDiag(cid,allH,mappings,first){const el=document.getElementById(cid);if(!el)return;const pills=allH.map(h=>'<span class="diag-pill">'+h+'</span>').join('');const rows=mappings.map(m=>{const raw=first&&m.foundKey!=null?first[m.foundKey]:'';return'<div class="diag-row"><div class="diag-col-name">'+m.label+'</div>'+(m.foundKey?'<span class="diag-col-mapped">\u2192 "'+m.foundKey+'"</span>':'<span class="diag-col-mapped miss">\u2715 N\u00e3o encontrada</span>')+(raw===''||raw==null?'<span class="diag-col-val empty">(vazio)</span>':'<span class="diag-col-val">'+String(raw).slice(0,80)+'</span>')+'</div>';}).join('');el.innerHTML='<div class="diag-box"><div class="diag-grid">'+rows+'</div><div class="diag-all-cols">'+pills+'</div></div>';el.style.display='block';}
 function wirePaste(taId,fn,statusId){const ta=document.getElementById(taId);if(!ta)return;ta.addEventListener('paste',e=>{e.preventDefault();setStatus(statusId,'Processando...',null);const txt=(e.clipboardData||window.clipboardData).getData('text');setTimeout(()=>{fn(txt);ta.value='';},0);});}
-window.addEventListener('load',()=>{wirePaste('paste-csv',processCSVText,'status-csv');['d-ano','d-mes','d-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',renderDashboard);});const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
+window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');['d-ano','d-mes','d-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',renderDashboard);});const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
 
 function processCSVText(txt){
   const rows=parseTSV(txt);
@@ -52,9 +54,9 @@ function processCSVText(txt){
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
   setStatus('status-csv','+'+novos.length+' registros \u2014 total: '+DATA.csv.length+'.',true);
-  renderCSVTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();
+  renderCSVTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();autoSave();
 }
-function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();}
+function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
 function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
 function renderCSVTable(){
   const arr=DATA.csv;
@@ -274,12 +276,61 @@ function renderCaixaInicialCampos(){
     return '<div style="display:flex;flex-direction:column;gap:6px;padding:12px 16px;border:2px solid '+(ativo?'var(--brand)':'var(--border)')+';border-radius:6px;background:'+(ativo?'var(--brand-light)':'var(--bg)')+';min-width:200px">'
       +'<span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:'+(ativo?'var(--brand)':'var(--text3)')+'">'+obra+'</span>'
       +'<input type="number" value="'+val+'" placeholder="0,00" step="0.01"'
-      +' onchange="DATA.caixaInicial[decodeURIComponent(this.dataset.obra)]=parseFloat(this.value)||0;renderFluxo()"'
+      +' onchange="DATA.caixaInicial[decodeURIComponent(this.dataset.obra)]=parseFloat(this.value)||0;renderFluxo();autoSave()"'
       +' data-obra="'+encodeURIComponent(obra)+'"'
       +' style="border:1px solid '+(ativo?'var(--brand)':'var(--border)')+';background:#fff;padding:6px 10px;font-family:DM Sans,sans-serif;font-size:14px;font-weight:600;color:var(--text);outline:none;text-align:right;width:100%;box-sizing:border-box">'
       +'</div>';
   }).join('');
 }
+// ── JSONBin sync ────────────────────────────────────────────────────────────
+function jbinPayload(){
+  return {csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),
+    estoque:DATA.estoque,orcamento:DATA.orcamento,
+    orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial};
+}
+async function jbinSave(){
+  if(_jbinSaving){_jbinDirty=true;return;}
+  _jbinSaving=true;_jbinDirty=false;
+  setJbinStatus('saving');
+  try{
+    const r=await fetch(JBIN.url+JBIN.bin,{method:'PUT',
+      headers:{'Content-Type':'application/json','X-Master-Key':JBIN.key,'X-Bin-Versioning':'false'},
+      body:JSON.stringify(jbinPayload())});
+    if(!r.ok)throw new Error(r.status);
+    setJbinStatus('ok');
+  }catch(e){setJbinStatus('error');}
+  _jbinSaving=false;
+  if(_jbinDirty)jbinSave();
+}
+async function jbinLoad(){
+  setJbinStatus('loading');
+  try{
+    const r=await fetch(JBIN.url+JBIN.bin+'/latest',{headers:{'X-Master-Key':JBIN.key}});
+    if(!r.ok)throw new Error(r.status);
+    const j=await r.json();
+    const d=j.record;
+    if(!d||!d.csv)return setJbinStatus('empty');
+    DATA.csv=(d.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
+    DATA.estoque=d.estoque||[];
+    DATA.orcamento=d.orcamento||[];
+    DATA.orcamentoMensal=d.orcamentoMensal||{};
+    DATA.caixaInicial=d.caixaInicial||{};
+    renderCSVTable();renderEstoqueTable();renderOrcamentoTable();
+    updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();
+    setJbinStatus('ok');
+  }catch(e){setJbinStatus('error');}
+}
+function setJbinStatus(s){
+  const el=document.getElementById('jbin-status');
+  if(!el)return;
+  const map={loading:['⟳ Carregando...','#888'],saving:['⟳ Salvando...','#888'],
+    ok:['✓ Sincronizado','#1B6B35'],error:['✕ Erro de conexão','#C0392B'],empty:['— Sem dados','#888']};
+  const[txt,col]=map[s]||['','#888'];
+  el.textContent=txt;el.style.color=col;
+}
+// Auto-save após qualquer alteração nos dados
+function autoSave(){jbinSave();}
+
 function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();alert('Restaurado! '+DATA.csv.length+' registros CSV.');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
@@ -644,8 +695,10 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <button class="nav-tab" data-tab="orcamento" onclick="goTab(this)">Orçamento</button>
   </div>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
-    <button onclick="backupJSON()" style="background:none;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;cursor:pointer;white-space:nowrap" title="Salvar todos os dados em arquivo JSON">⬇ Backup</button>
-    <button onclick="document.getElementById('restore-input').click()" style="background:none;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;cursor:pointer;white-space:nowrap" title="Restaurar dados de um arquivo JSON">⬆ Restaurar</button>
+    <span id="jbin-status" style="font-size:11px;color:#888;white-space:nowrap">⟳ Carregando...</span>
+    <button onclick="jbinLoad()" style="background:none;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;cursor:pointer;white-space:nowrap" title="Recarregar dados da nuvem">↺ Sync</button>
+    <button onclick="backupJSON()" style="background:none;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;cursor:pointer;white-space:nowrap" title="Salvar backup local">⬇ Backup</button>
+    <button onclick="document.getElementById('restore-input').click()" style="background:none;border:1px solid rgba(255,255,255,.25);color:rgba(255,255,255,.8);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;cursor:pointer;white-space:nowrap" title="Restaurar de arquivo JSON">⬆ Restaurar</button>
     <input type="file" id="restore-input" accept=".json" style="display:none" onchange="restoreJSON(this)">
   </div>
 </nav>
