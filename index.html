@@ -300,16 +300,16 @@ async function ghubSave(){
       if(rr.ok){const jj=await rr.json();_ghubSha=jj.sha;}
     }
     const body={message:'update: Solucione BI data '+new Date().toISOString(),
-      content:btoa(unescape(encodeURIComponent(ghubPayload())))};
+      content:btoa(encodeURIComponent(ghubPayload()).replace(/%([0-9A-F]{2})/g,(_,p)=>String.fromCharCode(parseInt(p,16))))};
     if(_ghubSha)body.sha=_ghubSha;
     const r=await fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
       {method:'PUT',headers:{'Authorization':'token '+GHUB.token,'Content-Type':'application/json','User-Agent':'solucione-bi'},
        body:JSON.stringify(body)});
-    if(!r.ok)throw new Error(r.status);
+    if(!r.ok){const err=await r.text();throw new Error(r.status+': '+err);}
     const j=await r.json();
     _ghubSha=j.content?.sha||_ghubSha;
     setJbinStatus('ok');
-  }catch(e){console.error(e);setJbinStatus('error');}
+  }catch(e){console.error('ghubSave error:',e);setJbinStatus('error: '+e.message.slice(0,40));}
   _ghubSaving=false;
   if(_ghubDirty)ghubSave();
 }
@@ -346,7 +346,7 @@ function setJbinStatus(s){
 function autoSave(){ghubSave();}
 
 function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
-function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();alert('Restaurado! '+DATA.csv.length+' registros CSV.');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
+function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 
 </script>
