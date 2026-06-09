@@ -670,7 +670,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <div class="tbl-title">Fluxo de Caixa por Conta</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="filter-label">Obra</span>
-        <select class="filter-select" id="fc-obra" onchange="renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
+        <select class="filter-select" id="fc-obra" onchange="const _k=this.value||'__all__';const _el=document.getElementById('fc-caixa-inicial');if(_el){_el.value=DATA.caixaInicial[_k]||'';_el.dataset.edited='';};renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
         <span class="filter-label">Ano</span>
         <select class="filter-select" id="fc-ano" onchange="renderFluxo()" style="width:90px"><option value="">Todos</option></select>
         <span class="filter-label" style="margin-left:8px">Caixa Inicial</span>
