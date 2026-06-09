@@ -222,10 +222,16 @@ function getDtF(){return{obra:document.getElementById('dt-obra')?.value||'',ano:
 function applyDtF(arr){const f=getDtF();return arr.filter(r=>(!f.obra||ccMatch(r.cc||'',f.obra))&&(!f.ano||String(r.ano)===f.ano)&&(!f.mes||String(r.mes)===f.mes));}
 function renderDtlh(){
   const obra=document.getElementById('dt-obra')?.value||'';
+  const entregaStr=document.getElementById('dt-entrega')?.value||'';
+  const entrega=entregaStr?new Date(entregaStr+'T23:59:59'):null;
 
-  // A Receber = todo FATURAMENTO com 'A RECEBER' filtrado por obra
+  // A Receber = FATURAMENTO "A RECEBER" filtrado por obra, e por data <= entrega das chaves se definida
   const csvFilt=DATA.csv.filter(r=>!obra||ccMatch(r.cc||'',obra));
-  const vAReceber=csvFilt.filter(r=>r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')).reduce((s,r)=>s+r.valor,0);
+  const vAReceber=csvFilt.filter(r=>
+    r.tipo==='FATURAMENTO' &&
+    r.complemento && r.complemento.toUpperCase().includes('A RECEBER') &&
+    (!entrega || !r.data || r.data<=entrega)
+  ).reduce((s,r)=>s+r.valor,0);
 
   // Saldo Orcamento = orcado (top-level) - realizado, filtrado por obra
   const orcEntries=Object.values(DATA.orcamentoMensal||{}).filter(e=>!obra||ccMatch(e.obra,obra));
@@ -233,17 +239,32 @@ function renderDtlh(){
   const vRealizado=orcEntries.reduce((s,e)=>{Object.values(e.anos||{}).forEach(meses=>Object.values(meses).forEach(v=>s+=v));return s;},0);
   const vSaldoOrc=vOrcado-vRealizado;
 
-  // Afetacao = 4% do A Receber
-  const vAfetacao=vAReceber*0.04;
+  // Estoque = soma das unidades filtradas por obra (aba Estoque)
+  const estObra=DATA.estoque.filter(u=>!obra||ccMatch(u.obra,obra));
+  const vEstoque=estObra.reduce((s,u)=>s+(u.venda||0),0);
 
-  // Caixa Disponivel = A Receber - Saldo Orc - Afetacao
-  const vCaixa=vAReceber-vSaldoOrc-vAfetacao;
+  // COLUNA 1
+  const vAfetacao1=vAReceber*0.04;
+  const vCaixa=vAReceber-vSaldoOrc-vAfetacao1;
 
-  set('dt-areceber',vAReceber?fmt(vAReceber):'—');
-  set('dt-orcamento',vOrcado?fmt(vSaldoOrc):'—');
-  set('dt-afetacao',vAReceber?fmt(vAfetacao):'—');
+  // COLUNA 2
+  const vAfetacao2=(vAReceber+vEstoque)*0.04;
+  const pct=(parseFloat(document.getElementById('dt-comissao-pct')?.value)||6)/100;
+  const vComissao=vEstoque*pct;
+
+  // Preencher coluna 1
+  set('dt-areceber',   vAReceber  ? fmt(vAReceber)  : '—');
+  set('dt-orcamento',  vOrcado    ? fmt(vSaldoOrc)  : '—');
+  set('dt-afetacao',   vAReceber  ? fmt(vAfetacao1) : '—');
   const cEl=document.getElementById('dt-caixa-disponivel');
-  if(cEl){cEl.textContent=vOrcado||vAReceber?fmt(vCaixa):'—';}
+  if(cEl) cEl.textContent=(vOrcado||vAReceber)?fmt(vCaixa):'—';
+
+  // Preencher coluna 2
+  set('dt-areceber2',  vAReceber  ? fmt(vAReceber)  : '—');
+  set('dt-estoque-val',vEstoque   ? fmt(vEstoque)   : '—');
+  set('dt-afetacao2',  (vAReceber+vEstoque) ? fmt(vAfetacao2) : '—');
+  set('dt-comissao',   vEstoque   ? fmt(vComissao)  : '—');
+  set('dt-orcamento2', vOrcado    ? fmt(vSaldoOrc)  : '—');
 }
 
 function renderDtlhOrcTable(){}
@@ -954,35 +975,101 @@ function exportarOrcamento(){}
   <div class="sec-sub">Visão financeira consolidada por obra</div>
 
   <div class="filters-bar">
-    <span class="filter-label">Filtrar por obra</span>
+    <span class="filter-label">Obra</span>
     <select class="filter-select" id="dt-obra" onchange="renderDtlh()"><option value="">Todas as obras</option></select>
-    <button class="btn-ghost" onclick="document.getElementById('dt-obra').value='';renderDtlh()">✕ Limpar</button>
+    <span class="filter-label" style="margin-left:16px">Entrega das Chaves</span>
+    <input type="date" id="dt-entrega" onchange="renderDtlh()"
+      style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;cursor:pointer">
+    <button onclick="document.getElementById('dt-entrega').value='';renderDtlh()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px">✕</button>
+    <button class="btn-ghost" style="margin-left:8px" onclick="document.getElementById('dt-obra').value='';document.getElementById('dt-entrega').value='';renderDtlh()">✕ Limpar</button>
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:20px">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:20px">
 
-    <div class="kpi-card" style="border-top:3px solid var(--brand)">
-      <div class="kpi-label">A Receber</div>
-      <div class="kpi-val pos" id="dt-areceber">—</div>
-      <div class="kpi-sub">Total a receber pelo filtro</div>
+    <!-- COLUNA 1: Caixa da Obra -->
+    <div class="dtlh-kpi-group">
+      <div class="dtlh-group-header">
+        <span class="dtlh-group-title">Caixa da Obra</span>
+      </div>
+      <div class="dtlh-item">
+        <div class="dtlh-item-left">
+          <span class="dtlh-item-label">A Receber</span>
+          <span class="dtlh-item-sub">FATURAMENTO "A RECEBER" até entrega das chaves</span>
+        </div>
+        <span class="dtlh-item-val pos" id="dt-areceber">—</span>
+      </div>
+      <div class="dtlh-item">
+        <div class="dtlh-item-left">
+          <span class="dtlh-item-label">Saldo do Orçamento</span>
+          <span class="dtlh-item-sub">Orçado − Realizado</span>
+        </div>
+        <span class="dtlh-item-val" id="dt-orcamento">—</span>
+      </div>
+      <div class="dtlh-item">
+        <div class="dtlh-item-left">
+          <span class="dtlh-item-label">Afetação</span>
+          <span class="dtlh-item-sub">4% do A Receber</span>
+        </div>
+        <span class="dtlh-item-val neg" id="dt-afetacao">—</span>
+      </div>
+      <div class="dtlh-item" style="background:var(--brand-dark);border-radius:6px;margin-top:8px;padding:12px 16px">
+        <div class="dtlh-item-left">
+          <span class="dtlh-item-label" style="color:rgba(255,255,255,.6)">Caixa Disponível na Obra</span>
+          <span class="dtlh-item-sub" style="color:rgba(255,255,255,.4)">A Receber − Saldo Orç. − Afetação</span>
+        </div>
+        <span class="dtlh-item-val" id="dt-caixa-disponivel" style="color:#fff;font-size:20px">—</span>
+      </div>
     </div>
 
-    <div class="kpi-card" style="border-top:3px solid var(--blue)">
-      <div class="kpi-label">Saldo do Orçamento</div>
-      <div class="kpi-val" id="dt-orcamento">—</div>
-      <div class="kpi-sub">Orçado − Realizado</div>
-    </div>
-
-    <div class="kpi-card" style="border-top:3px solid var(--gold)">
-      <div class="kpi-label">Afetação</div>
-      <div class="kpi-val neg" id="dt-afetacao">—</div>
-      <div class="kpi-sub">4% do A Receber</div>
-    </div>
-
-    <div class="kpi-card" style="border-top:3px solid var(--brand-dark);background:var(--brand-dark)">
-      <div class="kpi-label" style="color:rgba(255,255,255,.6)">Caixa Disponível na Obra</div>
-      <div class="kpi-val" id="dt-caixa-disponivel" style="color:#fff">—</div>
-      <div class="kpi-sub" style="color:rgba(255,255,255,.45)">A Receber − Saldo Orç. − Afetação</div>
+    <!-- COLUNA 2: Estoque / Comissão -->
+    <div class="dtlh-kpi-group">
+      <div class="dtlh-group-header">
+        <span class="dtlh-group-title">Estoque / Comissão</span>
+      </div>
+      <div class="dtlh-item">
+        <div class="dtlh-item-left">
+          <span class="dtlh-item-label">A Receber</span>
+          <span class="dtlh-item-sub">Mesmo valor da coluna Caixa</span>
+        </div>
+        <span class="dtlh-item-val pos" id="dt-areceber2">—</span>
+      </div>
+      <div class="dtlh-item">
+        <div class="dtlh-item-left">
+          <span class="dtlh-item-label">Estoque</span>
+          <span class="dtlh-item-sub">Unidades disponíveis (aba Estoque)</span>
+        </div>
+        <span class="dtlh-item-val gold" id="dt-estoque-val">—</span>
+      </div>
+      <div class="dtlh-item">
+        <div class="dtlh-item-left">
+          <span class="dtlh-item-label">Afetação</span>
+          <span class="dtlh-item-sub">4% de (A Receber + Estoque)</span>
+        </div>
+        <span class="dtlh-item-val neg" id="dt-afetacao2">—</span>
+      </div>
+      <div class="dtlh-item" style="align-items:flex-start;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
+          <div class="dtlh-item-left">
+            <span class="dtlh-item-label">Comissão</span>
+            <span class="dtlh-item-sub">% do Estoque</span>
+          </div>
+          <span class="dtlh-item-val neg" id="dt-comissao">—</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;width:100%">
+          <span style="font-size:11px;color:var(--text3)">Percentual:</span>
+          <input type="number" id="dt-comissao-pct" value="6" min="0" max="100" step="0.5"
+            onchange="renderDtlh()"
+            style="width:70px;border:1px solid var(--border);background:var(--bg);padding:4px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+          <span style="font-size:12px;color:var(--text2)">%</span>
+        </div>
+      </div>
+      <div class="dtlh-item">
+        <div class="dtlh-item-left">
+          <span class="dtlh-item-label">Saldo do Orçamento</span>
+          <span class="dtlh-item-sub">Orçado − Realizado</span>
+        </div>
+        <span class="dtlh-item-val" id="dt-orcamento2">—</span>
+      </div>
     </div>
 
   </div>
