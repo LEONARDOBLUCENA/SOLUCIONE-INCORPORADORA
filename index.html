@@ -689,13 +689,9 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <div class="tbl-title">Fluxo de Caixa por Conta</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="filter-label">Obra</span>
-        <select class="filter-select" id="fc-obra" onchange="const _k=this.value||'__all__';const _el=document.getElementById('fc-caixa-inicial');if(_el){_el.value=DATA.caixaInicial[_k]||'';_el.dataset.edited='';};renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
+        <select class="filter-select" id="fc-obra" onchange="renderCaixaInicialCampos();renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
         <span class="filter-label">Ano</span>
         <select class="filter-select" id="fc-ano" onchange="renderFluxo()" style="width:90px"><option value="">Todos</option></select>
-        <span class="filter-label" style="margin-left:8px">Caixa Inicial</span>
-        <input type="number" id="fc-caixa-inicial" placeholder="0,00" step="0.01"
-          onchange="DATA.caixaInicial[document.getElementById('fc-obra').value||'__all__']=this.value;this.dataset.edited='1';renderFluxo()"
-          style="width:130px;border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
         <span class="tbl-badge" id="fc-badge">—</span>
         <button class="btn-export" onclick="exportarFluxo()" style="padding:5px 12px;font-size:11px">&#8595; Excel</button>
       </div>
