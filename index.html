@@ -262,9 +262,13 @@ function renderDtlh(){
   // Preencher coluna 2
   set('dt-areceber2',  vAReceber  ? fmt(vAReceber)  : '—');
   set('dt-estoque-val',vEstoque   ? fmt(vEstoque)   : '—');
+  set('dt-orcamento2', vOrcado    ? fmt(vSaldoOrc)  : '—');
   set('dt-afetacao2',  (vAReceber+vEstoque) ? fmt(vAfetacao2) : '—');
   set('dt-comissao',   vEstoque   ? fmt(vComissao)  : '—');
-  set('dt-orcamento2', vOrcado    ? fmt(vSaldoOrc)  : '—');
+  // Caixa Terralta = A Receber + Estoque - Saldo Orc - Afetacao - Comissao
+  const vCaixaTerralta=vAReceber+vEstoque-vSaldoOrc-vAfetacao2-vComissao;
+  const ctEl=document.getElementById('dt-caixa-terralta');
+  if(ctEl) ctEl.textContent=(vOrcado||vAReceber||vEstoque)?fmt(vCaixaTerralta):'—';
 }
 
 function renderDtlhOrcTable(){}
@@ -1024,7 +1028,7 @@ function exportarOrcamento(){}
     <!-- COLUNA 2: Estoque / Comissão -->
     <div class="dtlh-kpi-group">
       <div class="dtlh-group-header">
-        <span class="dtlh-group-title">Estoque / Comissão</span>
+        <span class="dtlh-group-title">Caixa Terralta</span>
       </div>
       <div class="dtlh-item">
         <div class="dtlh-item-left">
@@ -1038,7 +1042,14 @@ function exportarOrcamento(){}
           <span class="dtlh-item-label">Estoque</span>
           <span class="dtlh-item-sub">Unidades disponíveis (aba Estoque)</span>
         </div>
-        <span class="dtlh-item-val gold" id="dt-estoque-val">—</span>
+        <span class="dtlh-item-val pos" id="dt-estoque-val">—</span>
+      </div>
+      <div class="dtlh-item">
+        <div class="dtlh-item-left">
+          <span class="dtlh-item-label">Saldo do Orçamento</span>
+          <span class="dtlh-item-sub">Orçado − Realizado</span>
+        </div>
+        <span class="dtlh-item-val neg" id="dt-orcamento2">—</span>
       </div>
       <div class="dtlh-item">
         <div class="dtlh-item-left">
@@ -1063,12 +1074,12 @@ function exportarOrcamento(){}
           <span style="font-size:12px;color:var(--text2)">%</span>
         </div>
       </div>
-      <div class="dtlh-item">
+      <div class="dtlh-item" style="background:var(--brand-dark);border-radius:6px;margin-top:8px;padding:12px 16px">
         <div class="dtlh-item-left">
-          <span class="dtlh-item-label">Saldo do Orçamento</span>
-          <span class="dtlh-item-sub">Orçado − Realizado</span>
+          <span class="dtlh-item-label" style="color:rgba(255,255,255,.6)">Caixa Terralta</span>
+          <span class="dtlh-item-sub" style="color:rgba(255,255,255,.4)">A Receber + Estoque − Saldo Orç. − Afetação − Comissão</span>
         </div>
-        <span class="dtlh-item-val" id="dt-orcamento2">—</span>
+        <span class="dtlh-item-val" id="dt-caixa-terralta" style="color:#fff;font-size:20px">—</span>
       </div>
     </div>
 
