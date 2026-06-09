@@ -249,9 +249,11 @@ function renderDtlh(){
   });
   const vSaldoOrc=vOrcado-vRealizado;
 
-  // Estoque = soma das unidades filtradas por obra (aba Estoque)
+  // Estoque = soma das unidades filtradas por obra (aba Estoque) × % configurado
   const estObra=DATA.estoque.filter(u=>!obra||ccMatch(u.obra,obra));
-  const vEstoque=estObra.reduce((s,u)=>s+(u.venda||0),0);
+  const vEstoqueTotal=estObra.reduce((s,u)=>s+(u.venda||0),0);
+  const estPct=(parseFloat(document.getElementById('dt-estoque-pct')?.value)||100)/100;
+  const vEstoque=vEstoqueTotal*estPct;
 
   // COLUNA 1
   const vAfetacao1=vAReceber*0.04;
@@ -259,15 +261,20 @@ function renderDtlh(){
 
   // COLUNA 2
   const vAfetacao2=(vAReceber+vEstoque)*0.04;
-  const pct=(parseFloat(document.getElementById('dt-comissao-pct')?.value)||6)/100;
-  const vComissao=vEstoque*pct;
+  const comPct=(parseFloat(document.getElementById('dt-comissao-pct')?.value)||6)/100;
+  const vComissao=vEstoque*comPct;
+  const vCaixaTerralta=vAReceber+vEstoque-vSaldoOrc-vAfetacao2-vComissao;
+
+  // Cor dinamica para KPIs resultado
+  const corCaixa=vCaixa>=0?'#4CAF50':'#E53935';
+  const corTerralta=vCaixaTerralta>=0?'#4CAF50':'#E53935';
 
   // Preencher coluna 1
   set('dt-areceber',   vAReceber  ? fmt(vAReceber)  : '—');
   set('dt-orcamento',  vOrcado    ? fmt(vSaldoOrc)  : '—');
   set('dt-afetacao',   vAReceber  ? fmt(vAfetacao1) : '—');
   const cEl=document.getElementById('dt-caixa-disponivel');
-  if(cEl) cEl.textContent=(vOrcado||vAReceber)?fmt(vCaixa):'—';
+  if(cEl){cEl.textContent=(vOrcado||vAReceber)?fmt(vCaixa):'—';cEl.style.color=corCaixa;}
 
   // Preencher coluna 2
   set('dt-areceber2',  vAReceber  ? fmt(vAReceber)  : '—');
@@ -275,10 +282,8 @@ function renderDtlh(){
   set('dt-orcamento2', vOrcado    ? fmt(vSaldoOrc)  : '—');
   set('dt-afetacao2',  (vAReceber+vEstoque) ? fmt(vAfetacao2) : '—');
   set('dt-comissao',   vEstoque   ? fmt(vComissao)  : '—');
-  // Caixa Terralta = A Receber + Estoque - Saldo Orc - Afetacao - Comissao
-  const vCaixaTerralta=vAReceber+vEstoque-vSaldoOrc-vAfetacao2-vComissao;
   const ctEl=document.getElementById('dt-caixa-terralta');
-  if(ctEl) ctEl.textContent=(vOrcado||vAReceber||vEstoque)?fmt(vCaixaTerralta):'—';
+  if(ctEl){ctEl.textContent=(vOrcado||vAReceber||vEstoque)?fmt(vCaixaTerralta):'—';ctEl.style.color=corTerralta;}
 }
 
 function renderDtlhOrcTable(){}
@@ -1031,7 +1036,7 @@ function exportarOrcamento(){}
           <span class="dtlh-item-label" style="color:rgba(255,255,255,.6)">Caixa Disponível na Obra</span>
           <span class="dtlh-item-sub" style="color:rgba(255,255,255,.4)">A Receber − Saldo Orç. − Afetação</span>
         </div>
-        <span class="dtlh-item-val" id="dt-caixa-disponivel" style="color:#fff;font-size:20px">—</span>
+        <span class="dtlh-item-val" id="dt-caixa-disponivel" style="font-size:20px">—</span>
       </div>
     </div>
 
@@ -1047,12 +1052,21 @@ function exportarOrcamento(){}
         </div>
         <span class="dtlh-item-val pos" id="dt-areceber2">—</span>
       </div>
-      <div class="dtlh-item">
-        <div class="dtlh-item-left">
-          <span class="dtlh-item-label">Estoque</span>
-          <span class="dtlh-item-sub">Unidades disponíveis (aba Estoque)</span>
+      <div class="dtlh-item" style="align-items:flex-start;flex-direction:column;gap:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;width:100%">
+          <div class="dtlh-item-left">
+            <span class="dtlh-item-label">Estoque</span>
+            <span class="dtlh-item-sub">% das unidades disponíveis (aba Estoque)</span>
+          </div>
+          <span class="dtlh-item-val pos" id="dt-estoque-val">—</span>
         </div>
-        <span class="dtlh-item-val pos" id="dt-estoque-val">—</span>
+        <div style="display:flex;align-items:center;gap:8px;width:100%">
+          <span style="font-size:11px;color:var(--text3)">Percentual:</span>
+          <input type="number" id="dt-estoque-pct" value="100" min="0" max="100" step="1"
+            onchange="renderDtlh()"
+            style="width:70px;border:1px solid var(--border);background:var(--bg);padding:4px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+          <span style="font-size:12px;color:var(--text2)">%</span>
+        </div>
       </div>
       <div class="dtlh-item">
         <div class="dtlh-item-left">
@@ -1089,7 +1103,7 @@ function exportarOrcamento(){}
           <span class="dtlh-item-label" style="color:rgba(255,255,255,.6)">Caixa Terralta</span>
           <span class="dtlh-item-sub" style="color:rgba(255,255,255,.4)">A Receber + Estoque − Saldo Orç. − Afetação − Comissão</span>
         </div>
-        <span class="dtlh-item-val" id="dt-caixa-terralta" style="color:#fff;font-size:20px">—</span>
+        <span class="dtlh-item-val" id="dt-caixa-terralta" style="font-size:20px">—</span>
       </div>
     </div>
 
