@@ -54,7 +54,7 @@ function processCSVText(txt){
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
   setStatus('status-csv','+'+novos.length+' registros \u2014 total: '+DATA.csv.length+'.',true);
-  renderCSVTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();autoSave();
+  renderCSVTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
 function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
@@ -331,7 +331,7 @@ async function jbinLoad(){
       {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}})
       .then(r=>r.json()).then(j=>{_ghubSha=j.sha;}).catch(()=>{});
     renderCSVTable();renderEstoqueTable();renderOrcamentoTable();
-    updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();
+    updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderFluxo();renderCaixaInicialCampos();
     setJbinStatus('ok');
   }catch(e){console.error(e);setJbinStatus('error');}
 }
