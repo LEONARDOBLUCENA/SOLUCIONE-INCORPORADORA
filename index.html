@@ -30,19 +30,19 @@ function setStatus(id,msg,ok){const el=document.getElementById(id);if(!el)return
 function destroyChart(id){if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];}}
 function renderDiag(cid,allH,mappings,first){const el=document.getElementById(cid);if(!el)return;const pills=allH.map(h=>'<span class="diag-pill">'+h+'</span>').join('');const rows=mappings.map(m=>{const raw=first&&m.foundKey!=null?first[m.foundKey]:'';return'<div class="diag-row"><div class="diag-col-name">'+m.label+'</div>'+(m.foundKey?'<span class="diag-col-mapped">\u2192 "'+m.foundKey+'"</span>':'<span class="diag-col-mapped miss">\u2715 N\u00e3o encontrada</span>')+(raw===''||raw==null?'<span class="diag-col-val empty">(vazio)</span>':'<span class="diag-col-val">'+String(raw).slice(0,80)+'</span>')+'</div>';}).join('');el.innerHTML='<div class="diag-box"><div class="diag-grid">'+rows+'</div><div class="diag-all-cols">'+pills+'</div></div>';el.style.display='block';}
 function wirePaste(taId,fn,statusId){const ta=document.getElementById(taId);if(!ta)return;ta.addEventListener('paste',e=>{e.preventDefault();setStatus(statusId,'Processando...',null);const txt=(e.clipboardData||window.clipboardData).getData('text');setTimeout(()=>{fn(txt);ta.value='';},0);});}
-window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');['d-ano','d-mes','d-cc'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('change',renderDashboard);});const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
+window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
 
 function processCSVText(txt){
   const rows=parseTSV(txt);
   if(!rows.length){setStatus('status-csv','Nenhum dado encontrado.',false);return;}
   const allH=Object.keys(rows[0]),first=rows[0];
-  const mData={data:findColKey(first,['Data','data']),complemento:findColKey(first,['Complemento','complemento','Historico']),valor:findColExact(first,['Valor'],['Valor','valor']),cc:findColExact(first,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']),conta:findColExact(first,['Conta','Plano de Contas'],['Conta','conta'])};
+  const mData={data:findColKey(first,['Data','data']),complemento:findColKey(first,['Complemento','complemento','Historico','Lançamento']),valor:findColExact(first,['Valor'],['Valor']),cc:findColExact(first,['Nome centro de custo','Nome Centro de Custo','Nome CC'],['centro de custo','cc']),conta:findColExact(first,['Conta','Plano de Contas'],['Conta','conta'])};
   renderDiag('diag-csv',allH,[{label:'Data',foundKey:mData.data.foundKey},{label:'Complemento',foundKey:mData.complemento.foundKey},{label:'Valor',foundKey:mData.valor.foundKey},{label:'Nome Centro de Custo',foundKey:mData.cc.foundKey},{label:'Conta',foundKey:mData.conta.foundKey}],first);
   const novos=rows.map(r=>{
     const data=parseDateBR(findColKey(r,['Data','data']).value);
-    const complemento=findColKey(r,['Complemento','complemento','Historico']).value;
-    const valor=Math.abs(parseBRNum(findColExact(r,['Valor'],['Valor','valor']).value));
-    const cc=normCC(findColExact(r,['Nome Centro de Custo','Nome CC'],['Nome Centro de Custo','centro de custo']).value);
+    const complemento=findColKey(r,['Complemento','complemento','Historico','Lançamento']).value;
+    const valor=Math.abs(parseBRNum(findColExact(r,['Valor'],['Valor']).value));
+    const cc=normCC(findColExact(r,['Nome centro de custo','Nome Centro de Custo','Nome CC'],['centro de custo','cc']).value);
     const conta=findColExact(r,['Conta','Plano de Contas'],['Conta','conta']).value;
     const cu=complemento.toUpperCase(),contaU=conta.toUpperCase();
     // Classificação por complemento (padrão)
@@ -54,7 +54,7 @@ function processCSVText(txt){
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
   setStatus('status-csv','+'+novos.length+' registros \u2014 total: '+DATA.csv.length+'.',true);
-  renderCSVTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();
+  renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
 function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
@@ -331,7 +331,7 @@ async function jbinLoad(){
       {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}})
       .then(r=>r.json()).then(j=>{_ghubSha=j.sha;}).catch(()=>{});
     renderCSVTable();renderEstoqueTable();renderOrcamentoTable();
-    updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderFluxo();renderCaixaInicialCampos();
+    updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();
     setJbinStatus('ok');
   }catch(e){console.error(e);setJbinStatus('error');}
 }
@@ -346,7 +346,7 @@ function setJbinStatus(s){
 function autoSave(){ghubSave();}
 
 function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
-function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDashFilters();updateDtlhFilters();renderDashboard();renderDtlh();renderCaixaInicialCampos();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
+function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 
 </script>
