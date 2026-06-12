@@ -32,8 +32,7 @@ function renderDiag(cid,allH,mappings,first){const el=document.getElementById(ci
 function wirePaste(taId,fn,statusId){const ta=document.getElementById(taId);if(!ta)return;ta.addEventListener('paste',e=>{e.preventDefault();setStatus(statusId,'Processando...',null);const txt=(e.clipboardData||window.clipboardData).getData('text');setTimeout(()=>{fn(txt);ta.value='';},0);});}
 function processPrevisao(txt){
   if(!txt||!txt.trim())return;
-  const lines=txt.trim().split('
-').map(l=>l.split('	'));
+  const lines=txt.trim().split(String.fromCharCode(10)).map(l=>l.split(String.fromCharCode(9)));
   if(lines.length<2)return;
   const hdr=lines[0].map(h=>(h||'').trim().toLowerCase());
   const fC=function(names){for(var n of names){var i=hdr.findIndex(function(h){return h.includes(n);});if(i>=0)return i;}return -1;};
