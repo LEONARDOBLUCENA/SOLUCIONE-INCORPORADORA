@@ -272,9 +272,12 @@ function renderFluxo(){
       +'<td class="r" style="padding:4px 6px;font-size:10px;color:#B7950B;font-weight:700;background:#FDEBD0">'+f2(pTot)+'</td></tr>';
   }).join('');
 
-  // Caixa Inicial + Saldo acumulado
+  // Previsto total por mês (soma de todas as obras visíveis)
+  const prevTotalMes=colKeys.map((_,i)=>obrasVis.reduce((s,o)=>s+(parseFloat(DATA.previsto[o]?.[colKeys[i]]||0)||0),0));
+
+  // Caixa Inicial + Saldo acumulado (descontando previsto)
   const ci=obraSel?parseFloat(DATA.caixaInicial[obraSel]||0)||0:Object.values(DATA.caixaInicial).reduce((s,v)=>s+(parseFloat(v)||0),0);
-  const saldo=[];let acc=ci;rv.forEach(v=>{acc+=v;saldo.push(acc);});
+  const saldo=[];let acc=ci;rv.forEach((v,i)=>{acc+=v-prevTotalMes[i];saldo.push(acc);});
   const ciMeses=rv.map((_,i)=>i===0?ci:saldo[i-1]);
   tfoot.innerHTML=
     '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="'+SD+'#f0f0f0;padding:6px 12px;font-size:11px">Resultado do Período</td>'+rv.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt>=0?'#1B6B35':'#C0392B')+'">'+f2(rt)+'</td></tr>'+
