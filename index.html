@@ -30,7 +30,7 @@ function setStatus(id,msg,ok){const el=document.getElementById(id);if(!el)return
 function destroyChart(id){if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];}}
 function renderDiag(cid,allH,mappings,first){const el=document.getElementById(cid);if(!el)return;const pills=allH.map(h=>'<span class="diag-pill">'+h+'</span>').join('');const rows=mappings.map(m=>{const raw=first&&m.foundKey!=null?first[m.foundKey]:'';return'<div class="diag-row"><div class="diag-col-name">'+m.label+'</div>'+(m.foundKey?'<span class="diag-col-mapped">\u2192 "'+m.foundKey+'"</span>':'<span class="diag-col-mapped miss">\u2715 N\u00e3o encontrada</span>')+(raw===''||raw==null?'<span class="diag-col-val empty">(vazio)</span>':'<span class="diag-col-val">'+String(raw).slice(0,80)+'</span>')+'</div>';}).join('');el.innerHTML='<div class="diag-box"><div class="diag-grid">'+rows+'</div><div class="diag-all-cols">'+pills+'</div></div>';el.style.display='block';}
 function wirePaste(taId,fn,statusId){const ta=document.getElementById(taId);if(!ta)return;ta.addEventListener('paste',e=>{e.preventDefault();setStatus(statusId,'Processando...',null);const txt=(e.clipboardData||window.clipboardData).getData('text');setTimeout(()=>{fn(txt);ta.value='';},0);});}
-window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
+window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');wirePaste('paste-prev',processPrevisao,null);const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
 
 function processCSVText(txt){
   const rows=parseTSV(txt);
@@ -1436,7 +1436,7 @@ function exportarOrcamento(){}
     <div style="padding:16px 20px">
       <textarea id="paste-prev" rows="4" placeholder="Cole aqui os dados do Excel (Data, Valor, Nome Centro de Custo, Conta)..."
         style="width:100%;box-sizing:border-box;border:1px solid var(--border);background:var(--bg);padding:10px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);resize:vertical;outline:none"
-        onpaste="setTimeout(()=>{processPrevisao(this.value);this.value='';},50)"></textarea>
+></textarea>
       <div style="margin-top:8px;display:flex;gap:8px">
         <button class="btn-primary" onclick="processPrevisao(document.getElementById('paste-prev').value);document.getElementById('paste-prev').value=''">Processar</button>
         <button class="btn-secondary" onclick="DATA.previsao=[];renderPrevisao()">✕ Limpar</button>
