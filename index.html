@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 
-const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{}};
+const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{}};
 const GHUB={token:['ghp_DMtc','LFDDPZIq7QGo','GgJvmTc1TbfSMf0H9mw1'].join(''),repo:'LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA',file:'data.json',raw:'https://raw.githubusercontent.com/LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA/main/data.json'};
 let _ghubSaving=false,_ghubDirty=false,_ghubSha=null;
 const CHARTS={};
@@ -253,30 +253,32 @@ function renderFluxo(){
   tbody.innerHTML=rows;
   const rv=tFM.map((v,i)=>v-tPM[i]),rt=rv.reduce((s,v)=>s+v,0);
 
-  // Previsto (Orçamento) — soma folhas do orcamentoMensal por colKey (ano*100+mes)
-  const orcFilt=Object.values(DATA.orcamentoMensal||{}).filter(e=>!obraSel||ccMatch(e.obra,obraSel));
-  const allOrcCodes=orcFilt.map(e=>e.codigo).filter(Boolean);
-  const isTotOrc=e=>e.codigo&&allOrcCodes.some(c=>c!==e.codigo&&c.startsWith(e.codigo+'.'));
-  const previsto=Array(NC).fill(0);
-  orcFilt.filter(e=>!isTotOrc(e)).forEach(e=>{
-    Object.entries(e.anos||{}).forEach(([a,meses])=>{
-      Object.entries(meses).forEach(([m,v])=>{
-        const ci=colKeys.indexOf(Number(a)*100+Number(m));
-        if(ci>=0)previsto[ci]+=v;
-      });
-    });
-  });
-  const prevTot=previsto.reduce((s,v)=>s+v,0);
+  // Previsto editável por obra — DATA.previsto[obra][colKey] = valor
+  const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
+  const obrasVis=obraSel?obras.filter(o=>ccMatch(o,obraSel)):obras;
+  if(!DATA.previsto)DATA.previsto={};
+  obrasVis.forEach(o=>{if(!DATA.previsto[o])DATA.previsto[o]={};});
+
+  // Linhas de previsto para o tfoot
+  const prevRows=obrasVis.map(obra=>{
+    const pVals=colKeys.map(k=>parseFloat(DATA.previsto[obra]?.[k]||0)||0);
+    const pTot=pVals.reduce((s,v)=>s+v,0);
+    return '<tr style="background:#FEF9E7"><td style="'+SD+'#FEF9E7;padding:4px 8px;font-size:11px;color:#B7950B;font-weight:600">Previsto — '+obra+'</td>'
+      +pVals.map((v,i)=>'<td style="padding:2px 3px"><input type="number" value="'+(v||'')+'" placeholder="0"'
+        +' data-obra="'+encodeURIComponent(obra)+'" data-key="'+colKeys[i]+'"'
+        +' onchange="if(!DATA.previsto[decodeURIComponent(this.dataset.obra)])DATA.previsto[decodeURIComponent(this.dataset.obra)]={};'
+        +'DATA.previsto[decodeURIComponent(this.dataset.obra)][this.dataset.key]=parseFloat(this.value)||0;autoSave();"'
+        +' style="width:72px;border:1px solid #F0D9A0;background:#FFFDE7;padding:2px 4px;font-size:10px;text-align:right;font-family:DM Sans,sans-serif;color:#7D6608;outline:none"></td>').join('')
+      +'<td class="r" style="padding:4px 6px;font-size:10px;color:#B7950B;font-weight:700;background:#FDEBD0">'+f2(pTot)+'</td></tr>';
+  }).join('');
 
   // Caixa Inicial + Saldo acumulado
-  // Caixa Inicial: obra selecionada = valor dela; todas as obras = soma de todas
   const ci=obraSel?parseFloat(DATA.caixaInicial[obraSel]||0)||0:Object.values(DATA.caixaInicial).reduce((s,v)=>s+(parseFloat(v)||0),0);
   const saldo=[];let acc=ci;rv.forEach(v=>{acc+=v;saldo.push(acc);});
   const ciMeses=rv.map((_,i)=>i===0?ci:saldo[i-1]);
-  const hasPrev=previsto.some(v=>v!==0);
   tfoot.innerHTML=
     '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="'+SD+'#f0f0f0;padding:6px 12px;font-size:11px">Resultado do Período</td>'+rv.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt>=0?'#1B6B35':'#C0392B')+'">'+f2(rt)+'</td></tr>'+
-    (hasPrev?'<tr style="background:#FEF9E7;font-weight:600"><td style="'+SD+'#FEF9E7;padding:6px 12px;font-size:11px;color:#B7950B">▶ Previsto (Orçamento)</td>'+previsto.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#B7950B">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#FDEBD0;font-size:10px;color:#B7950B;font-weight:700">'+f2(prevTot)+'</td></tr>':'')+
+    prevRows+
     '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial</td>'+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
     '<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa</td>'+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
   set('fc-badge',nomes.length+(nomes.length===1?' conta':' contas'));
@@ -304,7 +306,7 @@ function renderCaixaInicialCampos(){
 function ghubPayload(){
   return JSON.stringify({csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),
     estoque:DATA.estoque,orcamento:DATA.orcamento,
-    orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial});
+    orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto||{}});
 }
 async function ghubSave(){
   if(_ghubSaving){_ghubDirty=true;return;}
@@ -343,7 +345,7 @@ async function jbinLoad(){
     DATA.estoque=d.estoque||[];
     DATA.orcamento=d.orcamento||[];
     DATA.orcamentoMensal=d.orcamentoMensal||{};
-    DATA.caixaInicial=d.caixaInicial||{};
+    DATA.caixaInicial=d.caixaInicial||{};DATA.previsto=d.previsto||{};
     // Buscar SHA para saves futuros
     fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
       {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}})
@@ -363,7 +365,7 @@ function setJbinStatus(s){
 }
 function autoSave(){ghubSave();}
 
-function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
+function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 
