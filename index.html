@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 
-const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{}};
+const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previsao:[]};
 const GHUB={token:['ghp_DMtc','LFDDPZIq7QGo','GgJvmTc1TbfSMf0H9mw1'].join(''),repo:'LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA',file:'data.json',raw:'https://raw.githubusercontent.com/LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA/main/data.json'};
 let _ghubSaving=false,_ghubDirty=false,_ghubSha=null;
 const CHARTS={};
@@ -54,7 +54,7 @@ function processCSVText(txt){
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
   setStatus('status-csv','+'+novos.length+' registros \u2014 total: '+DATA.csv.length+'.',true);
-  renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();
+  renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderPrevisao();autoSave();
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
 function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
@@ -348,13 +348,13 @@ async function jbinLoad(){
     DATA.estoque=d.estoque||[];
     DATA.orcamento=d.orcamento||[];
     DATA.orcamentoMensal=d.orcamentoMensal||{};
-    DATA.caixaInicial=d.caixaInicial||{};DATA.previsto=d.previsto||{};
+    DATA.caixaInicial=d.caixaInicial||{};DATA.previsto=d.previsto||{};DATA.previsao=(d.previsao||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
     // Buscar SHA para saves futuros
     fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
       {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}})
       .then(r=>r.json()).then(j=>{_ghubSha=j.sha;}).catch(()=>{});
     renderCSVTable();renderEstoqueTable();renderOrcamentoTable();
-    updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();
+    updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderPrevisao();
     setJbinStatus('ok');
   }catch(e){console.error(e);setJbinStatus('error');}
 }
@@ -368,8 +368,98 @@ function setJbinStatus(s){
 }
 function autoSave(){ghubSave();}
 
-function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
-function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
+// ── Previsão por Período ────────────────────────────────────────────────────
+function processPrevisao(text){
+  if(!text||!text.trim())return;
+  const lines=text.trim().split('\n').map(l=>l.split('\t'));
+  if(lines.length<2)return;
+  const hdr=lines[0].map(h=>h.trim().toLowerCase());
+  const fCol=(names)=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>=0)return i;}return -1;};
+  const cData=fCol(['data']),cValor=fCol(['valor']),cCC=fCol(['nome centro','centro de custo','cc']),cConta=fCol(['conta']);
+  if(cData<0||cValor<0){alert('Colunas "Data" e "Valor" não encontradas.');return;}
+  const parseBR=s=>{if(!s)return 0;return parseFloat(String(s).replace(/\./g,'').replace(',','.'))||0;};
+  const parseDate=s=>{if(!s)return null;const p=s.trim().split('/');if(p.length===3)return new Date(+p[2],+p[1]-1,+p[0]);return new Date(s);};
+  DATA.previsao=lines.slice(1).filter(r=>r.length>1&&r[cData]&&r[cValor]).map(r=>({
+    data:parseDate(r[cData]),
+    valor:Math.abs(parseBR(r[cValor])),
+    cc:(cCC>=0?r[cCC]:'').trim(),
+    conta:(cConta>=0?r[cConta]:'').trim(),
+    tipo:parseBR(r[cValor])>=0?'RECEBER':'PAGAR'
+  })).filter(r=>r.data&&!isNaN(r.data));
+  DATA.previsao.sort((a,b)=>a.data-b.data);
+  renderPrevisao();autoSave();
+}
+
+function renderPrevisao(){
+  const filtDe=document.getElementById('prev-de')?.value;
+  const filtAte=document.getElementById('prev-ate')?.value;
+  const filtCC=document.getElementById('prev-cc')?.value||'';
+  const de=filtDe?new Date(filtDe):null;
+  const ate=filtAte?new Date(filtAte+'T23:59:59'):null;
+  const dados=DATA.previsao.filter(r=>
+    (!de||r.data>=de)&&(!ate||r.data<=ate)&&
+    (!filtCC||r.cc.toLowerCase().includes(filtCC.toLowerCase()))
+  );
+
+  // Popular select de CC
+  const ccSel=document.getElementById('prev-cc');
+  if(ccSel){
+    const ccs=[...new Set(DATA.previsao.map(r=>r.cc).filter(Boolean))].sort();
+    const cur=ccSel.value;
+    ccSel.innerHTML='<option value="">Todos os centros</option>'+ccs.map(c=>'<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>').join('');
+  }
+
+  const fmt=v=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmtD=d=>d?d.toLocaleDateString('pt-BR'):'';
+
+  // Tabela de lançamentos
+  const tbody=document.getElementById('prev-body');
+  if(tbody){
+    if(!dados.length){tbody.innerHTML='<tr><td colspan="5"><div class="empty-state"><p>Nenhum lançamento</p></div></td></tr>';}
+    else tbody.innerHTML=dados.map(r=>'<tr>'
+      +'<td style="padding:5px 10px;font-size:12px">'+fmtD(r.data)+'</td>'
+      +'<td style="padding:5px 10px;font-size:12px">'+r.cc+'</td>'
+      +'<td style="padding:5px 10px;font-size:12px">'+r.conta+'</td>'
+      +'<td class="r" style="padding:5px 10px;font-size:12px;color:'+(r.tipo==='RECEBER'?'#1B6B35':'#C0392B')+';font-weight:600">'+(r.tipo==='RECEBER'?'▲ '+fmt(r.valor):'▼ '+fmt(r.valor))+'</td>'
+      +'<td style="padding:5px 10px;font-size:11px;color:#888">'+r.tipo+'</td>'
+      +'</tr>').join('');
+  }
+
+  // Resumo diário
+  const diasMap={};
+  dados.forEach(r=>{
+    const dk=fmtD(r.data);
+    if(!diasMap[dk])diasMap[dk]={data:r.data,rec:0,pag:0};
+    if(r.tipo==='RECEBER')diasMap[dk].rec+=r.valor;
+    else diasMap[dk].pag+=r.valor;
+  });
+  const dias=Object.values(diasMap).sort((a,b)=>a.data-b.data);
+  const tbodyD=document.getElementById('prev-body-dia');
+  if(tbodyD){
+    if(!dias.length){tbodyD.innerHTML='<tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>';}
+    else tbodyD.innerHTML=dias.map(d=>{
+      const saldo=d.rec-d.pag;
+      return '<tr>'
+        +'<td style="padding:5px 10px;font-size:12px;font-weight:600">'+fmtD(d.data)+'</td>'
+        +'<td class="r" style="padding:5px 10px;font-size:12px;color:#1B6B35">'+fmt(d.rec)+'</td>'
+        +'<td class="r" style="padding:5px 10px;font-size:12px;color:#C0392B">'+fmt(d.pag)+'</td>'
+        +'<td class="r" style="padding:5px 10px;font-size:12px;font-weight:700;color:'+(saldo>=0?'#1B6B35':'#C0392B')+'">'+fmt(saldo)+'</td>'
+        +'</tr>';
+    }).join('');
+  }
+
+  // Totais do período
+  const totRec=dados.filter(r=>r.tipo==='RECEBER').reduce((s,r)=>s+r.valor,0);
+  const totPag=dados.filter(r=>r.tipo==='PAGAR').reduce((s,r)=>s+r.valor,0);
+  const totSaldo=totRec-totPag;
+  set('prev-tot-rec',fmt(totRec));set('prev-tot-pag',fmt(totPag));
+  const selEl=document.getElementById('prev-tot-saldo');
+  if(selEl){selEl.textContent=fmt(Math.abs(totSaldo));selEl.style.color=totSaldo>=0?'#1B6B35':'#C0392B';}
+  set('prev-count',dados.length+' lançamentos');
+}
+
+function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto,previsao:(DATA.previsao||[]).map(r=>({...r,data:r.data?r.data.toISOString():null}))};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
+function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderPrevisao();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 
 </script>
@@ -729,6 +819,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <button class="nav-tab active" data-tab="fluxo" onclick="goTab(this)">Fluxo de Caixa</button>
     <button class="nav-tab" data-tab="estoque" onclick="goTab(this)">Estoque</button>
     <button class="nav-tab" data-tab="orcamento" onclick="goTab(this)">Orçamento</button>
+    <button class="nav-tab" data-tab="prev" onclick="goTab(this)">Previsão por Período</button>
   </div>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
     <span id="jbin-status" style="font-size:11px;color:#888;white-space:nowrap">⟳ Carregando...</span>
@@ -1315,6 +1406,100 @@ function exportarOrcamento(){}
         <thead id="thead-orc-mensal"></thead>
         <tbody id="tbody-orc-mensal">
           <tr><td colspan="3"><div class="empty-state"><p>Nenhum dado de orçamento ainda</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-prev">
+  <div class="sec-title">Previsão por Período</div>
+  <div class="sec-sub">Cole os dados do Excel para visualizar recebimentos e pagamentos futuros</div>
+
+  <!-- Filtros -->
+  <div class="filters-bar" style="flex-wrap:wrap;gap:12px">
+    <span class="filter-label">De</span>
+    <input type="date" id="prev-de" onchange="renderPrevisao()" style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none">
+    <span class="filter-label">Até</span>
+    <input type="date" id="prev-ate" onchange="renderPrevisao()" style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none">
+    <span class="filter-label">Centro de Custo</span>
+    <select class="filter-select" id="prev-cc" onchange="renderPrevisao()"><option value="">Todos os centros</option></select>
+    <button class="btn-ghost" onclick="document.getElementById('prev-de').value='';document.getElementById('prev-ate').value='';document.getElementById('prev-cc').value='';renderPrevisao()">✕ Limpar</button>
+  </div>
+
+  <!-- Colar dados -->
+  <div class="tbl-card" style="margin-top:16px">
+    <div class="tbl-head">
+      <div class="tbl-title">Importar Dados</div>
+      <span class="tbl-badge" id="prev-count">0 lançamentos</span>
+    </div>
+    <div style="padding:16px 20px">
+      <textarea id="paste-prev" rows="4" placeholder="Cole aqui os dados do Excel (Data, Valor, Nome Centro de Custo, Conta)..."
+        style="width:100%;box-sizing:border-box;border:1px solid var(--border);background:var(--bg);padding:10px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);resize:vertical;outline:none"
+        onpaste="setTimeout(()=>{processPrevisao(this.value);this.value='';},50)"></textarea>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <button class="btn-primary" onclick="processPrevisao(document.getElementById('paste-prev').value);document.getElementById('paste-prev').value=''">Processar</button>
+        <button class="btn-secondary" onclick="DATA.previsao=[];renderPrevisao()">✕ Limpar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resumo diário -->
+  <div class="tbl-card" style="margin-top:16px">
+    <div class="tbl-head">
+      <div class="tbl-title">Resumo por Dia</div>
+    </div>
+    <div style="overflow-x:auto;overflow-y:auto;max-height:300px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Data</th>
+            <th class="r" style="padding:8px 10px;font-size:11px;color:#1B6B35;position:sticky;top:0;background:#f5f5f5">A Receber</th>
+            <th class="r" style="padding:8px 10px;font-size:11px;color:#C0392B;position:sticky;top:0;background:#f5f5f5">A Pagar</th>
+            <th class="r" style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Saldo do Dia</th>
+          </tr>
+        </thead>
+        <tbody id="prev-body-dia">
+          <tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Totais do período -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px">
+    <div class="kpi-card" style="border-top:3px solid #1B6B35">
+      <div class="kpi-label">Total a Receber</div>
+      <div class="kpi-val pos" id="prev-tot-rec">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #C0392B">
+      <div class="kpi-label">Total a Pagar</div>
+      <div class="kpi-val neg" id="prev-tot-pag">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid var(--brand)">
+      <div class="kpi-label">Saldo do Período</div>
+      <div class="kpi-val" id="prev-tot-saldo">—</div>
+    </div>
+  </div>
+
+  <!-- Tabela de lançamentos -->
+  <div class="tbl-card" style="margin-top:16px">
+    <div class="tbl-head">
+      <div class="tbl-title">Lançamentos</div>
+    </div>
+    <div style="overflow-x:auto;overflow-y:auto;max-height:400px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Data</th>
+            <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Centro de Custo</th>
+            <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Conta</th>
+            <th class="r" style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Valor</th>
+            <th style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Tipo</th>
+          </tr>
+        </thead>
+        <tbody id="prev-body">
+          <tr><td colspan="5"><div class="empty-state"><p>Nenhum lançamento importado</p></div></td></tr>
         </tbody>
       </table>
     </div>
