@@ -30,6 +30,53 @@ function setStatus(id,msg,ok){const el=document.getElementById(id);if(!el)return
 function destroyChart(id){if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];}}
 function renderDiag(cid,allH,mappings,first){const el=document.getElementById(cid);if(!el)return;const pills=allH.map(h=>'<span class="diag-pill">'+h+'</span>').join('');const rows=mappings.map(m=>{const raw=first&&m.foundKey!=null?first[m.foundKey]:'';return'<div class="diag-row"><div class="diag-col-name">'+m.label+'</div>'+(m.foundKey?'<span class="diag-col-mapped">\u2192 "'+m.foundKey+'"</span>':'<span class="diag-col-mapped miss">\u2715 N\u00e3o encontrada</span>')+(raw===''||raw==null?'<span class="diag-col-val empty">(vazio)</span>':'<span class="diag-col-val">'+String(raw).slice(0,80)+'</span>')+'</div>';}).join('');el.innerHTML='<div class="diag-box"><div class="diag-grid">'+rows+'</div><div class="diag-all-cols">'+pills+'</div></div>';el.style.display='block';}
 function wirePaste(taId,fn,statusId){const ta=document.getElementById(taId);if(!ta)return;ta.addEventListener('paste',e=>{e.preventDefault();setStatus(statusId,'Processando...',null);const txt=(e.clipboardData||window.clipboardData).getData('text');setTimeout(()=>{fn(txt);ta.value='';},0);});}
+
+function processPrevisao(txt){
+  if(!txt||!txt.trim())return;
+  const lines=txt.trim().split('\n').map(l=>l.split('\t'));
+  if(lines.length<2)return;
+  const hdr=lines[0].map(h=>(h||'').trim().toLowerCase());
+  const fC=names=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>=0)return i;}return -1;};
+  const cD=fC(['data']),cV=fC(['valor']),cCC=fC(['nome centro','centro de custo']),cCt=fC(['conta']);
+  if(cD<0||cV<0){alert('Colunas Data e Valor não encontradas.');return;}
+  const pBR=s=>{if(!s)return 0;return parseFloat(String(s).replace(/\./g,'').replace(',','.'))||0;};
+  const pD=s=>{if(!s)return null;const p=s.trim().split('/');if(p.length===3)return new Date(+p[2],+p[1]-1,+p[0]);return null;};
+  DATA.previsao=lines.slice(1).filter(r=>r.length>1&&r[cD]&&r[cV]).map(r=>({
+    data:pD(r[cD]),valor:Math.abs(pBR(r[cV])),
+    cc:(cCC>=0?r[cCC]:'').trim(),conta:(cCt>=0?r[cCt]:'').trim(),
+    tipo:pBR(r[cV])>=0?'RECEBER':'PAGAR'
+  })).filter(r=>r.data&&!isNaN(r.data.getTime()));
+  DATA.previsao.sort((a,b)=>a.data-b.data);
+  renderPrevisao();autoSave();
+}
+
+function renderPrevisao(){
+  const de=document.getElementById('prev-de')?.value,ate=document.getElementById('prev-ate')?.value;
+  const cc=document.getElementById('prev-cc')?.value||'';
+  const dDe=de?new Date(de):null,dAte=ate?new Date(ate+'T23:59:59'):null;
+  const dados=(DATA.previsao||[]).filter(r=>(!dDe||r.data>=dDe)&&(!dAte||r.data<=dAte)&&(!cc||r.cc.toLowerCase().includes(cc.toLowerCase())));
+  const fP=v=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fD=d=>d?d.toLocaleDateString('pt-BR'):'';
+  // Popular CC select
+  const ccEl=document.getElementById('prev-cc');
+  if(ccEl){const ccs=[...new Set((DATA.previsao||[]).map(r=>r.cc).filter(Boolean))].sort();const cur=ccEl.value;ccEl.innerHTML='<option value="">Todos</option>'+ccs.map(c=>'<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>').join('');}
+  // Tabela lançamentos
+  const tb=document.getElementById('prev-body');
+  if(tb)tb.innerHTML=dados.length?dados.map(r=>'<tr><td style="padding:5px 10px;font-size:12px">'+fD(r.data)+'</td><td style="padding:5px 10px;font-size:12px">'+r.cc+'</td><td style="padding:5px 10px;font-size:12px">'+r.conta+'</td><td class="r" style="padding:5px 10px;font-size:12px;color:'+(r.tipo==='RECEBER'?'#1B6B35':'#C0392B')+';font-weight:600">'+(r.tipo==='RECEBER'?'▲ ':'▼ ')+fP(r.valor)+'</td></tr>').join(''):'<tr><td colspan="4"><div class="empty-state"><p>Nenhum lançamento</p></div></td></tr>';
+  // Resumo diário
+  const dm={};dados.forEach(r=>{const k=fD(r.data);if(!dm[k])dm[k]={data:r.data,rec:0,pag:0};r.tipo==='RECEBER'?dm[k].rec+=r.valor:dm[k].pag+=r.valor;});
+  const dias=Object.values(dm).sort((a,b)=>a.data-b.data);
+  const td=document.getElementById('prev-body-dia');
+  if(td)td.innerHTML=dias.length?dias.map(d=>{const s=d.rec-d.pag;return'<tr><td style="padding:5px 10px;font-size:12px;font-weight:600">'+fD(d.data)+'</td><td class="r" style="padding:5px 10px;font-size:12px;color:#1B6B35">'+fP(d.rec)+'</td><td class="r" style="padding:5px 10px;font-size:12px;color:#C0392B">'+fP(d.pag)+'</td><td class="r" style="padding:5px 10px;font-size:12px;font-weight:700;color:'+(s>=0?'#1B6B35':'#C0392B')+'">'+fP(s)+'</td></tr>';}).join(''):'<tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>';
+  // KPIs
+  const tR=dados.filter(r=>r.tipo==='RECEBER').reduce((s,r)=>s+r.valor,0);
+  const tP=dados.filter(r=>r.tipo==='PAGAR').reduce((s,r)=>s+r.valor,0);
+  set('prev-tot-rec',fP(tR));set('prev-tot-pag',fP(tP));
+  const sEl=document.getElementById('prev-tot-saldo');
+  if(sEl){const s=tR-tP;sEl.textContent=fP(Math.abs(s));sEl.style.color=s>=0?'#1B6B35':'#C0392B';}
+  set('prev-count',dados.length+' lançamentos');
+}
+
 window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');wirePaste('paste-prev',processPrevisao,null);const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
 
 function processCSVText(txt){
@@ -367,96 +414,6 @@ function setJbinStatus(s){
   el.textContent=txt;el.style.color=col;
 }
 function autoSave(){ghubSave();}
-
-// ── Previsão por Período ────────────────────────────────────────────────────
-function processPrevisao(text){
-  if(!text||!text.trim())return;
-  const lines=text.trim().split('\n').map(l=>l.split('\t'));
-  if(lines.length<2)return;
-  const hdr=lines[0].map(h=>h.trim().toLowerCase());
-  const fCol=(names)=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>=0)return i;}return -1;};
-  const cData=fCol(['data']),cValor=fCol(['valor']),cCC=fCol(['nome centro','centro de custo','cc']),cConta=fCol(['conta']);
-  if(cData<0||cValor<0){alert('Colunas "Data" e "Valor" não encontradas.');return;}
-  const parseBR=s=>{if(!s)return 0;return parseFloat(String(s).replace(/\./g,'').replace(',','.'))||0;};
-  const parseDate=s=>{if(!s)return null;const p=s.trim().split('/');if(p.length===3)return new Date(+p[2],+p[1]-1,+p[0]);return new Date(s);};
-  DATA.previsao=lines.slice(1).filter(r=>r.length>1&&r[cData]&&r[cValor]).map(r=>({
-    data:parseDate(r[cData]),
-    valor:Math.abs(parseBR(r[cValor])),
-    cc:(cCC>=0?r[cCC]:'').trim(),
-    conta:(cConta>=0?r[cConta]:'').trim(),
-    tipo:parseBR(r[cValor])>=0?'RECEBER':'PAGAR'
-  })).filter(r=>r.data&&!isNaN(r.data));
-  DATA.previsao.sort((a,b)=>a.data-b.data);
-  renderPrevisao();autoSave();
-}
-
-function renderPrevisao(){
-  const filtDe=document.getElementById('prev-de')?.value;
-  const filtAte=document.getElementById('prev-ate')?.value;
-  const filtCC=document.getElementById('prev-cc')?.value||'';
-  const de=filtDe?new Date(filtDe):null;
-  const ate=filtAte?new Date(filtAte+'T23:59:59'):null;
-  const dados=DATA.previsao.filter(r=>
-    (!de||r.data>=de)&&(!ate||r.data<=ate)&&
-    (!filtCC||r.cc.toLowerCase().includes(filtCC.toLowerCase()))
-  );
-
-  // Popular select de CC
-  const ccSel=document.getElementById('prev-cc');
-  if(ccSel){
-    const ccs=[...new Set(DATA.previsao.map(r=>r.cc).filter(Boolean))].sort();
-    const cur=ccSel.value;
-    ccSel.innerHTML='<option value="">Todos os centros</option>'+ccs.map(c=>'<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>').join('');
-  }
-
-  const fmt=v=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const fmtD=d=>d?d.toLocaleDateString('pt-BR'):'';
-
-  // Tabela de lançamentos
-  const tbody=document.getElementById('prev-body');
-  if(tbody){
-    if(!dados.length){tbody.innerHTML='<tr><td colspan="5"><div class="empty-state"><p>Nenhum lançamento</p></div></td></tr>';}
-    else tbody.innerHTML=dados.map(r=>'<tr>'
-      +'<td style="padding:5px 10px;font-size:12px">'+fmtD(r.data)+'</td>'
-      +'<td style="padding:5px 10px;font-size:12px">'+r.cc+'</td>'
-      +'<td style="padding:5px 10px;font-size:12px">'+r.conta+'</td>'
-      +'<td class="r" style="padding:5px 10px;font-size:12px;color:'+(r.tipo==='RECEBER'?'#1B6B35':'#C0392B')+';font-weight:600">'+(r.tipo==='RECEBER'?'▲ '+fmt(r.valor):'▼ '+fmt(r.valor))+'</td>'
-      +'<td style="padding:5px 10px;font-size:11px;color:#888">'+r.tipo+'</td>'
-      +'</tr>').join('');
-  }
-
-  // Resumo diário
-  const diasMap={};
-  dados.forEach(r=>{
-    const dk=fmtD(r.data);
-    if(!diasMap[dk])diasMap[dk]={data:r.data,rec:0,pag:0};
-    if(r.tipo==='RECEBER')diasMap[dk].rec+=r.valor;
-    else diasMap[dk].pag+=r.valor;
-  });
-  const dias=Object.values(diasMap).sort((a,b)=>a.data-b.data);
-  const tbodyD=document.getElementById('prev-body-dia');
-  if(tbodyD){
-    if(!dias.length){tbodyD.innerHTML='<tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>';}
-    else tbodyD.innerHTML=dias.map(d=>{
-      const saldo=d.rec-d.pag;
-      return '<tr>'
-        +'<td style="padding:5px 10px;font-size:12px;font-weight:600">'+fmtD(d.data)+'</td>'
-        +'<td class="r" style="padding:5px 10px;font-size:12px;color:#1B6B35">'+fmt(d.rec)+'</td>'
-        +'<td class="r" style="padding:5px 10px;font-size:12px;color:#C0392B">'+fmt(d.pag)+'</td>'
-        +'<td class="r" style="padding:5px 10px;font-size:12px;font-weight:700;color:'+(saldo>=0?'#1B6B35':'#C0392B')+'">'+fmt(saldo)+'</td>'
-        +'</tr>';
-    }).join('');
-  }
-
-  // Totais do período
-  const totRec=dados.filter(r=>r.tipo==='RECEBER').reduce((s,r)=>s+r.valor,0);
-  const totPag=dados.filter(r=>r.tipo==='PAGAR').reduce((s,r)=>s+r.valor,0);
-  const totSaldo=totRec-totPag;
-  set('prev-tot-rec',fmt(totRec));set('prev-tot-pag',fmt(totPag));
-  const selEl=document.getElementById('prev-tot-saldo');
-  if(selEl){selEl.textContent=fmt(Math.abs(totSaldo));selEl.style.color=totSaldo>=0?'#1B6B35':'#C0392B';}
-  set('prev-count',dados.length+' lançamentos');
-}
 
 function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto,previsao:(DATA.previsao||[]).map(r=>({...r,data:r.data?r.data.toISOString():null}))};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderPrevisao();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
