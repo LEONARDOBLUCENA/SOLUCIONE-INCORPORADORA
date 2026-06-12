@@ -30,54 +30,53 @@ function setStatus(id,msg,ok){const el=document.getElementById(id);if(!el)return
 function destroyChart(id){if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];}}
 function renderDiag(cid,allH,mappings,first){const el=document.getElementById(cid);if(!el)return;const pills=allH.map(h=>'<span class="diag-pill">'+h+'</span>').join('');const rows=mappings.map(m=>{const raw=first&&m.foundKey!=null?first[m.foundKey]:'';return'<div class="diag-row"><div class="diag-col-name">'+m.label+'</div>'+(m.foundKey?'<span class="diag-col-mapped">\u2192 "'+m.foundKey+'"</span>':'<span class="diag-col-mapped miss">\u2715 N\u00e3o encontrada</span>')+(raw===''||raw==null?'<span class="diag-col-val empty">(vazio)</span>':'<span class="diag-col-val">'+String(raw).slice(0,80)+'</span>')+'</div>';}).join('');el.innerHTML='<div class="diag-box"><div class="diag-grid">'+rows+'</div><div class="diag-all-cols">'+pills+'</div></div>';el.style.display='block';}
 function wirePaste(taId,fn,statusId){const ta=document.getElementById(taId);if(!ta)return;ta.addEventListener('paste',e=>{e.preventDefault();setStatus(statusId,'Processando...',null);const txt=(e.clipboardData||window.clipboardData).getData('text');setTimeout(()=>{fn(txt);ta.value='';},0);});}
-
 function processPrevisao(txt){
   if(!txt||!txt.trim())return;
-  const lines=txt.trim().split('\n').map(l=>l.split('\t'));
+  const lines=txt.trim().split('
+').map(l=>l.split('	'));
   if(lines.length<2)return;
   const hdr=lines[0].map(h=>(h||'').trim().toLowerCase());
-  const fC=names=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>=0)return i;}return -1;};
-  const cD=fC(['data']),cV=fC(['valor']),cCC=fC(['nome centro','centro de custo']),cCt=fC(['conta']);
-  if(cD<0||cV<0){alert('Colunas Data e Valor não encontradas.');return;}
-  const pBR=s=>{if(!s)return 0;return parseFloat(String(s).replace(/\./g,'').replace(',','.'))||0;};
-  const pD=s=>{if(!s)return null;const p=s.trim().split('/');if(p.length===3)return new Date(+p[2],+p[1]-1,+p[0]);return null;};
-  DATA.previsao=lines.slice(1).filter(r=>r.length>1&&r[cD]&&r[cV]).map(r=>({
+  const fC=function(names){for(var n of names){var i=hdr.findIndex(function(h){return h.includes(n);});if(i>=0)return i;}return -1;};
+  var cD=fC(['data']),cV=fC(['valor']),cCC=fC(['nome centro','centro de custo']),cCt=fC(['conta']);
+  if(cD<0||cV<0){alert('Colunas Data e Valor nao encontradas.');return;}
+  var pBR=function(s){if(!s)return 0;return parseFloat(String(s).replace(/\./g,'').replace(',','.'))||0;};
+  var pD=function(s){if(!s)return null;var p=s.trim().split('/');if(p.length===3)return new Date(+p[2],+p[1]-1,+p[0]);return null;};
+  DATA.previsao=lines.slice(1).filter(function(r){return r.length>1&&r[cD]&&r[cV];}).map(function(r){return{
     data:pD(r[cD]),valor:Math.abs(pBR(r[cV])),
     cc:(cCC>=0?r[cCC]:'').trim(),conta:(cCt>=0?r[cCt]:'').trim(),
     tipo:pBR(r[cV])>=0?'RECEBER':'PAGAR'
-  })).filter(r=>r.data&&!isNaN(r.data.getTime()));
-  DATA.previsao.sort((a,b)=>a.data-b.data);
-  renderPrevisao();autoSave();
+  };}).filter(function(r){return r.data&&!isNaN(r.data.getTime());});
+  DATA.previsao.sort(function(a,b){return a.data-b.data;});
+  renderPrevisao();
 }
-
 function renderPrevisao(){
-  const de=document.getElementById('prev-de')?.value,ate=document.getElementById('prev-ate')?.value;
-  const cc=document.getElementById('prev-cc')?.value||'';
-  const dDe=de?new Date(de):null,dAte=ate?new Date(ate+'T23:59:59'):null;
-  const dados=(DATA.previsao||[]).filter(r=>(!dDe||r.data>=dDe)&&(!dAte||r.data<=dAte)&&(!cc||r.cc.toLowerCase().includes(cc.toLowerCase())));
-  const fP=v=>'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const fD=d=>d?d.toLocaleDateString('pt-BR'):'';
-  // Popular CC select
-  const ccEl=document.getElementById('prev-cc');
-  if(ccEl){const ccs=[...new Set((DATA.previsao||[]).map(r=>r.cc).filter(Boolean))].sort();const cur=ccEl.value;ccEl.innerHTML='<option value="">Todos</option>'+ccs.map(c=>'<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>').join('');}
-  // Tabela lançamentos
-  const tb=document.getElementById('prev-body');
-  if(tb)tb.innerHTML=dados.length?dados.map(r=>'<tr><td style="padding:5px 10px;font-size:12px">'+fD(r.data)+'</td><td style="padding:5px 10px;font-size:12px">'+r.cc+'</td><td style="padding:5px 10px;font-size:12px">'+r.conta+'</td><td class="r" style="padding:5px 10px;font-size:12px;color:'+(r.tipo==='RECEBER'?'#1B6B35':'#C0392B')+';font-weight:600">'+(r.tipo==='RECEBER'?'▲ ':'▼ ')+fP(r.valor)+'</td></tr>').join(''):'<tr><td colspan="4"><div class="empty-state"><p>Nenhum lançamento</p></div></td></tr>';
-  // Resumo diário
-  const dm={};dados.forEach(r=>{const k=fD(r.data);if(!dm[k])dm[k]={data:r.data,rec:0,pag:0};r.tipo==='RECEBER'?dm[k].rec+=r.valor:dm[k].pag+=r.valor;});
-  const dias=Object.values(dm).sort((a,b)=>a.data-b.data);
-  const td=document.getElementById('prev-body-dia');
-  if(td)td.innerHTML=dias.length?dias.map(d=>{const s=d.rec-d.pag;return'<tr><td style="padding:5px 10px;font-size:12px;font-weight:600">'+fD(d.data)+'</td><td class="r" style="padding:5px 10px;font-size:12px;color:#1B6B35">'+fP(d.rec)+'</td><td class="r" style="padding:5px 10px;font-size:12px;color:#C0392B">'+fP(d.pag)+'</td><td class="r" style="padding:5px 10px;font-size:12px;font-weight:700;color:'+(s>=0?'#1B6B35':'#C0392B')+'">'+fP(s)+'</td></tr>';}).join(''):'<tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>';
+  var de=document.getElementById('prev-de'),ate=document.getElementById('prev-ate'),ccEl=document.getElementById('prev-cc');
+  var dDe=de&&de.value?new Date(de.value):null;
+  var dAte=ate&&ate.value?new Date(ate.value+'T23:59:59'):null;
+  var cc=ccEl?ccEl.value||'':'';
+  var dados=(DATA.previsao||[]).filter(function(r){return(!dDe||r.data>=dDe)&&(!dAte||r.data<=dAte)&&(!cc||r.cc.toLowerCase().includes(cc.toLowerCase()));});
+  var fP=function(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var fD=function(d){return d?d.toLocaleDateString('pt-BR'):'';};
+  // CC select
+  if(ccEl){var ccs=[...new Set((DATA.previsao||[]).map(function(r){return r.cc;}).filter(Boolean))].sort();var cur=ccEl.value;ccEl.innerHTML='<option value="">Todos</option>'+ccs.map(function(c){return'<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>';}).join('');}
+  // Lancamentos
+  var tb=document.getElementById('prev-body');
+  if(tb)tb.innerHTML=dados.length?dados.map(function(r){return'<tr><td style="padding:5px 10px;font-size:12px">'+fD(r.data)+'</td><td style="padding:5px 10px;font-size:12px">'+r.cc+'</td><td style="padding:5px 10px;font-size:12px">'+r.conta+'</td><td class="r" style="padding:5px 10px;font-size:12px;color:'+(r.tipo==='RECEBER'?'#1B6B35':'#C0392B')+';font-weight:600">'+(r.tipo==='RECEBER'?'(+) ':'(-) ')+fP(r.valor)+'</td></tr>';}).join(''):'<tr><td colspan="4"><div class="empty-state"><p>Nenhum lancamento</p></div></td></tr>';
+  // Resumo diario
+  var dm={};dados.forEach(function(r){var k=fD(r.data);if(!dm[k])dm[k]={data:r.data,rec:0,pag:0};if(r.tipo==='RECEBER')dm[k].rec+=r.valor;else dm[k].pag+=r.valor;});
+  var dias=Object.values(dm).sort(function(a,b){return a.data-b.data;});
+  var td=document.getElementById('prev-body-dia');
+  if(td)td.innerHTML=dias.length?dias.map(function(d){var s=d.rec-d.pag;return'<tr><td style="padding:5px 10px;font-size:12px;font-weight:600">'+fD(d.data)+'</td><td class="r" style="padding:5px 10px;font-size:12px;color:#1B6B35">'+fP(d.rec)+'</td><td class="r" style="padding:5px 10px;font-size:12px;color:#C0392B">'+fP(d.pag)+'</td><td class="r" style="padding:5px 10px;font-size:12px;font-weight:700;color:'+(s>=0?'#1B6B35':'#C0392B')+'">'+fP(s)+'</td></tr>';}).join(''):'<tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>';
   // KPIs
-  const tR=dados.filter(r=>r.tipo==='RECEBER').reduce((s,r)=>s+r.valor,0);
-  const tP=dados.filter(r=>r.tipo==='PAGAR').reduce((s,r)=>s+r.valor,0);
-  set('prev-tot-rec',fP(tR));set('prev-tot-pag',fP(tP));
-  const sEl=document.getElementById('prev-tot-saldo');
-  if(sEl){const s=tR-tP;sEl.textContent=fP(Math.abs(s));sEl.style.color=s>=0?'#1B6B35':'#C0392B';}
-  set('prev-count',dados.length+' lançamentos');
+  var tR=dados.filter(function(r){return r.tipo==='RECEBER';}).reduce(function(s,r){return s+r.valor;},0);
+  var tP=dados.filter(function(r){return r.tipo==='PAGAR';}).reduce(function(s,r){return s+r.valor;},0);
+  var set_=function(id,v){var el=document.getElementById(id);if(el)el.textContent=v;};
+  set_('prev-tot-rec',fP(tR));set_('prev-tot-pag',fP(tP));
+  var sEl=document.getElementById('prev-tot-saldo');
+  if(sEl){var s=tR-tP;sEl.textContent=fP(Math.abs(s));sEl.style.color=s>=0?'#1B6B35':'#C0392B';}
+  set_('prev-count',dados.length+' lancamentos');
 }
-
-window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');wirePaste('paste-prev',processPrevisao,null);const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
+window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
 
 function processCSVText(txt){
   const rows=parseTSV(txt);
@@ -101,7 +100,7 @@ function processCSVText(txt){
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
   setStatus('status-csv','+'+novos.length+' registros \u2014 total: '+DATA.csv.length+'.',true);
-  renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderPrevisao();autoSave();
+  renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
 function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
@@ -395,13 +394,13 @@ async function jbinLoad(){
     DATA.estoque=d.estoque||[];
     DATA.orcamento=d.orcamento||[];
     DATA.orcamentoMensal=d.orcamentoMensal||{};
-    DATA.caixaInicial=d.caixaInicial||{};DATA.previsto=d.previsto||{};DATA.previsao=(d.previsao||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
+    DATA.caixaInicial=d.caixaInicial||{};DATA.previsto=d.previsto||{};
     // Buscar SHA para saves futuros
     fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
       {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}})
       .then(r=>r.json()).then(j=>{_ghubSha=j.sha;}).catch(()=>{});
     renderCSVTable();renderEstoqueTable();renderOrcamentoTable();
-    updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderPrevisao();
+    updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();
     setJbinStatus('ok');
   }catch(e){console.error(e);setJbinStatus('error');}
 }
@@ -415,8 +414,8 @@ function setJbinStatus(s){
 }
 function autoSave(){ghubSave();}
 
-function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto,previsao:(DATA.previsao||[]).map(r=>({...r,data:r.data?r.data.toISOString():null}))};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
-function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderPrevisao();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
+function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
+function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 
 </script>
@@ -1370,98 +1369,63 @@ function exportarOrcamento(){}
 </div>
 
 <div class="page" id="page-prev">
-  <div class="sec-title">Previsão por Período</div>
-  <div class="sec-sub">Cole os dados do Excel para visualizar recebimentos e pagamentos futuros</div>
-
-  <!-- Filtros -->
+  <div class="sec-title">Previsao por Periodo</div>
+  <div class="sec-sub">Cole os dados do Excel para visualizar recebimentos e pagamentos previstos</div>
   <div class="filters-bar" style="flex-wrap:wrap;gap:12px">
     <span class="filter-label">De</span>
     <input type="date" id="prev-de" onchange="renderPrevisao()" style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none">
-    <span class="filter-label">Até</span>
+    <span class="filter-label">Ate</span>
     <input type="date" id="prev-ate" onchange="renderPrevisao()" style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none">
     <span class="filter-label">Centro de Custo</span>
-    <select class="filter-select" id="prev-cc" onchange="renderPrevisao()"><option value="">Todos os centros</option></select>
-    <button class="btn-ghost" onclick="document.getElementById('prev-de').value='';document.getElementById('prev-ate').value='';document.getElementById('prev-cc').value='';renderPrevisao()">✕ Limpar</button>
+    <select class="filter-select" id="prev-cc" onchange="renderPrevisao()"><option value="">Todos</option></select>
+    <button class="btn-ghost" onclick="document.getElementById('prev-de').value='';document.getElementById('prev-ate').value='';document.getElementById('prev-cc').value='';renderPrevisao()">x Limpar</button>
   </div>
-
-  <!-- Colar dados -->
   <div class="tbl-card" style="margin-top:16px">
     <div class="tbl-head">
       <div class="tbl-title">Importar Dados</div>
-      <span class="tbl-badge" id="prev-count">0 lançamentos</span>
+      <span class="tbl-badge" id="prev-count">0 lancamentos</span>
     </div>
     <div style="padding:16px 20px">
-      <textarea id="paste-prev" rows="4" placeholder="Cole aqui os dados do Excel (Data, Valor, Nome Centro de Custo, Conta)..."
-        style="width:100%;box-sizing:border-box;border:1px solid var(--border);background:var(--bg);padding:10px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);resize:vertical;outline:none"
-></textarea>
+      <textarea id="paste-prev" rows="4" placeholder="Cole aqui os dados do Excel (Data, Valor, Nome Centro de Custo, Conta)..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);background:var(--bg);padding:10px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);resize:vertical;outline:none"></textarea>
       <div style="margin-top:8px;display:flex;gap:8px">
         <button class="btn-primary" onclick="processPrevisao(document.getElementById('paste-prev').value);document.getElementById('paste-prev').value=''">Processar</button>
-        <button class="btn-secondary" onclick="DATA.previsao=[];renderPrevisao()">✕ Limpar</button>
+        <button class="btn-secondary" onclick="DATA.previsao=[];renderPrevisao()">x Limpar</button>
       </div>
     </div>
   </div>
-
-  <!-- Resumo diário -->
   <div class="tbl-card" style="margin-top:16px">
-    <div class="tbl-head">
-      <div class="tbl-title">Resumo por Dia</div>
-    </div>
+    <div class="tbl-head"><div class="tbl-title">Resumo por Dia</div></div>
     <div style="overflow-x:auto;overflow-y:auto;max-height:300px">
       <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:#f5f5f5">
-            <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Data</th>
-            <th class="r" style="padding:8px 10px;font-size:11px;color:#1B6B35;position:sticky;top:0;background:#f5f5f5">A Receber</th>
-            <th class="r" style="padding:8px 10px;font-size:11px;color:#C0392B;position:sticky;top:0;background:#f5f5f5">A Pagar</th>
-            <th class="r" style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Saldo do Dia</th>
-          </tr>
-        </thead>
-        <tbody id="prev-body-dia">
-          <tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>
-        </tbody>
+        <thead><tr style="background:#f5f5f5">
+          <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Data</th>
+          <th class="r" style="padding:8px 10px;font-size:11px;color:#1B6B35;position:sticky;top:0;background:#f5f5f5">A Receber</th>
+          <th class="r" style="padding:8px 10px;font-size:11px;color:#C0392B;position:sticky;top:0;background:#f5f5f5">A Pagar</th>
+          <th class="r" style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Saldo do Dia</th>
+        </tr></thead>
+        <tbody id="prev-body-dia"><tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
-
-  <!-- Totais do período -->
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px">
-    <div class="kpi-card" style="border-top:3px solid #1B6B35">
-      <div class="kpi-label">Total a Receber</div>
-      <div class="kpi-val pos" id="prev-tot-rec">—</div>
-    </div>
-    <div class="kpi-card" style="border-top:3px solid #C0392B">
-      <div class="kpi-label">Total a Pagar</div>
-      <div class="kpi-val neg" id="prev-tot-pag">—</div>
-    </div>
-    <div class="kpi-card" style="border-top:3px solid var(--brand)">
-      <div class="kpi-label">Saldo do Período</div>
-      <div class="kpi-val" id="prev-tot-saldo">—</div>
-    </div>
+    <div class="kpi-card" style="border-top:3px solid #1B6B35"><div class="kpi-label">Total a Receber</div><div class="kpi-val pos" id="prev-tot-rec">--</div></div>
+    <div class="kpi-card" style="border-top:3px solid #C0392B"><div class="kpi-label">Total a Pagar</div><div class="kpi-val neg" id="prev-tot-pag">--</div></div>
+    <div class="kpi-card" style="border-top:3px solid var(--brand)"><div class="kpi-label">Saldo do Periodo</div><div class="kpi-val" id="prev-tot-saldo">--</div></div>
   </div>
-
-  <!-- Tabela de lançamentos -->
   <div class="tbl-card" style="margin-top:16px">
-    <div class="tbl-head">
-      <div class="tbl-title">Lançamentos</div>
-    </div>
+    <div class="tbl-head"><div class="tbl-title">Lancamentos</div></div>
     <div style="overflow-x:auto;overflow-y:auto;max-height:400px">
       <table style="width:100%;border-collapse:collapse">
-        <thead>
-          <tr style="background:#f5f5f5">
-            <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Data</th>
-            <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Centro de Custo</th>
-            <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Conta</th>
-            <th class="r" style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Valor</th>
-            <th style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Tipo</th>
-          </tr>
-        </thead>
-        <tbody id="prev-body">
-          <tr><td colspan="5"><div class="empty-state"><p>Nenhum lançamento importado</p></div></td></tr>
-        </tbody>
+        <thead><tr style="background:#f5f5f5">
+          <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Data</th>
+          <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Centro de Custo</th>
+          <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Conta</th>
+          <th class="r" style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Valor</th>
+        </tr></thead>
+        <tbody id="prev-body"><tr><td colspan="4"><div class="empty-state"><p>Nenhum lancamento importado</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
 </div>
-
 </body>
 </html>
