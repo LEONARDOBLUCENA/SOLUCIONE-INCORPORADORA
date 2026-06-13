@@ -88,7 +88,7 @@ function gerarWhatsApp(){
     msg+='• Saldo: '+fP(c.rec-c.pag)+'\n\n';
   });
   msg+='---\n_Gerado automaticamente pelo BI Solucione_';
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  showMsgModal(msg);
 }
 function gerarWhatsAppFornecedor(){
   var dados=DATA.previsao||[];
@@ -128,7 +128,7 @@ function gerarWhatsAppFornecedor(){
   msg+='*💸 Total Geral a Pagar: '+fP(tP)+'*\n';
   msg+='*📈 Saldo: '+fP(tR-tP)+'*\n\n';
   msg+='_Gerado automaticamente pelo BI Solucione_';
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  showMsgModal(msg);
 }
 function showMsgModal(msg){
   var el=document.getElementById('wamsg-modal');
