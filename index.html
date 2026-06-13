@@ -54,6 +54,82 @@ function processPrevisao(txt){
   DATA.previsao.sort(function(a,b){return a.data-b.data;});
   renderPrevisao();
 }
+function gerarWhatsApp(){
+  var dados=DATA.previsao||[];
+  if(!dados.length){alert('Nenhum dado para gerar mensagem.');return;}
+  var de=document.getElementById('prev-de'),ate=document.getElementById('prev-ate');
+  var dDe=de&&de.value?new Date(de.value):null;
+  var dAte=ate&&ate.value?new Date(ate.value+'T23:59:59'):null;
+  var filt=dados.filter(function(r){return(!dDe||r.data>=dDe)&&(!dAte||r.data<=dAte);});
+  var fP=function(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var fD=function(d){return d?d.toLocaleDateString('pt-BR'):'';};
+  var periodoStr=(dDe||dAte)?(fD(dDe||filt[0].data)+' a '+fD(dAte||filt[filt.length-1].data)):fD(filt[0].data)+' a '+fD(filt[filt.length-1].data);
+  // Totais gerais
+  var tR=filt.filter(function(r){return r.tipo==='RECEBER';}).reduce(function(s,r){return s+r.valor;},0);
+  var tP=filt.filter(function(r){return r.tipo==='PAGAR';}).reduce(function(s,r){return s+r.valor;},0);
+  // Por CC
+  var ccs={};
+  filt.forEach(function(r){
+    if(!ccs[r.cc])ccs[r.cc]={rec:0,pag:0};
+    if(r.tipo==='RECEBER')ccs[r.cc].rec+=r.valor;
+    else ccs[r.cc].pag+=r.valor;
+  });
+  var msg='*📊 Resumo Financeiro Semanal — Solucione*\n';
+  msg+='_'+periodoStr+'_\n\n';
+  msg+='*💰 Recebimentos: '+fP(tR)+'*\n';
+  msg+='*💸 Pagamentos: '+fP(tP)+'*\n';
+  msg+='*📈 Saldo do Período: '+fP(tR-tP)+'*\n\n';
+  msg+='---\n*Por Centro de Custo:*\n\n';
+  Object.keys(ccs).sort().forEach(function(cc){
+    var c=ccs[cc];
+    msg+='🏗️ *'+cc+'*\n';
+    if(c.rec)msg+='• Recebimentos: '+fP(c.rec)+'\n';
+    if(c.pag)msg+='• Pagamentos: '+fP(c.pag)+'\n';
+    msg+='• Saldo: '+fP(c.rec-c.pag)+'\n\n';
+  });
+  msg+='---\n_Gerado automaticamente pelo BI Solucione_';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
+function gerarWhatsAppFornecedor(){
+  var dados=DATA.previsao||[];
+  if(!dados.length){alert('Nenhum dado para gerar mensagem.');return;}
+  var de=document.getElementById('prev-de'),ate=document.getElementById('prev-ate');
+  var dDe=de&&de.value?new Date(de.value):null;
+  var dAte=ate&&ate.value?new Date(ate.value+'T23:59:59'):null;
+  var filt=dados.filter(function(r){return(!dDe||r.data>=dDe)&&(!dAte||r.data<=dAte);});
+  var fP=function(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var fD=function(d){return d?d.toLocaleDateString('pt-BR'):'';};
+  var periodoStr=(dDe||dAte)?(fD(dDe||filt[0].data)+' a '+fD(dAte||filt[filt.length-1].data)):fD(filt[0].data)+' a '+fD(filt[filt.length-1].data);
+  // Agrupar por CC > fornecedor (complemento)
+  var ccs={};
+  filt.forEach(function(r){
+    if(!ccs[r.cc])ccs[r.cc]={};
+    var forn=r.complemento||'(sem fornecedor)';
+    if(!ccs[r.cc][forn])ccs[r.cc][forn]={rec:0,pag:0};
+    if(r.tipo==='RECEBER')ccs[r.cc][forn].rec+=r.valor;
+    else ccs[r.cc][forn].pag+=r.valor;
+  });
+  var tR=filt.filter(function(r){return r.tipo==='RECEBER';}).reduce(function(s,r){return s+r.valor;},0);
+  var tP=filt.filter(function(r){return r.tipo==='PAGAR';}).reduce(function(s,r){return s+r.valor;},0);
+  var msg='*📊 Relatório por Fornecedor — Solucione*\n';
+  msg+='_'+periodoStr+'_\n\n';
+  Object.keys(ccs).sort().forEach(function(cc){
+    msg+='*🏗️ '+cc+'*\n\n';
+    Object.keys(ccs[cc]).sort().forEach(function(forn){
+      var f=ccs[cc][forn];
+      msg+='📦 _'+forn+'_\n';
+      if(f.rec)msg+='• A Receber: '+fP(f.rec)+'\n';
+      if(f.pag)msg+='• A Pagar: '+fP(f.pag)+'\n';
+      msg+='\n';
+    });
+    msg+='---\n\n';
+  });
+  msg+='*💰 Total Geral a Receber: '+fP(tR)+'*\n';
+  msg+='*💸 Total Geral a Pagar: '+fP(tP)+'*\n';
+  msg+='*📈 Saldo: '+fP(tR-tP)+'*\n\n';
+  msg+='_Gerado automaticamente pelo BI Solucione_';
+  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+}
 function renderPrevisao(){
   var de=document.getElementById('prev-de'),ate=document.getElementById('prev-ate'),ccEl=document.getElementById('prev-cc');
   var dDe=de&&de.value?new Date(de.value):null;
@@ -1438,6 +1514,8 @@ function exportarOrcamento(){}
       <div style="margin-top:8px;display:flex;gap:8px">
         <button class="btn-primary" onclick="processPrevisao(document.getElementById('paste-prev').value);document.getElementById('paste-prev').value=''">Processar</button>
         <button class="btn-secondary" onclick="DATA.previsao=[];renderPrevisao()">x Limpar</button>
+        <button onclick="gerarWhatsApp()" style="background:#25D366;color:#fff;border:none;padding:7px 14px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:4px">📲 Gerar WhatsApp</button>
+        <button onclick="gerarWhatsAppFornecedor()" style="background:#128C7E;color:#fff;border:none;padding:7px 14px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:4px">📦 WhatsApp por Fornecedor</button>
       </div>
     </div>
   </div>
