@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 
-const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previsao:[]};
+const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previsao:[],dtmPct:{}};
 const GHUB={token:['ghp_DMtc','LFDDPZIq7QGo','GgJvmTc1TbfSMf0H9mw1'].join(''),repo:'LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA',file:'data.json',raw:'https://raw.githubusercontent.com/LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA/main/data.json'};
 let _ghubSaving=false,_ghubDirty=false,_ghubSha=null;
 const CHARTS={};
@@ -635,9 +635,124 @@ function renderDtlh(){
   set('dt-dev-terreno', fmt(vDevTerreno));
   const ctEl=document.getElementById('dt-caixa-terralta');
   if(ctEl){ctEl.textContent=(vOrcado||vAReceber||vEstoque)?fmt(vCaixaTerralta):'—';ctEl.style.color=corTerralta;}
+  renderDtlhTabela();
 }
 
 function renderDtlhOrcTable(){}
+
+function renderDtlhTabela(){
+  var obra=document.getElementById('dt-obra')&&document.getElementById('dt-obra').value||'';
+  var entregaStr=document.getElementById('dt-entrega')&&document.getElementById('dt-entrega').value||'';
+  var entrega=entregaStr?new Date(entregaStr+'T23:59:59'):null;
+  var nParcelas=parseInt(document.getElementById('dtm-parcelas')&&document.getElementById('dtm-parcelas').value)||10;
+
+  // Estoque total
+  var estObra=DATA.estoque.filter(function(u){return !obra||ccMatch(u.obra,obra);});
+  var vEstTotal=estObra.reduce(function(s,u){return s+(u.venda||0);},0);
+  var el=document.getElementById('dtm-estoque-total');
+  if(el)el.textContent=vEstTotal?fmt(vEstTotal):'—';
+
+  // Meses disponíveis nos dados CSV
+  var csvFilt=DATA.csv.filter(function(r){return !obra||ccMatch(r.cc||'',obra);});
+  var colSet=new Set();
+  csvFilt.forEach(function(r){if(r.ano!=null&&r.mes!=null)colSet.add(r.ano*100+r.mes);});
+  // Adicionar meses do previsto do fluxo
+  Object.keys(DATA.previsto||{}).forEach(function(o){
+    if(!obra||ccMatch(o,obra)){
+      Object.keys(DATA.previsto[o]).forEach(function(k){colSet.add(parseInt(k));});
+    }
+  });
+  var colKeys=[...colSet].sort();
+  if(!colKeys.length){
+    document.getElementById('dtm-tbody').innerHTML='<tr><td colspan="8"><div class="empty-state"><p>Nenhum dado disponível</p></div></td></tr>';
+    return;
+  }
+
+  var MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var fmt2=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+
+  // Thead
+  var thead=document.getElementById('dtm-thead');
+  var SD='position:sticky;top:0;background:#f5f5f5;';
+  thead.innerHTML='<tr style="background:#f5f5f5">'
+    +'<th style="text-align:left;padding:8px 12px;font-size:11px;min-width:90px;'+SD+'">Mês/Ano</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;color:#1B6B35;'+SD+'">A Receber</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:100px;color:#C0392B;'+SD+'">Afetação (4%)</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;'+SD+'">Fat. Líquido</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;color:#B7950B;'+SD+'">Saldo Orç.</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;'+SD+'">Nec. Caixa</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:70px;'+SD+'">% Est.</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:120px;color:#7D3C98;'+SD+'">Prev. Vendas</th>'
+    +'</tr>';
+
+  // Carregar % por colKey salvo
+  if(!DATA.dtmPct)DATA.dtmPct={};
+
+  // Calcular previsão de vendas acumulativa
+  var estoqueRest=vEstTotal;
+  var parcelasPendentes=[]; // [{parcela, restante}]
+
+  var rows=colKeys.map(function(k){
+    var ano=Math.floor(k/100),mes=k%100;
+    // A Receber: FATURAMENTO com "A RECEBER" filtrado por obra e entrega
+    var aRec=csvFilt.filter(function(r){
+      return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')
+        &&r.ano===ano&&r.mes===mes&&(!entrega||!r.data||r.data<=entrega);
+    }).reduce(function(s,r){return s+r.valor;},0);
+
+    // Afetação
+    var afet=aRec*0.04;
+    // Fat Liquido
+    var fatLiq=aRec-afet;
+
+    // Saldo Orçamento: soma do previsto do fluxo para este mês/obra
+    var saldoOrc=0;
+    Object.keys(DATA.previsto||{}).forEach(function(o){
+      if(!obra||ccMatch(o,obra)){
+        saldoOrc+=parseFloat((DATA.previsto[o]&&DATA.previsto[o][k])||0)||0;
+      }
+    });
+
+    // Necessidade de Caixa
+    var necCaixa=fatLiq-saldoOrc;
+
+    // % do estoque deste mês
+    var pct=parseFloat(DATA.dtmPct[k]||0)||0;
+
+    // Calcular venda deste mês
+    var vendaMes=estoqueRest*(pct/100);
+    estoqueRest-=vendaMes;
+    var parcelaMes=vendaMes/nParcelas;
+
+    // Adicionar parcelas desta venda
+    if(vendaMes>0)parcelasPendentes.push({parcela:parcelaMes,restante:nParcelas});
+
+    // Somar todas as parcelas pendentes
+    var prevVendas=0;
+    parcelasPendentes=parcelasPendentes.filter(function(p){return p.restante>0;});
+    parcelasPendentes.forEach(function(p){prevVendas+=p.parcela;p.restante--;});
+
+    return {k:k,ano:ano,mes:mes,aRec:aRec,afet:afet,fatLiq:fatLiq,saldoOrc:saldoOrc,necCaixa:necCaixa,pct:pct,prevVendas:prevVendas};
+  });
+
+  // Renderizar tbody
+  var tbody=document.getElementById('dtm-tbody');
+  tbody.innerHTML=rows.map(function(r){
+    var necColor=r.necCaixa>=0?'#1B6B35':'#C0392B';
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:6px 12px;font-size:12px;font-weight:600">'+MESES[r.mes]+'/'+r.ano+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;color:#1B6B35">'+fmt2(r.aRec)+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;color:#C0392B">'+fmt2(r.afet)+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px">'+fmt2(r.fatLiq)+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;color:#B7950B">'+fmt2(r.saldoOrc)+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;font-weight:600;color:'+necColor+'">'+fmt2(r.necCaixa)+'</td>'
+      +'<td style="padding:4px 6px"><input type="number" value="'+(r.pct||'')+'" min="0" max="100" step="0.5" placeholder="0"'
+        +' data-key="'+r.k+'" onchange="if(!DATA.dtmPct)DATA.dtmPct={};DATA.dtmPct[this.dataset.key]=parseFloat(this.value)||0;renderDtlhTabela();"'
+        +' style="width:60px;border:1px solid var(--border);background:var(--bg);padding:3px 5px;font-size:11px;text-align:right;font-family:DM Sans,sans-serif;outline:none"></td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;color:#7D3C98;font-weight:600">'+fmt2(r.prevVendas)+'</td>'
+      +'</tr>';
+  }).join('');
+}
 function adicionarOrcamento(){const obra=document.getElementById('orc-obra').value.trim(),tot=document.getElementById('orc-totalizador').value.trim(),cod=document.getElementById('orc-codigo').value.trim(),desc=document.getElementById('orc-descricao').value.trim(),val=parseBRNum(document.getElementById('orc-valor').value);if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderOrcamentoTable();renderDtlh();}
 function fPct(r,o){return o?'<span style="font-size:10px;font-weight:600;color:'+(r/o>1?'#C0392B':'#1B6B35')+'">'+(r/o*100).toFixed(1)+'%</span>':'<span style="color:#ccc;font-size:10px">—</span>';}
 function renderOrcamentoTable(){const tbody=document.getElementById('body-orcamento');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('orc-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item</p></div></td></tr>';return;}tbody.innerHTML=DATA.orcamento.map((o,i)=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r val-neg">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
@@ -1464,6 +1579,33 @@ function exportarOrcamento(){}
       </div>
     </div>
 
+  </div>
+
+  <!-- Tabela Mensal -->
+  <div class="tbl-card" style="margin-top:24px">
+    <div class="tbl-head">
+      <div class="tbl-title">Projeção Mensal</div>
+    </div>
+    <!-- Configuração -->
+    <div style="display:flex;flex-wrap:wrap;gap:20px;padding:14px 20px;border-bottom:1px solid var(--border);align-items:center">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:var(--text3);font-weight:600">Estoque Total:</span>
+        <span id="dtm-estoque-total" style="font-size:13px;font-weight:700;color:var(--brand)">—</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:var(--text3);font-weight:600">Nº de Parcelas:</span>
+        <input type="number" id="dtm-parcelas" value="10" min="1" step="1" onchange="renderDtlh()"
+          style="width:70px;border:1px solid var(--border);background:var(--bg);padding:5px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+      </div>
+    </div>
+    <div style="overflow-x:auto;overflow-y:auto;max-height:500px">
+      <table id="dtm-table" style="width:100%;border-collapse:collapse;min-width:900px">
+        <thead id="dtm-thead"></thead>
+        <tbody id="dtm-tbody">
+          <tr><td colspan="8"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
