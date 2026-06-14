@@ -683,6 +683,9 @@ function renderDtlhTabela(){
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;'+SD+'">Nec. Caixa</th>'
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:70px;'+SD+'">% Est.</th>'
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:120px;color:#7D3C98;'+SD+'">Prev. Vendas</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:100px;color:#C0392B;'+SD+'">Comissão 6%</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;color:#C0392B;'+SD+'">Afet. Prevista</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:120px;'+SD+'">Nec. Caixa Mensal</th>'
     +'</tr>';
 
   // Carregar % por colKey salvo
@@ -732,7 +735,11 @@ function renderDtlhTabela(){
     parcelasPendentes=parcelasPendentes.filter(function(p){return p.restante>0;});
     parcelasPendentes.forEach(function(p){prevVendas+=p.parcela;p.restante--;});
 
-    return {k:k,ano:ano,mes:mes,aRec:aRec,afet:afet,fatLiq:fatLiq,saldoOrc:saldoOrc,necCaixa:necCaixa,pct:pct,prevVendas:prevVendas};
+    // Novas colunas
+    var comissao=vendaMes*0.06;
+    var afetPrev=prevVendas*0.04;
+    var necCaixaMensal=(necCaixa+prevVendas)-(comissao+afetPrev);
+    return {k:k,ano:ano,mes:mes,aRec:aRec,afet:afet,fatLiq:fatLiq,saldoOrc:saldoOrc,necCaixa:necCaixa,pct:pct,prevVendas:prevVendas,comissao:comissao,afetPrev:afetPrev,necCaixaMensal:necCaixaMensal};
   });
 
   // Renderizar tbody
@@ -750,6 +757,9 @@ function renderDtlhTabela(){
         +' data-key="'+r.k+'" onchange="if(!DATA.dtmPct)DATA.dtmPct={};DATA.dtmPct[this.dataset.key]=parseFloat(this.value)||0;renderDtlhTabela();"'
         +' style="width:60px;border:1px solid var(--border);background:var(--bg);padding:3px 5px;font-size:11px;text-align:right;font-family:DM Sans,sans-serif;outline:none"></td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;color:#7D3C98;font-weight:600">'+fmt2(r.prevVendas)+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;color:#C0392B">'+fmt2(r.comissao)+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;color:#C0392B">'+fmt2(r.afetPrev)+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;font-weight:700;color:'+(r.necCaixaMensal>=0?'#1B6B35':'#C0392B')+'">'+fmt2(r.necCaixaMensal)+'</td>'
       +'</tr>';
   }).join('');
 }
