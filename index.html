@@ -499,12 +499,10 @@ async function ghubSave(){
   _ghubSaving=true;_ghubDirty=false;
   setJbinStatus('saving');
   try{
-    // Buscar SHA atual se não temos
-    if(!_ghubSha){
-      const rr=await fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
-        {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}});
-      if(rr.ok){const jj=await rr.json();_ghubSha=jj.sha;}
-    }
+    // Sempre buscar SHA atual para evitar conflito 409
+    const rr=await fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
+      {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}});
+    if(rr.ok){const jj=await rr.json();_ghubSha=jj.sha;}
     const body={message:'update: Solucione BI data '+new Date().toISOString(),
       content:btoa(encodeURIComponent(ghubPayload()).replace(/%([0-9A-F]{2})/g,(_,p)=>String.fromCharCode(parseInt(p,16))))};
     if(_ghubSha)body.sha=_ghubSha;
