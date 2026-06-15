@@ -809,120 +809,90 @@ function renderDtlhTabela(){
 function simularCenario(){
   var obra=document.getElementById('dt-obra')&&document.getElementById('dt-obra').value||'';
   var estObra=DATA.estoque.filter(function(u){return !obra||ccMatch(u.obra,obra);});
-  var vEstTotal=estObra.reduce(function(s,u){return s+(u.venda||0);},0);
-  if(!vEstTotal){alert('Nenhum estoque disponível.');return;}
-
-  var csvFilt=DATA.csv.filter(function(r){return !obra||ccMatch(r.cc||'',obra);});
+  var vEst=estObra.reduce(function(s,u){return s+(u.venda||0);},0);
+  if(!vEst){alert('Nenhum estoque disponivel.');return;}
+  var csvF=DATA.csv.filter(function(r){return !obra||ccMatch(r.cc||'',obra);});
   var colSet=new Set();
-  csvFilt.forEach(function(r){if(r.ano!=null&&r.mes!=null)colSet.add(r.ano*100+r.mes);});
-  Object.keys(DATA.previsto||{}).forEach(function(o){
-    if(!obra||ccMatch(o,obra))Object.keys(DATA.previsto[o]).forEach(function(k){colSet.add(parseInt(k));});
-  });
-  var dataChavesStr=document.getElementById('dtm-data-chaves')&&document.getElementById('dtm-data-chaves').value||'';
-  var chaveKey=dataChavesStr?parseInt(dataChavesStr.split('-')[0])*100+(parseInt(dataChavesStr.split('-')[1])-1):null;
-  if(chaveKey)colSet.add(chaveKey);
-  var hoje=new Date();
-  var keyMin=new Date(hoje.getFullYear(),hoje.getMonth()-1,1);
+  csvF.forEach(function(r){if(r.ano!=null&&r.mes!=null)colSet.add(r.ano*100+r.mes);});
+  Object.keys(DATA.previsto||{}).forEach(function(o){if(!obra||ccMatch(o,obra))Object.keys(DATA.previsto[o]).forEach(function(k){colSet.add(parseInt(k));});});
+  var dcs=document.getElementById('dtm-data-chaves')&&document.getElementById('dtm-data-chaves').value||'';
+  var ck=dcs?parseInt(dcs.split('-')[0])*100+(parseInt(dcs.split('-')[1])-1):null;
+  if(ck)colSet.add(ck);
+  var hoje=new Date(),keyMin=new Date(hoje.getFullYear(),hoje.getMonth()-1,1);
   keyMin=keyMin.getFullYear()*100+keyMin.getMonth();
   var colKeys=[...colSet].sort().filter(function(k){return k>=keyMin;});
-  if(!colKeys.length){alert('Nenhum mês disponível.');return;}
+  if(!colKeys.length){alert('Nenhum mes disponivel.');return;}
+  var ciVal=parseFloat(document.getElementById('dt-caixa-inicial')&&document.getElementById('dt-caixa-inicial').value)||0;
 
-  var caixaInicialVal=parseFloat(document.getElementById('dt-caixa-inicial')&&document.getElementById('dt-caixa-inicial').value)||0;
+  function calcNecBase(k){
+    var ano=Math.floor(k/100),mes=k%100;
+    var aRec=csvF.filter(function(r){return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')&&r.ano===ano&&r.mes===mes;}).reduce(function(s,r){return s+r.valor;},0);
+    var sOrc=0;Object.keys(DATA.previsto||{}).forEach(function(o){if(!obra||ccMatch(o,obra))sOrc+=parseFloat((DATA.previsto[o]&&(DATA.previsto[o][String(k)]||DATA.previsto[o][k]))||0)||0;});
+    return (aRec*0.96)-sOrc;
+  }
+  var necBase=colKeys.map(calcNecBase);
 
-  // Função de simulação completa dado premissas e array de % por mês
-  function simular(pctE,pctP,pctC,nP,pcts){
-    var ck=dataChavesStr?parseInt(dataChavesStr.split('-')[0])*100+(parseInt(dataChavesStr.split('-')[1])-1):null;
-    var estR=vEstTotal,pend=[],chavesPend=0,cAcum=0,minCaixa=Infinity;
+  function simular(pE,pP,pC,nP,pcts){
+    var estR=vEst,pend=[],chavP=0,ca=0,minC=Infinity;
     colKeys.forEach(function(k,i){
-      var ano=Math.floor(k/100),mes=k%100;
-      var aRec=csvFilt.filter(function(r){return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')&&r.ano===ano&&r.mes===mes;}).reduce(function(s,r){return s+r.valor;},0);
-      var saldoOrc=0;Object.keys(DATA.previsto||{}).forEach(function(o){if(!obra||ccMatch(o,obra))saldoOrc+=parseFloat((DATA.previsto[o]&&(DATA.previsto[o][String(k)]||DATA.previsto[o][k]))||0)||0;});
-      var necCaixa=(aRec*0.96)-saldoOrc;
-      var pct=pcts[i]||0;
-      var vendaMes=estR*(pct/100);estR-=vendaMes;
-      var valE=vendaMes*pctE,valP=vendaMes*pctP,valC=vendaMes*pctC;
-      var parcelaMes=nP>0?valP/nP:0;
-      if(vendaMes>0&&valC>0)chavesPend+=valC;
-      if(vendaMes>0&&parcelaMes>0)pend.push({parcela:parcelaMes,restante:nP});
-      var prev=pctE>0?valE:0;
-      pend=pend.filter(function(p){return p.restante>0;});
-      var pendAntes=vendaMes>0&&parcelaMes>0?pend.slice(0,-1):pend;
-      pendAntes.forEach(function(p){prev+=p.parcela;p.restante--;});
-      if(ck!==null&&k===ck)prev+=chavesPend;
-      var comissao=vendaMes*0.06,afetPrev=prev*0.04;
-      var necMensal=(necCaixa+prev)-(comissao+afetPrev);
-      cAcum=i===0?caixaInicialVal:cAcum+necMensal;
-      if(cAcum<minCaixa)minCaixa=cAcum;
+      var necC=necBase[i];
+      var pct=pcts[i]||0,vM=estR*(pct/100);estR-=vM;
+      var vE=vM*pE,vP=vM*pP,vC=vM*pC;
+      if(vM>0&&vC>0)chavP+=vC;
+      var pm=nP>0?vP/nP:0;
+      if(vM>0&&pm>0)pend.push({p:pm,r:nP});
+      var prev=pE>0?vE:0;
+      pend=pend.filter(function(x){return x.r>0;});
+      var antes=vM>0&&pm>0?pend.slice(0,-1):pend;
+      antes.forEach(function(x){prev+=x.p;x.r--;});
+      if(ck!==null&&k===ck)prev+=chavP;
+      var nM=(necC+prev)-(vM*0.06+prev*0.04);
+      ca=i===0?ciVal:ca+nM;
+      if(ca<minC)minC=ca;
     });
-    return minCaixa;
+    return minC;
   }
 
-  // Calcular Nec. Caixa de cada mês (sem vendas) para guiar distribuição
-  var necMeses=colKeys.map(function(k){
-    var ano=Math.floor(k/100),mes=k%100;
-    var aRec=csvFilt.filter(function(r){return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')&&r.ano===ano&&r.mes===mes;}).reduce(function(s,r){return s+r.valor;},0);
-    var saldoOrc=0;Object.keys(DATA.previsto||{}).forEach(function(o){if(!obra||ccMatch(o,obra))saldoOrc+=parseFloat((DATA.previsto[o]&&(DATA.previsto[o][String(k)]||DATA.previsto[o][k]))||0)||0;});
-    return (aRec*0.96)-saldoOrc;
-  });
+  function distribuirPcts(pE,pP,pC,nP){
+    var pcts=colKeys.map(function(){return 0;});
+    var pesos=necBase.map(function(n){return Math.max(0,-n);});
+    var totPeso=pesos.reduce(function(s,v){return s+v;},0);
+    var rest=100;
+    if(totPeso>0){
+      pesos.forEach(function(p,i){
+        if(rest<=0)return;
+        var v=Math.min(10,Math.floor((p/totPeso)*100));
+        pcts[i]=v;rest-=v;
+      });
+    }
+    for(var i=0;i<pcts.length&&rest>0;i++){
+      var add=Math.min(10-pcts[i],rest);
+      pcts[i]+=add;rest-=add;
+    }
+    return pcts;
+  }
 
-  var melhor={minCaixa:-Infinity,pctE:10,pctP:50,pctC:40,nP:24,pcts:[]};
-
-  // Grid de busca sobre premissas
+  var best={minC:-Infinity,pE:10,pP:50,pC:40,nP:24,pcts:[]};
   [0,10,15,20].forEach(function(e){
     [30,35,40,45,50].forEach(function(c){
-      var p=100-e-c;
-      if(p<0)return;
+      var p=100-e-c;if(p<0)return;
       [12,24,36,48,60].forEach(function(np){
-        // Distribuir % estoque: proporcional à necessidade negativa de cada mês
-        // Priorizar meses com necCaixa mais negativa, máx 10%/mês, total 100%
-        var pcts=colKeys.map(function(){return 0;});
-        var negPesos=necMeses.map(function(n){return Math.max(0,-n);});
-        var totalNeg=negPesos.reduce(function(s,v){return s+v;},0);
-        var restPct=100;
-        if(totalNeg>0){
-          negPesos.forEach(function(peso,i){
-            if(restPct<=0)return;
-            var proporcional=Math.min(10,Math.round((peso/totalNeg)*100*10)/10);
-            pcts[i]=proporcional;
-            restPct-=proporcional;
-          });
-        }
-        // Distribuir restante uniformemente nos primeiros meses
-        if(restPct>0){
-          for(var i=0;i<pcts.length&&restPct>0;i++){
-            var add=Math.min(10-pcts[i],restPct);
-            pcts[i]+=Math.round(add*10)/10;
-            restPct=Math.round((restPct-add)*10)/10;
-          }
-        }
+        var pcts=distribuirPcts(e/100,p/100,c/100,np);
         var mc=simular(e/100,p/100,c/100,np,pcts);
-        if(mc>melhor.minCaixa){melhor={minCaixa:mc,pctE:e,pctP:p,pctC:c,nP:np,pcts:pcts.slice()};}
+        if(mc>best.minC)best={minC:mc,pE:e,pP:p,pC:c,nP:np,pcts:pcts.slice()};
       });
     });
   });
 
-  // Aplicar melhor cenário
-  document.getElementById('dtm-pct-entrada').value=melhor.pctE;
-  document.getElementById('dtm-pct-parcelas').value=melhor.pctP;
-  document.getElementById('dtm-pct-chaves').value=melhor.pctC;
-  document.getElementById('dtm-parcelas').value=melhor.nP;
+  document.getElementById('dtm-pct-entrada').value=best.pE;
+  document.getElementById('dtm-pct-parcelas').value=best.pP;
+  document.getElementById('dtm-pct-chaves').value=best.pC;
+  document.getElementById('dtm-parcelas').value=best.nP;
   if(!DATA.dtmPct)DATA.dtmPct={};
-  colKeys.forEach(function(k,i){DATA.dtmPct[k]=melhor.pcts[i]||0;});
+  colKeys.forEach(function(k,i){DATA.dtmPct[k]=best.pcts[i]||0;});
   renderDtlhTabela();
-
-  var msg='Melhor cenário encontrado:
-'
-    +'• Entrada: '+melhor.pctE+'%
-'
-    +'• Parcelas: '+melhor.pctP+'% em '+melhor.nP+'x
-'
-    +'• Chaves: '+melhor.pctC+'%
-'
-    +'• Caixa mínimo projetado: R$ '+melhor.minCaixa.toLocaleString('pt-BR',{minimumFractionDigits:2})+'
-
-'
-    +(melhor.minCaixa>=0?'✓ Caixa mantido positivo!':'⚠ Melhor cenário possível, mas caixa ainda fica negativo em alguns meses.');
-  alert(msg);
+  var NL=String.fromCharCode(10);
+  alert('Melhor cenario encontrado:'+NL+'Entrada: '+best.pE+'%'+NL+'Parcelas: '+best.pP+'% em '+best.nP+'x'+NL+'Chaves: '+best.pC+'%'+NL+'Caixa minimo: R$ '+best.minC.toLocaleString('pt-BR',{minimumFractionDigits:2})+NL+(best.minC>=0?'Caixa mantido positivo!':'Melhor cenario possivel, caixa ainda negativo em algum mes.'));
 }
 function exportarProjecaoXLS(){
   var tbody=document.getElementById('dtm-tbody');
@@ -1645,7 +1615,7 @@ function exportarOrcamento(){}
     <div class="tbl-head">
       <div class="tbl-title">Projeção Mensal</div>
       <button onclick="exportarProjecaoXLS()" style="background:#1B6B35;color:#fff;border:none;padding:6px 12px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:4px">&#8595; Excel</button>
-      <button onclick="simularCenario()" style="background:#7D3C98;color:#fff;border:none;padding:6px 14px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:4px">&#9881; Simular Cenário</button>
+      <button onclick="simularCenario()" style="background:#7D3C98;color:#fff;border:none;padding:6px 14px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:4px">&#9881; Simular Cenario</button>
     </div>
 
     <!-- Totalizador de estoque -->
