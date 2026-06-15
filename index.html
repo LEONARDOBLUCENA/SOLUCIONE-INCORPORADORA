@@ -647,6 +647,93 @@ function renderDtlh(){
 
 function renderDtlhOrcTable(){}
 
+function exportarProjecaoXLS(){
+  var tbody=document.getElementById('dtm-tbody');
+  if(!tbody||!tbody.querySelector('tr td:not([colspan])')){alert('Nenhum dado para exportar.');return;}
+  var MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var rows=[['Mês/Ano','A Receber','Afetação (4%)','Fat. Líquido','Saldo Orç.','Nec. Caixa','% Est.','Prev. Vendas','Comissão 6%','Afet. Prevista','Nec. Caixa Mensal','Caixa Acumulado']];
+  // Ler dados da tabela renderizada
+  Array.from(tbody.querySelectorAll('tr')).forEach(function(tr){
+    var cells=Array.from(tr.querySelectorAll('td'));
+    if(!cells.length)return;
+    var row=cells.map(function(td){
+      var inp=td.querySelector('input');
+      return inp?inp.value:(td.textContent||'').trim().replace('R$ ','').replace(/\./g,'').replace(',','.');
+    });
+    if(row.some(function(c){return c&&c!=='—';}))rows.push(row);
+  });
+  var wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb,ws,'Projeção Mensal');
+  XLSX.writeFile(wb,'Solucione_Projecao_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
+}
+
+function simularMelhorCenario(){
+  // Parâmetros fixos do simulador
+  var obra=document.getElementById('dt-obra')&&document.getElementById('dt-obra').value||'';
+  var estObra=DATA.estoque.filter(function(u){return !obra||ccMatch(u.obra,obra);});
+  var vEstTotal=estObra.reduce(function(s,u){return s+(u.venda||0);},0);
+  if(!vEstTotal){alert('Nenhum estoque disponível para simular.');return;}
+
+  var hoje=new Date();
+  var mesAnterior=new Date(hoje.getFullYear(),hoje.getMonth()-1,1);
+  var keyMin=mesAnterior.getFullYear()*100+mesAnterior.getMonth();
+  var colSet=new Set();
+  DATA.csv.filter(function(r){return !obra||ccMatch(r.cc||'',obra);}).forEach(function(r){if(r.ano!=null&&r.mes!=null)colSet.add(r.ano*100+r.mes);});
+  Object.keys(DATA.previsto||{}).forEach(function(o){if(!obra||ccMatch(o,obra))Object.keys(DATA.previsto[o]).forEach(function(k){colSet.add(parseInt(k));});});
+  var colKeys=[...colSet].sort().filter(function(k){return k>=keyMin;});
+  if(!colKeys.length){alert('Nenhum mês disponível.');return;}
+
+  // Função de simulação: calcula caixa acumulado mínimo dado nParcelas, pctEntrada, pctVenda uniforme
+  function simular(nParcelas, pctEntrada, pctVenda){
+    var csvFilt=DATA.csv.filter(function(r){return !obra||ccMatch(r.cc||'',obra);});
+    var caixaInicialVal=parseFloat(document.getElementById('dt-caixa-inicial')&&document.getElementById('dt-caixa-inicial').value)||0;
+    var estoqueRest=vEstTotal;
+    var parcelasPendentes=[];
+    var caixaAcum=0;
+    var minCaixa=Infinity;
+    colKeys.forEach(function(k,idx){
+      var ano=Math.floor(k/100),mes=k%100;
+      var aRec=csvFilt.filter(function(r){return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')&&r.ano===ano&&r.mes===mes;}).reduce(function(s,r){return s+r.valor;},0);
+      var afet=aRec*0.04,fatLiq=aRec-afet;
+      var saldoOrc=0;Object.keys(DATA.previsto||{}).forEach(function(o){if(!obra||ccMatch(o,obra))saldoOrc+=parseFloat((DATA.previsto[o]&&(DATA.previsto[o][String(k)]||DATA.previsto[o][k]))||0)||0;});
+      var necCaixa=fatLiq-saldoOrc;
+      var vendaMes=estoqueRest*(pctVenda/100);estoqueRest-=vendaMes;
+      var entrada=vendaMes*pctEntrada;
+      var valorFin=vendaMes-entrada;
+      var parcelaMes=nParcelas>0?valorFin/nParcelas:0;
+      if(vendaMes>0)parcelasPendentes.push({parcela:parcelaMes,restante:nParcelas});
+      var prevVendas=entrada;
+      parcelasPendentes=parcelasPendentes.filter(function(p){return p.restante>0;});
+      parcelasPendentes.forEach(function(p){prevVendas+=p.parcela;p.restante--;});
+      var comissao=vendaMes*0.06,afetPrev=prevVendas*0.04;
+      var necMensal=(necCaixa+prevVendas)-(comissao+afetPrev);
+      caixaAcum=idx===0?caixaInicialVal:caixaAcum+necMensal;
+      if(caixaAcum<minCaixa)minCaixa=caixaAcum;
+    });
+    return minCaixa;
+  }
+
+  // Grid de busca: parcelas 40-80 (step 10), entrada 0-20% (step 5%), pctVenda 5-20% (step 5%)
+  var melhor={minCaixa:-Infinity,nParcelas:40,pctEntrada:0,pctVenda:10};
+  [40,50,60,70,80].forEach(function(np){
+    [0,5,10,15,20].forEach(function(ent){
+      [5,8,10,12,15,20].forEach(function(pv){
+        var mc=simular(np,ent/100,pv);
+        if(mc>melhor.minCaixa){melhor={minCaixa:mc,nParcelas:np,pctEntrada:ent,pctVenda:pv};}
+      });
+    });
+  });
+
+  // Aplicar melhor cenário
+  document.getElementById('dtm-parcelas').value=melhor.nParcelas;
+  document.getElementById('dtm-entrada-pct').value=melhor.pctEntrada;
+  // Preencher % estoque igual para todos os meses
+  if(!DATA.dtmPct)DATA.dtmPct={};
+  colKeys.forEach(function(k){DATA.dtmPct[k]=melhor.pctVenda;});
+  renderDtlhTabela();
+  alert('Melhor cenário encontrado:\n• Parcelas: '+melhor.nParcelas+'x\n• Entrada: '+melhor.pctEntrada+'%\n• % Estoque/mês: '+melhor.pctVenda+'%\n• Caixa mínimo projetado: R$ '+melhor.minCaixa.toLocaleString('pt-BR',{minimumFractionDigits:2}));
+}
+
 function renderDtlhTabela(){
   var obra=document.getElementById('dt-obra')&&document.getElementById('dt-obra').value||'';
   var entregaStr=document.getElementById('dt-entrega')&&document.getElementById('dt-entrega').value||'';
@@ -1496,6 +1583,10 @@ function exportarOrcamento(){}
   <div class="tbl-card" style="margin-top:24px">
     <div class="tbl-head">
       <div class="tbl-title">Projeção Mensal</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="exportarProjecaoXLS()" style="background:#1B6B35;color:#fff;border:none;padding:6px 12px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:4px">&#8595; Excel</button>
+        <button onclick="simularMelhorCenario()" style="background:#7D3C98;color:#fff;border:none;padding:6px 12px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:4px">&#9881; Simular Melhor Cenário</button>
+      </div>
     </div>
     <!-- Configuração -->
     <div style="display:flex;flex-wrap:wrap;gap:20px;padding:14px 20px;border-bottom:1px solid var(--border);align-items:center">
