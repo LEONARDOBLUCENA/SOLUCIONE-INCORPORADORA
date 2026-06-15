@@ -649,9 +649,18 @@ function renderDtlhOrcTable(){}
 
 function renderDtlhTabela(){
   var obra=document.getElementById('dt-obra')&&document.getElementById('dt-obra').value||'';
-  var entregaStr=document.getElementById('dt-entrega')&&document.getElementById('dt-entrega').value||'';
-  var entrega=entregaStr?new Date(entregaStr+'T23:59:59'):null;
   var nParcelas=parseInt(document.getElementById('dtm-parcelas')&&document.getElementById('dtm-parcelas').value)||10;
+  var pctEntrada=(parseFloat(document.getElementById('dtm-pct-entrada')&&document.getElementById('dtm-pct-entrada').value)||0)/100;
+  var pctParc=(parseFloat(document.getElementById('dtm-pct-parcelas')&&document.getElementById('dtm-pct-parcelas').value)||0)/100;
+  var pctChaves=(parseFloat(document.getElementById('dtm-pct-chaves')&&document.getElementById('dtm-pct-chaves').value)||0)/100;
+  var dataChavesStr=document.getElementById('dtm-data-chaves')&&document.getElementById('dtm-data-chaves').value||'';
+  // dataChavesStr formato YYYY-MM → colKey = YYYY*100+(MM-1) (0-based mes)
+  var chaveKey=dataChavesStr?parseInt(dataChavesStr.split('-')[0])*100+(parseInt(dataChavesStr.split('-')[1])-1):null;
+
+  // Validar soma = 100%
+  var soma=Math.round((pctEntrada+pctParc+pctChaves)*100);
+  var aviso=document.getElementById('dtm-pct-aviso');
+  if(aviso)aviso.textContent=soma!==100?'⚠ Entrada+Parcelas+Chaves deve somar 100% (atual: '+soma+'%)':'';
 
   // Estoque total
   var estObra=DATA.estoque.filter(function(u){return !obra||ccMatch(u.obra,obra);});
@@ -659,28 +668,38 @@ function renderDtlhTabela(){
   var el=document.getElementById('dtm-estoque-total');
   if(el)el.textContent=vEstTotal?fmt(vEstTotal):'—';
 
-  // Meses disponíveis nos dados CSV
+  // Meses disponíveis
   var csvFilt=DATA.csv.filter(function(r){return !obra||ccMatch(r.cc||'',obra);});
   var colSet=new Set();
   csvFilt.forEach(function(r){if(r.ano!=null&&r.mes!=null)colSet.add(r.ano*100+r.mes);});
-  // Adicionar meses do previsto do fluxo
   Object.keys(DATA.previsto||{}).forEach(function(o){
-    if(!obra||ccMatch(o,obra)){
-      Object.keys(DATA.previsto[o]).forEach(function(k){colSet.add(parseInt(k));});
-    }
+    if(!obra||ccMatch(o,obra))Object.keys(DATA.previsto[o]).forEach(function(k){colSet.add(parseInt(k));});
   });
-  // Filtrar: manter só a partir do mês anterior ao atual
+  // Incluir mês das chaves se definido
+  if(chaveKey!==null)colSet.add(chaveKey);
   var hoje=new Date();
-  var mesAnterior=new Date(hoje.getFullYear(),hoje.getMonth()-1,1);
-  var keyMin=mesAnterior.getFullYear()*100+mesAnterior.getMonth();
+  var keyMin=new Date(hoje.getFullYear(),hoje.getMonth()-1,1);
+  keyMin=keyMin.getFullYear()*100+keyMin.getMonth();
   var colKeys=[...colSet].sort().filter(function(k){return k>=keyMin;});
   if(!colKeys.length){
-    document.getElementById('dtm-tbody').innerHTML='<tr><td colspan="8"><div class="empty-state"><p>Nenhum dado disponível</p></div></td></tr>';
+    document.getElementById('dtm-tbody').innerHTML='<tr><td colspan="12"><div class="empty-state"><p>Nenhum dado disponível</p></div></td></tr>';
     return;
   }
 
   var MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var fmt2=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+
+  if(!DATA.dtmPct)DATA.dtmPct={};
+
+  // Calcular totalizador de estoque vendido
+  var pctTotalVendido=colKeys.reduce(function(s,k){return s+(parseFloat(DATA.dtmPct[k]||0)||0);},0);
+  var vVendido=vEstTotal*(pctTotalVendido/100);
+  var vDisp=vEstTotal-vVendido;
+  var set_=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
+  set_('dtm-pct-vendido',pctTotalVendido.toFixed(1)+'%');
+  set_('dtm-val-vendido',vVendido?fmt(vVendido):'—');
+  set_('dtm-pct-disp',(100-pctTotalVendido).toFixed(1)+'%');
+  set_('dtm-val-disp',vDisp>0?fmt(vDisp):'—');
 
   // Thead
   var thead=document.getElementById('dtm-thead');
@@ -700,71 +719,72 @@ function renderDtlhTabela(){
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:120px;background:#EAF4FB;'+SD+'">Caixa Acumulado</th>'
     +'</tr>';
 
-  // Carregar % por colKey salvo
-  if(!DATA.dtmPct)DATA.dtmPct={};
-
-  // Calcular previsão de vendas acumulativa
+  // Estrutura de recebíveis pendentes: {parcelaMes, restante} para parcelas; chaveValor acumulado separado
   var estoqueRest=vEstTotal;
-  var parcelasPendentes=[]; // [{parcela, restante}]
-
-  // Caixa Acumulado
+  var parcelasPend=[]; // parcelas mensais pendentes
+  var chavesPend=0;   // valor acumulado a receber nas chaves
   var caixaInicialVal=parseFloat(document.getElementById('dt-caixa-inicial')&&document.getElementById('dt-caixa-inicial').value)||0;
-  var caixaAcum=0; // acumulador
+  var caixaAcum=0;
   var rows=[];
+
   colKeys.forEach(function(k){
     var ano=Math.floor(k/100),mes=k%100;
-    // A Receber: FATURAMENTO com "A RECEBER" filtrado por obra e entrega
+
+    // A Receber do CSV
     var aRec=csvFilt.filter(function(r){
-      return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')
-        &&r.ano===ano&&r.mes===mes&&(!entrega||!r.data||r.data<=entrega);
+      return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER')&&r.ano===ano&&r.mes===mes;
     }).reduce(function(s,r){return s+r.valor;},0);
+    var afet=aRec*0.04,fatLiq=aRec-afet;
 
-    // Afetação
-    var afet=aRec*0.04;
-    // Fat Liquido
-    var fatLiq=aRec-afet;
-
-    // Saldo Orçamento: soma do previsto bruto (DATA.previsto) filtrado por obra
+    // Saldo Orçamento
     var saldoOrc=0;
     Object.keys(DATA.previsto||{}).forEach(function(o){
-      if(!obra||ccMatch(o,obra)){
-        saldoOrc+=parseFloat((DATA.previsto[o]&&(DATA.previsto[o][String(k)]||DATA.previsto[o][k]))||0)||0;
-      }
+      if(!obra||ccMatch(o,obra))saldoOrc+=parseFloat((DATA.previsto[o]&&(DATA.previsto[o][String(k)]||DATA.previsto[o][k]))||0)||0;
     });
-
-    // Necessidade de Caixa
     var necCaixa=fatLiq-saldoOrc;
 
-    // % do estoque deste mês
+    // % estoque vendido neste mês
     var pct=parseFloat(DATA.dtmPct[k]||0)||0;
-
-    // Calcular venda deste mês
     var vendaMes=estoqueRest*(pct/100);
     estoqueRest-=vendaMes;
-    var parcelaMes=vendaMes/nParcelas;
 
-    // Adicionar parcelas desta venda
-    if(vendaMes>0)parcelasPendentes.push({parcela:parcelaMes,restante:nParcelas});
+    // Decompor venda pelas premissas
+    var valEntrada=vendaMes*pctEntrada;
+    var valParc=vendaMes*pctParc;
+    var valChaves=vendaMes*pctChaves;
+    var parcelaMes=nParcelas>0?valParc/nParcelas:0;
 
-    // Somar todas as parcelas pendentes
+    // Acumular chaves a receber futuramente
+    if(vendaMes>0)chavesPend+=valChaves;
+
+    // Adicionar parcelas desta venda (distribuídas nos próximos meses)
+    if(vendaMes>0&&parcelaMes>0)parcelasPend.push({parcela:parcelaMes,restante:nParcelas});
+
+    // Prev. Vendas deste mês:
     var prevVendas=0;
-    parcelasPendentes=parcelasPendentes.filter(function(p){return p.restante>0;});
-    parcelasPendentes.forEach(function(p){prevVendas+=p.parcela;p.restante--;});
+    // 1. Entrada (se > 0%) lançada no mês da venda
+    if(pctEntrada>0)prevVendas+=valEntrada;
+    // 2. Parcelas de vendas anteriores (e atual se parcelas começam no mesmo mês)
+    // Parcelas começam no mês SEGUINTE — então só conta parcelasPend que já existiam antes desta venda
+    parcelasPend=parcelasPend.filter(function(p){return p.restante>0;});
+    // A venda atual acabou de ser adicionada — suas parcelas começam no próximo mês
+    // Portanto somamos parcelas de vendas ANTERIORES (excluindo a última adicionada)
+    var pendAntes=vendaMes>0&&parcelaMes>0?parcelasPend.slice(0,-1):parcelasPend;
+    pendAntes.forEach(function(p){prevVendas+=p.parcela;p.restante--;});
+    // Atualizar restante da venda atual (não decrementada acima)
+    if(vendaMes>0&&parcelaMes>0&&parcelasPend.length>0){
+      // já foi filtrada, a última é a atual — não decrementar aqui pois começa no próximo mês
+    }
+    // 3. Chaves: receber no mês da data de entrega
+    if(chaveKey!==null&&k===chaveKey)prevVendas+=chavesPend;
 
-    // Novas colunas
     var comissao=vendaMes*0.06;
     var afetPrev=prevVendas*0.04;
     var necCaixaMensal=(necCaixa+prevVendas)-(comissao+afetPrev);
-    // Caixa Acumulado: primeira linha = caixaInicialVal, demais = anterior + necCaixaMensal
-    if(rows.length===0){
-      caixaAcum=caixaInicialVal;
-    } else {
-      caixaAcum=caixaAcum+necCaixaMensal;
-    }
-    rows.push({k:k,ano:ano,mes:mes,aRec:aRec,afet:afet,fatLiq:fatLiq,saldoOrc:saldoOrc,necCaixa:necCaixa,pct:pct,prevVendas:prevVendas,comissao:comissao,afetPrev:afetPrev,necCaixaMensal:necCaixaMensal,caixaAcum:caixaAcum});
+    caixaAcum=rows.length===0?caixaInicialVal:caixaAcum+necCaixaMensal;
+    rows.push({k,ano,mes,aRec,afet,fatLiq,saldoOrc,necCaixa,pct,prevVendas,comissao,afetPrev,necCaixaMensal,caixaAcum});
   });
 
-  // Renderizar tbody
   var tbody=document.getElementById('dtm-tbody');
   tbody.innerHTML=rows.map(function(r){
     var necColor=r.necCaixa>=0?'#1B6B35':'#C0392B';
@@ -785,6 +805,20 @@ function renderDtlhTabela(){
       +'<td class="r" style="padding:6px 10px;font-size:12px;font-weight:700;color:'+(r.caixaAcum>=0?'#1a5276':'#C0392B')+';background:#EAF4FB">'+fmt2(r.caixaAcum)+'</td>'
       +'</tr>';
   }).join('');
+}
+function exportarProjecaoXLS(){
+  var tbody=document.getElementById('dtm-tbody');
+  if(!tbody||!tbody.querySelector('tr td:not([colspan])')){alert('Nenhum dado para exportar.');return;}
+  var rows=[['Mes/Ano','A Receber','Afetacao (4%)','Fat. Liquido','Saldo Orc.','Nec. Caixa','% Est.','Prev. Vendas','Comissao 6%','Afet. Prevista','Nec. Caixa Mensal','Caixa Acumulado']];
+  Array.from(tbody.querySelectorAll('tr')).forEach(function(tr){
+    var cells=Array.from(tr.querySelectorAll('td'));
+    if(!cells.length)return;
+    var row=cells.map(function(td){var inp=td.querySelector('input');return inp?inp.value:(td.textContent||'').trim();});
+    if(row.some(function(c){return c&&c!='—';}))rows.push(row);
+  });
+  var wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb,ws,'Projecao Mensal');
+  XLSX.writeFile(wb,'Solucione_Projecao_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
 }
 function adicionarOrcamento(){const obra=document.getElementById('orc-obra').value.trim(),tot=document.getElementById('orc-totalizador').value.trim(),cod=document.getElementById('orc-codigo').value.trim(),desc=document.getElementById('orc-descricao').value.trim(),val=parseBRNum(document.getElementById('orc-valor').value);if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderOrcamentoTable();renderDtlh();}
 function fPct(r,o){return o?'<span style="font-size:10px;font-weight:600;color:'+(r/o>1?'#C0392B':'#1B6B35')+'">'+(r/o*100).toFixed(1)+'%</span>':'<span style="color:#ccc;font-size:10px">—</span>';}
@@ -1492,24 +1526,62 @@ function exportarOrcamento(){}
   <div class="tbl-card" style="margin-top:24px">
     <div class="tbl-head">
       <div class="tbl-title">Projeção Mensal</div>
+      <button onclick="exportarProjecaoXLS()" style="background:#1B6B35;color:#fff;border:none;padding:6px 12px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:4px">&#8595; Excel</button>
     </div>
-    <!-- Configuração -->
-    <div style="display:flex;flex-wrap:wrap;gap:20px;padding:14px 20px;border-bottom:1px solid var(--border);align-items:center">
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:12px;color:var(--text3);font-weight:600">Estoque Total:</span>
-        <span id="dtm-estoque-total" style="font-size:13px;font-weight:700;color:var(--brand)">—</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:12px;color:var(--text3);font-weight:600">Nº de Parcelas:</span>
-        <input type="number" id="dtm-parcelas" value="10" min="1" step="1" onchange="renderDtlh()"
-          style="width:70px;border:1px solid var(--border);background:var(--bg);padding:5px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
-      </div>
+
+    <!-- Totalizador de estoque -->
+    <div style="display:flex;flex-wrap:wrap;gap:24px;padding:12px 20px;background:#f9f9f9;border-bottom:1px solid var(--border);align-items:center">
+      <div><span style="font-size:11px;color:var(--text3);font-weight:600">ESTOQUE TOTAL</span><br><span id="dtm-estoque-total" style="font-size:14px;font-weight:700;color:var(--brand)">—</span></div>
+      <div><span style="font-size:11px;color:var(--text3);font-weight:600">% VENDIDO</span><br><span id="dtm-pct-vendido" style="font-size:14px;font-weight:700;color:#C0392B">0%</span></div>
+      <div><span style="font-size:11px;color:var(--text3);font-weight:600">VALOR VENDIDO</span><br><span id="dtm-val-vendido" style="font-size:14px;font-weight:700;color:#C0392B">—</span></div>
+      <div><span style="font-size:11px;color:var(--text3);font-weight:600">% DISPONÍVEL</span><br><span id="dtm-pct-disp" style="font-size:14px;font-weight:700;color:#1B6B35">100%</span></div>
+      <div><span style="font-size:11px;color:var(--text3);font-weight:600">VALOR DISPONÍVEL</span><br><span id="dtm-val-disp" style="font-size:14px;font-weight:700;color:#1B6B35">—</span></div>
     </div>
+
+    <!-- Premissas -->
+    <div style="display:flex;flex-wrap:wrap;gap:16px;padding:14px 20px;border-bottom:1px solid var(--border);align-items:flex-end;background:#fffdf5">
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--text3);font-weight:600">Entrada %</label>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" id="dtm-pct-entrada" value="15" min="0" max="100" step="1" onchange="renderDtlhTabela()"
+            style="width:65px;border:1px solid var(--border);background:var(--bg);padding:5px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+          <span style="font-size:12px;color:var(--text3)">%</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--text3);font-weight:600">Parcelas %</label>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" id="dtm-pct-parcelas" value="15" min="0" max="100" step="1" onchange="renderDtlhTabela()"
+            style="width:65px;border:1px solid var(--border);background:var(--bg);padding:5px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+          <span style="font-size:12px;color:var(--text3)">%</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--text3);font-weight:600">Nº de Parcelas</label>
+        <input type="number" id="dtm-parcelas" value="10" min="1" step="1" onchange="renderDtlhTabela()"
+          style="width:65px;border:1px solid var(--border);background:var(--bg);padding:5px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--text3);font-weight:600">Chaves %</label>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="number" id="dtm-pct-chaves" value="70" min="0" max="100" step="1" onchange="renderDtlhTabela()"
+            style="width:65px;border:1px solid var(--border);background:var(--bg);padding:5px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+          <span style="font-size:12px;color:var(--text3)">%</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <label style="font-size:11px;color:var(--text3);font-weight:600">Data Entrega das Chaves</label>
+        <input type="month" id="dtm-data-chaves" onchange="renderDtlhTabela()"
+          style="border:1px solid var(--border);background:var(--bg);padding:5px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none">
+      </div>
+      <div id="dtm-pct-aviso" style="font-size:11px;color:#C0392B;font-weight:600;align-self:center"></div>
+    </div>
+
     <div style="overflow-x:auto;overflow-y:auto;max-height:500px">
       <table id="dtm-table" style="width:100%;border-collapse:collapse;min-width:900px">
         <thead id="dtm-thead"></thead>
         <tbody id="dtm-tbody">
-          <tr><td colspan="8"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>
+          <tr><td colspan="12"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>
         </tbody>
       </table>
     </div>
