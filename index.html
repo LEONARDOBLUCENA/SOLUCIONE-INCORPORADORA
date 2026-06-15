@@ -933,7 +933,8 @@ function gerarApresentacaoFluxo(){
   var tfoot=document.getElementById('tfoot-fluxo');
   var thead=document.getElementById('thead-fluxo');
   var tbody=document.getElementById('tbody-fluxo');
-  if(!tfoot||!thead||!tbody){alert('Carregue os dados do Fluxo de Caixa primeiro.');return;}
+  if(!tfoot||!thead||!tbody){alert('Carregue os dados do Fluxo de Caixa primeiro.');return null;}
+  try{
 
   // Extrair colunas de meses do thead
   var thCols=Array.from(thead.querySelectorAll('th')).map(function(th){return th.textContent.trim();});
@@ -1123,6 +1124,7 @@ function gerarApresentacaoFluxo(){
 
   // Ordem: Resumo → Detalhamento → Evolução
   return '<html><head><meta charset="UTF-8"><title>Relatório Fluxo de Caixa</title><style>'+css+'</style></head><body>'+slide1+slide2+slide3+'</body></html>';
+  }catch(e){alert('Erro ao gerar apresentação: '+e.message);return null;}
 }
 
 function gerarApresentacaoExec(){
@@ -1136,7 +1138,7 @@ function gerarApresentacaoExec(){
 
   var css='*{margin:0;padding:0;box-sizing:border-box;font-family:\'Helvetica Neue\',Arial,sans-serif;}'
     +'body{background:#fff;color:#1a1a1a;font-size:12px;}'
-    +'.slide{width:100%;min-height:100vh;padding:32px 40px;page-break-after:always;border-bottom:2px solid #eee;}'
+    +'.slide{width:100%;padding:28px 40px;page-break-after:always;border-bottom:2px solid #eee;}'
     +'.slide:last-child{page-break-after:auto;border-bottom:none;}'
     +'.header{border-bottom:3px solid #1B6B35;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;}'
     +'.title{font-size:20px;font-weight:700;color:#1B6B35;}'
@@ -1223,7 +1225,9 @@ function gerarApresentacaoExec(){
 }
 
 function abrirPDF(html){
+  if(!html)return;
   var w=window.open('','_blank');
+  if(!w){alert('Pop-up bloqueado. Permita pop-ups para este site.');return;}
   w.document.write(html);
   w.document.close();
   setTimeout(function(){w.print();},800);
