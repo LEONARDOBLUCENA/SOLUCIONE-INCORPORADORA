@@ -688,6 +688,7 @@ function renderDtlhTabela(){
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:100px;color:#C0392B;'+SD+'">Comissão 6%</th>'
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;color:#C0392B;'+SD+'">Afet. Prevista</th>'
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:120px;background:#e8f5e9;'+SD+'">Nec. Caixa Mensal</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:120px;background:#EAF4FB;'+SD+'">Caixa Acumulado</th>'
     +'</tr>';
 
   // Carregar % por colKey salvo
@@ -697,7 +698,11 @@ function renderDtlhTabela(){
   var estoqueRest=vEstTotal;
   var parcelasPendentes=[]; // [{parcela, restante}]
 
-  var rows=colKeys.map(function(k){
+  // Caixa Acumulado
+  var caixaInicialVal=parseFloat(document.getElementById('dt-caixa-inicial')&&document.getElementById('dt-caixa-inicial').value)||0;
+  var caixaAcum=0; // acumulador
+  var rows=[];
+  colKeys.forEach(function(k){
     var ano=Math.floor(k/100),mes=k%100;
     // A Receber: FATURAMENTO com "A RECEBER" filtrado por obra e entrega
     var aRec=csvFilt.filter(function(r){
@@ -741,7 +746,13 @@ function renderDtlhTabela(){
     var comissao=vendaMes*0.06;
     var afetPrev=prevVendas*0.04;
     var necCaixaMensal=(necCaixa+prevVendas)-(comissao+afetPrev);
-    return {k:k,ano:ano,mes:mes,aRec:aRec,afet:afet,fatLiq:fatLiq,saldoOrc:saldoOrc,necCaixa:necCaixa,pct:pct,prevVendas:prevVendas,comissao:comissao,afetPrev:afetPrev,necCaixaMensal:necCaixaMensal};
+    // Caixa Acumulado: primeira linha = caixaInicialVal, demais = anterior + necCaixaMensal
+    if(rows.length===0){
+      caixaAcum=caixaInicialVal;
+    } else {
+      caixaAcum=caixaAcum+necCaixaMensal;
+    }
+    rows.push({k:k,ano:ano,mes:mes,aRec:aRec,afet:afet,fatLiq:fatLiq,saldoOrc:saldoOrc,necCaixa:necCaixa,pct:pct,prevVendas:prevVendas,comissao:comissao,afetPrev:afetPrev,necCaixaMensal:necCaixaMensal,caixaAcum:caixaAcum});
   });
 
   // Renderizar tbody
@@ -762,6 +773,7 @@ function renderDtlhTabela(){
       +'<td class="r" style="padding:6px 10px;font-size:12px;color:#C0392B">'+fmt2(r.comissao)+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;color:#C0392B">'+fmt2(r.afetPrev)+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;font-weight:700;color:'+(r.necCaixaMensal>=0?'#1B6B35':'#C0392B')+';background:#f0faf0">'+fmt2(r.necCaixaMensal)+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;font-weight:700;color:'+(r.caixaAcum>=0?'#1a5276':'#C0392B')+';background:#EAF4FB">'+fmt2(r.caixaAcum)+'</td>'
       +'</tr>';
   }).join('');
 }
@@ -1460,11 +1472,10 @@ function exportarOrcamento(){}
   <div class="filters-bar">
     <span class="filter-label">Obra</span>
     <select class="filter-select" id="dt-obra" onchange="renderDtlh()"><option value="">Todas as obras</option></select>
-    <span class="filter-label" style="margin-left:16px">Entrega das Chaves</span>
-    <input type="date" id="dt-entrega" onchange="renderDtlh()"
-      style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;cursor:pointer">
-    <button onclick="document.getElementById('dt-entrega').value='';renderDtlh()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px">✕</button>
-    <button class="btn-ghost" style="margin-left:8px" onclick="document.getElementById('dt-obra').value='';document.getElementById('dt-entrega').value='';renderDtlh()">✕ Limpar</button>
+    <span class="filter-label" style="margin-left:16px">Caixa Inicial</span>
+    <input type="number" id="dt-caixa-inicial" placeholder="0,00" step="0.01" onchange="renderDtlhTabela()"
+      style="width:140px;border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+    <button class="btn-ghost" style="margin-left:8px" onclick="document.getElementById('dt-obra').value='';document.getElementById('dt-caixa-inicial').value='';renderDtlh()">✕ Limpar</button>
   </div>
 
 
