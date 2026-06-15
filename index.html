@@ -1030,27 +1030,8 @@ function gerarApresentacaoFluxo(){
 
   var slide1='<div class="slide">'
     +'<div class="header"><div><div class="title">Fluxo de Caixa</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
-    +'<div class="sec-title">Resumo do Período</div>'
-    +'<div class="kpi-grid">'
-    +'<div class="kpi"><div class="kpi-label">Faturamento Total</div><div class="kpi-val">'+fmtV(totFatV)+'</div></div>'
-    +'<div class="kpi neg"><div class="kpi-label">Pagamentos Total</div><div class="kpi-val">'+fmtV(totPagV)+'</div></div>'
-    +'<div class="kpi '+(totResV>=0?'':'neg')+'"><div class="kpi-label">Resultado do Período</div><div class="kpi-val">'+fmtV(totResV)+'</div></div>'
-    +'<div class="kpi blue"><div class="kpi-label">Saldo Final de Caixa</div><div class="kpi-val">'+saldoFinal+'</div></div>'
-    +'</div>';
+    ;  // KPIs removidos a pedido
 
-  // Saldo de Caixa mês a mês
-  if(saldoRow&&saldoRow.vals.length){
-    slide1+='<div class="sec-title">Saldo de Caixa — Evolução Mensal</div>'
-      +'<table><tr><th>Mês</th>';
-    var meses=thCols.slice(1,-1);
-    meses.forEach(function(m){slide1+='<th>'+m+'</th>';});
-    slide1+='</tr><tr><td>Saldo</td>';
-    saldoRow.vals.slice(0,-1).forEach(function(v){
-      var isNeg=v.includes('-');
-      slide1+='<td class="'+(isNeg?'badge-neg':'badge-pos')+'">'+v+'</td>';
-    });
-    slide1+='</tr></table>';
-  }
   slide1+='</div>';
 
   // Slide 2: Detalhamento por Conta
