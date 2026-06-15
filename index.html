@@ -1064,6 +1064,57 @@ function gerarApresentacaoFluxo(){
   slide3+='<tr style="background:#f0f7f0;font-weight:700"><td>Total</td><td>'+fmtV(totPrev)+'</td></tr>';
   slide3+='</table></div>';
 
+  // Slide 3: Evolução de Caixa Mensal (Previsto Desembolso, Previsto Recebimento, Saldo)
+  // Extrair previsto desembolso e recebimento por mês dos dados CSV + previsto
+  var obraF2=obraSel&&obraSel!=='Todas as obras'?obraSel:'';
+  var mesesMap={};
+  // Previsto desembolso: DATA.previsto por mês
+  Object.keys(DATA.previsto||{}).forEach(function(obra){
+    if(!obraF2||ccMatch(obra,obraF2)){
+      Object.entries(DATA.previsto[obra]).forEach(function(kv){
+        var k=String(kv[0]),v=parseFloat(kv[1])||0;
+        if(!mesesMap[k])mesesMap[k]={desp:0,rec:0};
+        mesesMap[k].desp+=v;
+      });
+    }
+  });
+  // Previsto recebimento: FATURAMENTO "A RECEBER" por mês do CSV
+  var csvF2=DATA.csv.filter(function(r){return !obraF2||ccMatch(r.cc||'',obraF2);});
+  csvF2.filter(function(r){return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER');}).forEach(function(r){
+    if(r.ano==null||r.mes==null)return;
+    var k=r.ano*100+r.mes+'';
+    if(!mesesMap[k])mesesMap[k]={desp:0,rec:0};
+    mesesMap[k].rec+=r.valor;
+  });
+  var mesesOrdenados=Object.keys(mesesMap).sort();
+  var MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var slide3='<div class="slide">'
+    +'<div class="header"><div><div class="title">Evolução de Caixa Mensal</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
+    +'<table><tr><th>Mês/Ano</th><th>Prev. Desembolso</th><th>Prev. Recebimento</th><th>Saldo</th></tr>';
+  var acumSaldo=0;
+  mesesOrdenados.forEach(function(k){
+    var m=mesesMap[k];
+    var ano=Math.floor(parseInt(k)/100),mes=parseInt(k)%100;
+    var label=MESES_ABR[mes]+'/'+ano;
+    var saldo=m.rec-m.desp;acumSaldo+=saldo;
+    slide3+='<tr>'
+      +'<td>'+label+'</td>'
+      +'<td class="neg-c">'+fmtV(m.desp)+'</td>'
+      +'<td class="pos">'+fmtV(m.rec)+'</td>'
+      +'<td class="'+(saldo>=0?'pos':'neg-c')+'">'+fmtV(saldo)+'</td>'
+      +'</tr>';
+  });
+  var totDesp=mesesOrdenados.reduce(function(s,k){return s+(mesesMap[k].desp||0);},0);
+  var totRec=mesesOrdenados.reduce(function(s,k){return s+(mesesMap[k].rec||0);},0);
+  slide3+='<tr style="background:#f0f7f0;font-weight:700">'
+    +'<td>Total</td>'
+    +'<td class="neg-c">'+fmtV(totDesp)+'</td>'
+    +'<td class="pos">'+fmtV(totRec)+'</td>'
+    +'<td class="'+(totRec-totDesp>=0?'pos':'neg-c')+'">'+fmtV(totRec-totDesp)+'</td>'
+    +'</tr>';
+  slide3+='</table></div>';
+
+  // Ordem: Resumo → Detalhamento → Evolução
   return '<html><head><meta charset="UTF-8"><title>Relatório Fluxo de Caixa</title><style>'+css+'</style></head><body>'+slide1+slide2+slide3+'</body></html>';
 }
 
@@ -1119,26 +1170,15 @@ function gerarApresentacaoExec(){
   var vlrDisp=document.getElementById('dtm-val-disp')?.textContent||'—';
 
   var slide1='<div class="slide">'
-    +'<div class="header"><div><div class="title">Resumo Executivo — Premissas e Estoque</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
-    +'<div class="sec-title">Premissas Comerciais</div>'
+    +'<div class="header"><div><div class="title">Premissas Comerciais</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
     +'<div class="grid3">'
     +'<div class="card"><div class="card-label">Entrada</div><div class="card-val">'+pctE+'%</div></div>'
     +'<div class="card gold"><div class="card-label">Parcelamento</div><div class="card-val">'+pctP+'% em '+nParc+'x</div></div>'
     +'<div class="card blue"><div class="card-label">Chaves</div><div class="card-val">'+pctC+'%</div></div>'
     +'</div>'
-    +'<div class="grid2" style="margin-top:8px">'
-    +'<div class="card blue"><div class="card-label">Data Entrega das Chaves</div><div class="card-val" style="font-size:14px">'+dChavesF+'</div></div>'
-    +'<div class="card"><div class="card-label">Soma dos Percentuais</div><div class="card-val" style="font-size:14px">'+(parseInt(pctE)+parseInt(pctP)+parseInt(pctC))+'%</div></div>'
-    +'</div>'
-    +'<div class="sec-title">Controle de Estoque</div>'
-    +'<div class="grid3">'
-    +'<div class="card"><div class="card-label">Estoque Total</div><div class="card-val" style="font-size:14px">'+estTotal+'</div></div>'
-    +'<div class="card"><div class="card-label">Total de Unidades</div><div class="card-val" style="font-size:14px">'+unidTotal+'</div></div>'
-    +'<div class="card gold"><div class="card-label">Valor Médio/Unidade</div><div class="card-val" style="font-size:14px">'+vlrMedio+'</div></div>'
-    +'</div>'
-    +'<div class="grid2">'
-    +'<div class="card neg"><div class="card-label">Unidades Vendidas / Valor</div><div class="card-val" style="font-size:14px">'+unidVend+'</div><div style="font-size:12px;color:#C0392B;margin-top:4px">'+vlrVend+'</div></div>'
-    +'<div class="card"><div class="card-label">Unidades Disponíveis / Valor</div><div class="card-val" style="font-size:14px">'+unidDisp+'</div><div style="font-size:12px;color:#1B6B35;margin-top:4px">'+vlrDisp+'</div></div>'
+    +'<div class="grid2" style="margin-top:16px">'
+    +'<div class="card blue"><div class="card-label">Data Entrega das Chaves</div><div class="card-val" style="font-size:16px">'+dChavesF+'</div></div>'
+    +'<div class="card"><div class="card-label">Número de Parcelas</div><div class="card-val" style="font-size:16px">'+nParc+'x</div></div>'
     +'</div>'
     +'</div>';
 
