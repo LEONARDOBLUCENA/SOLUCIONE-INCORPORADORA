@@ -444,7 +444,14 @@ function renderFluxo(){
 
   // Linhas de previsto para o tfoot
   const prevRows=obrasVis.map(obra=>{
-    const pVals=colKeys.map(k=>parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0);
+    // Descontar realizado das contas 2010304 e 2010401 no mesmo mes/obra
+    const contasDesc=['2010304','2010401'];
+    const pVals=colKeys.map(k=>{
+      const prevBruto=parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0;
+      const ano=Math.floor(k/100),mes=k%100;
+      const realizado=DATA.csv.filter(r=>ccMatch(r.cc||'',obra)&&r.ano===ano&&r.mes===mes&&r.tipo==='PAGAMENTO'&&contasDesc.some(c=>r.conta&&r.conta.includes(c))).reduce((s,r)=>s+r.valor,0);
+      return Math.max(0,prevBruto-realizado);
+    });
     const pTot=pVals.reduce((s,v)=>s+v,0);
     return '<tr style="background:#FEF9E7"><td style="'+SD+'#FEF9E7;padding:4px 8px;font-size:11px;color:#B7950B;font-weight:600">Previsto — '+obra+'</td>'
       +pVals.map((v,i)=>'<td style="padding:2px 3px"><input type="number" value="'+(v||'')+'" placeholder="0"'
