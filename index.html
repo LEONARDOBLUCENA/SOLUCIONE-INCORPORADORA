@@ -1095,7 +1095,10 @@ function gerarApresentacaoFluxo(){
     if(!mesesMap[k])mesesMap[k]={desp:0,rec:0};
     mesesMap[k].rec+=r.valor;
   });
-  var mesesOrdenados=Object.keys(mesesMap).sort();
+  // Filtrar apenas meses a partir do mes atual
+  var hojeObj=new Date();
+  var keyAtual=hojeObj.getFullYear()*100+hojeObj.getMonth();
+  var mesesOrdenados=Object.keys(mesesMap).sort().filter(function(k){return parseInt(k)>=keyAtual;});
   var MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var slide3='<div class="slide">'
     +'<div class="header"><div><div class="title">Evolução de Caixa Mensal</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
