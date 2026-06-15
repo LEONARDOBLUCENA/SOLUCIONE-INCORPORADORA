@@ -924,6 +924,264 @@ function simularCenario(){
   var NL=String.fromCharCode(10);
   alert('Melhor cenario encontrado:'+NL+'Entrada: '+best.pE+'%'+NL+'Parcelas: '+best.pP+'% em '+best.nP+'x'+NL+'Chaves: '+best.pC+'%'+NL+'Caixa minimo: R$ '+best.minC.toLocaleString('pt-BR',{minimumFractionDigits:2})+NL+(best.minC>=0?'Caixa mantido positivo!':'Melhor cenario possivel, caixa ainda negativo em algum mes.'));
 }
+function gerarApresentacaoFluxo(){
+  var obraSel=document.getElementById('fc-obra')?.value||'Todas as obras';
+  var hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  var fmtV=function(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+
+  // Coletar dados do tfoot (Resultado, Caixa Inicial, Saldo de Caixa)
+  var tfoot=document.getElementById('tfoot-fluxo');
+  var thead=document.getElementById('thead-fluxo');
+  var tbody=document.getElementById('tbody-fluxo');
+  if(!tfoot||!thead||!tbody){alert('Carregue os dados do Fluxo de Caixa primeiro.');return;}
+
+  // Extrair colunas de meses do thead
+  var thCols=Array.from(thead.querySelectorAll('th')).map(function(th){return th.textContent.trim();});
+  // Extrair linhas do tbody
+  var tbRows=Array.from(tbody.querySelectorAll('tr')).map(function(tr){
+    return Array.from(tr.querySelectorAll('td')).map(function(td){return td.textContent.trim();});
+  });
+  // Extrair linhas do tfoot
+  var tfRows=Array.from(tfoot.querySelectorAll('tr')).map(function(tr){
+    return {
+      label:tr.querySelector('td')?.textContent.trim()||'',
+      vals:Array.from(tr.querySelectorAll('td')).slice(1).map(function(td){return td.textContent.trim();})
+    };
+  });
+
+  // Previsto por ano
+  var prevAnos={};
+  Object.keys(DATA.previsto||{}).forEach(function(obra){
+    if(!obraSel||obraSel==='Todas as obras'||ccMatch(obra,obraSel)){
+      Object.entries(DATA.previsto[obra]).forEach(function(kv){
+        var k=parseInt(kv[0]),v=parseFloat(kv[1])||0;
+        var ano=Math.floor(k/100);
+        prevAnos[ano]=(prevAnos[ano]||0)+v;
+      });
+    }
+  });
+
+  // Montar HTML
+  var NL=String.fromCharCode(10);
+  var css='*{margin:0;padding:0;box-sizing:border-box;font-family:\'Helvetica Neue\',Arial,sans-serif;}'
+    +'body{background:#fff;color:#1a1a1a;font-size:12px;}'
+    +'.slide{width:100%;min-height:100vh;padding:32px 40px;page-break-after:always;border-bottom:2px solid #eee;}'
+    +'.slide:last-child{page-break-after:auto;border-bottom:none;}'
+    +'.header{border-bottom:3px solid #1B6B35;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;}'
+    +'.title{font-size:20px;font-weight:700;color:#1B6B35;}'
+    +'.sub{font-size:11px;color:#888;margin-top:4px;}'
+    +'.date{font-size:11px;color:#aaa;}'
+    +'.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}'
+    +'.kpi{background:#f9f9f9;border-left:4px solid #1B6B35;padding:12px 16px;}'
+    +'.kpi.neg{border-left-color:#C0392B;}'
+    +'.kpi.blue{border-left-color:#1a5276;}'
+    +'.kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:6px;}'
+    +'.kpi-val{font-size:16px;font-weight:700;color:#1B6B35;}'
+    +'.kpi.neg .kpi-val{color:#C0392B;}.kpi.blue .kpi-val{color:#1a5276;}'
+    +'table{width:100%;border-collapse:collapse;font-size:10px;}'
+    +'th{background:#1B6B35;color:#fff;padding:6px 8px;text-align:right;white-space:nowrap;}'
+    +'th:first-child{text-align:left;}'
+    +'td{padding:5px 8px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;}'
+    +'td:first-child{text-align:left;font-weight:500;}'
+    +'tr:hover{background:#f5f5f5;}'
+    +'.sec-title{font-size:13px;font-weight:700;color:#1B6B35;margin:20px 0 10px;border-bottom:1px solid #e0e0e0;padding-bottom:6px;}'
+    +'.badge-pos{color:#1B6B35;font-weight:600;}.badge-neg{color:#C0392B;font-weight:600;}'
+    +'@media print{.slide{page-break-after:always;min-height:auto;}}';
+
+  // Slide 1: Resumo do Período
+  var resRow=tfRows.find(function(r){return r.label.includes('Resultado');});
+  var saldoRow=tfRows.find(function(r){return r.label.includes('Saldo');});
+  var ciRow=tfRows.find(function(r){return r.label.includes('Caixa Inicial');});
+  var totFat=0,totPag=0;
+  tbRows.forEach(function(r){
+    if(r.length<2)return;
+    // linhas de total têm valores
+    var last=r[r.length-1]||'';
+    var n=parseFloat(last.replace(/\./g,'').replace(',','.'))||0;
+  });
+  // Usar tfoot Resultado do Período - última coluna = total
+  var resVals=resRow?resRow.vals:[];
+  var resTotal=resVals.length?resVals[resVals.length-1]:'—';
+  var saldoFinal=saldoRow?saldoRow.vals[saldoRow.vals.length-1]:'—';
+  var ciInicial=ciRow?ciRow.vals[0]:'—';
+
+  // Calcular totais de faturamento e pagamento direto dos dados
+  var obraF=obraSel&&obraSel!=='Todas as obras'?obraSel:'';
+  var csvF=DATA.csv.filter(function(r){return !obraF||ccMatch(r.cc||'',obraF);});
+  var totFatV=csvF.filter(function(r){return r.tipo==='FATURAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var totDescV=csvF.filter(function(r){return r.tipo==='DESCONTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var totPagV=csvF.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var totResV=totFatV-totDescV-totPagV;
+
+  var slide1='<div class="slide">'
+    +'<div class="header"><div><div class="title">Fluxo de Caixa</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
+    +'<div class="sec-title">Resumo do Período</div>'
+    +'<div class="kpi-grid">'
+    +'<div class="kpi"><div class="kpi-label">Faturamento Total</div><div class="kpi-val">'+fmtV(totFatV)+'</div></div>'
+    +'<div class="kpi neg"><div class="kpi-label">Pagamentos Total</div><div class="kpi-val">'+fmtV(totPagV)+'</div></div>'
+    +'<div class="kpi '+(totResV>=0?'':'neg')+'"><div class="kpi-label">Resultado do Período</div><div class="kpi-val">'+fmtV(totResV)+'</div></div>'
+    +'<div class="kpi blue"><div class="kpi-label">Saldo Final de Caixa</div><div class="kpi-val">'+saldoFinal+'</div></div>'
+    +'</div>';
+
+  // Saldo de Caixa mês a mês
+  if(saldoRow&&saldoRow.vals.length){
+    slide1+='<div class="sec-title">Saldo de Caixa — Evolução Mensal</div>'
+      +'<table><tr><th>Mês</th>';
+    var meses=thCols.slice(1,-1);
+    meses.forEach(function(m){slide1+='<th>'+m+'</th>';});
+    slide1+='</tr><tr><td>Saldo</td>';
+    saldoRow.vals.slice(0,-1).forEach(function(v){
+      var isNeg=v.includes('-');
+      slide1+='<td class="'+(isNeg?'badge-neg':'badge-pos')+'">'+v+'</td>';
+    });
+    slide1+='</tr></table>';
+  }
+  slide1+='</div>';
+
+  // Slide 2: Detalhamento por Conta
+  var slide2='<div class="slide">'
+    +'<div class="header"><div><div class="title">Detalhamento por Conta</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
+    +'<table><tr>';
+  thCols.forEach(function(th,i){slide2+='<th'+(i===0?' style="min-width:200px"':'')+'>'+th+'</th>';});
+  slide2+='</tr>';
+  tbRows.forEach(function(r,i){
+    if(!r.length)return;
+    var isSec=r.length===1||(r[0]&&r[0].includes('▶'));
+    slide2+='<tr style="'+(isSec?'background:#f0f7f0;font-weight:700;':i%2===0?'background:#fafafa;':'')+'">';
+    r.forEach(function(c,ci){slide2+='<td>'+c+'</td>';});
+    slide2+='</tr>';
+  });
+  slide2+='</table></div>';
+
+  // Slide 3: Previsto por Ano
+  var slide3='<div class="slide">'
+    +'<div class="header"><div><div class="title">Previsto de Desembolso</div><div class="sub">'+obraSel+' — Resumo Anual</div></div><div class="date">'+hoje+'</div></div>'
+    +'<table><tr><th>Ano</th><th>Previsto Total</th></tr>';
+  Object.keys(prevAnos).sort().forEach(function(ano){
+    slide3+='<tr><td>'+ano+'</td><td>'+fmtV(prevAnos[ano])+'</td></tr>';
+  });
+  var totPrev=Object.values(prevAnos).reduce(function(s,v){return s+v;},0);
+  slide3+='<tr style="background:#f0f7f0;font-weight:700"><td>Total</td><td>'+fmtV(totPrev)+'</td></tr>';
+  slide3+='</table></div>';
+
+  return '<html><head><meta charset="UTF-8"><title>Relatório Fluxo de Caixa</title><style>'+css+'</style></head><body>'+slide1+slide2+slide3+'</body></html>';
+}
+
+function gerarApresentacaoExec(){
+  var obraSel=document.getElementById('dt-obra')?.value||'Todas as obras';
+  var hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  var fmtV=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+
+  var thead=document.getElementById('dtm-thead');
+  var tbody=document.getElementById('dtm-tbody');
+  if(!tbody||!tbody.querySelector('tr td:not([colspan])')){alert('Carregue os dados do Resumo Executivo primeiro.');return;}
+
+  var css='*{margin:0;padding:0;box-sizing:border-box;font-family:\'Helvetica Neue\',Arial,sans-serif;}'
+    +'body{background:#fff;color:#1a1a1a;font-size:12px;}'
+    +'.slide{width:100%;min-height:100vh;padding:32px 40px;page-break-after:always;border-bottom:2px solid #eee;}'
+    +'.slide:last-child{page-break-after:auto;border-bottom:none;}'
+    +'.header{border-bottom:3px solid #1B6B35;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;}'
+    +'.title{font-size:20px;font-weight:700;color:#1B6B35;}'
+    +'.sub{font-size:11px;color:#888;margin-top:4px;}'
+    +'.date{font-size:11px;color:#aaa;}'
+    +'.grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;}'
+    +'.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:24px;}'
+    +'.card{background:#f9f9f9;border-left:4px solid #1B6B35;padding:14px 18px;}'
+    +'.card.neg{border-left-color:#C0392B;}.card.blue{border-left-color:#1a5276;}.card.gold{border-left-color:#B7950B;}'
+    +'.card-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:6px;}'
+    +'.card-val{font-size:18px;font-weight:700;color:#1B6B35;}'
+    +'.card.neg .card-val{color:#C0392B;}.card.blue .card-val{color:#1a5276;}.card.gold .card-val{color:#B7950B;}'
+    +'.sec-title{font-size:13px;font-weight:700;color:#1B6B35;margin:20px 0 10px;border-bottom:1px solid #e0e0e0;padding-bottom:6px;}'
+    +'table{width:100%;border-collapse:collapse;font-size:10px;}'
+    +'th{background:#1B6B35;color:#fff;padding:6px 8px;text-align:right;white-space:nowrap;}'
+    +'th:first-child{text-align:left;}'
+    +'td{padding:5px 8px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;}'
+    +'td:first-child{text-align:left;}'
+    +'.pos{color:#1B6B35;font-weight:600;}.neg-c{color:#C0392B;font-weight:600;}.blue-c{color:#1a5276;font-weight:600;}'
+    +'tr:nth-child(even){background:#fafafa;}'
+    +'@media print{.slide{page-break-after:always;min-height:auto;}}';
+
+  // Premissas
+  var pctE=document.getElementById('dtm-pct-entrada')?.value||'0';
+  var pctP=document.getElementById('dtm-pct-parcelas')?.value||'0';
+  var pctC=document.getElementById('dtm-pct-chaves')?.value||'0';
+  var nParc=document.getElementById('dtm-parcelas')?.value||'—';
+  var dChaves=document.getElementById('dtm-data-chaves')?.value||'';
+  var dChavesF=dChaves?new Date(dChaves+'-01').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}):'Não definida';
+
+  // Estoque
+  var estTotal=document.getElementById('dtm-estoque-total')?.textContent||'—';
+  var unidTotal=document.getElementById('dtm-unid-total')?.textContent||'—';
+  var vlrMedio=document.getElementById('dtm-vlr-medio')?.textContent||'—';
+  var unidVend=document.getElementById('dtm-pct-vendido')?.textContent||'—';
+  var vlrVend=document.getElementById('dtm-val-vendido')?.textContent||'—';
+  var unidDisp=document.getElementById('dtm-pct-disp')?.textContent||'—';
+  var vlrDisp=document.getElementById('dtm-val-disp')?.textContent||'—';
+
+  var slide1='<div class="slide">'
+    +'<div class="header"><div><div class="title">Resumo Executivo — Premissas e Estoque</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
+    +'<div class="sec-title">Premissas Comerciais</div>'
+    +'<div class="grid3">'
+    +'<div class="card"><div class="card-label">Entrada</div><div class="card-val">'+pctE+'%</div></div>'
+    +'<div class="card gold"><div class="card-label">Parcelamento</div><div class="card-val">'+pctP+'% em '+nParc+'x</div></div>'
+    +'<div class="card blue"><div class="card-label">Chaves</div><div class="card-val">'+pctC+'%</div></div>'
+    +'</div>'
+    +'<div class="grid2" style="margin-top:8px">'
+    +'<div class="card blue"><div class="card-label">Data Entrega das Chaves</div><div class="card-val" style="font-size:14px">'+dChavesF+'</div></div>'
+    +'<div class="card"><div class="card-label">Soma dos Percentuais</div><div class="card-val" style="font-size:14px">'+(parseInt(pctE)+parseInt(pctP)+parseInt(pctC))+'%</div></div>'
+    +'</div>'
+    +'<div class="sec-title">Controle de Estoque</div>'
+    +'<div class="grid3">'
+    +'<div class="card"><div class="card-label">Estoque Total</div><div class="card-val" style="font-size:14px">'+estTotal+'</div></div>'
+    +'<div class="card"><div class="card-label">Total de Unidades</div><div class="card-val" style="font-size:14px">'+unidTotal+'</div></div>'
+    +'<div class="card gold"><div class="card-label">Valor Médio/Unidade</div><div class="card-val" style="font-size:14px">'+vlrMedio+'</div></div>'
+    +'</div>'
+    +'<div class="grid2">'
+    +'<div class="card neg"><div class="card-label">Unidades Vendidas / Valor</div><div class="card-val" style="font-size:14px">'+unidVend+'</div><div style="font-size:12px;color:#C0392B;margin-top:4px">'+vlrVend+'</div></div>'
+    +'<div class="card"><div class="card-label">Unidades Disponíveis / Valor</div><div class="card-val" style="font-size:14px">'+unidDisp+'</div><div style="font-size:12px;color:#1B6B35;margin-top:4px">'+vlrDisp+'</div></div>'
+    +'</div>'
+    +'</div>';
+
+  // Slide 2: Projeção Mensal
+  var thCols=Array.from(thead.querySelectorAll('th')).map(function(th){return th.textContent.trim();});
+  var tbRows=Array.from(tbody.querySelectorAll('tr')).map(function(tr){
+    return Array.from(tr.querySelectorAll('td')).map(function(td){
+      var inp=td.querySelector('input');
+      return inp?inp.value:(td.textContent||'').trim();
+    });
+  });
+
+  var slide2='<div class="slide">'
+    +'<div class="header"><div><div class="title">Projeção Mensal de Caixa</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
+    +'<table><tr>';
+  // Colunas selecionadas: Mês/Ano, A Receber, Nec. Caixa, Prev. Vendas, Nec. Caixa Mensal, Caixa Acumulado
+  var colIdx=[0,1,5,7,10,11];
+  var colLabels=['Mês/Ano','A Receber','Nec. Caixa','Prev. Vendas','Nec. Caixa Mensal','Caixa Acumulado'];
+  colLabels.forEach(function(l){slide2+='<th>'+l+'</th>';});
+  slide2+='</tr>';
+  tbRows.forEach(function(r,i){
+    if(!r.length||!r[0])return;
+    slide2+='<tr>';
+    colIdx.forEach(function(ci,li){
+      var v=r[ci]||'—';
+      var cls='';
+      if(li>0){var isNeg=v.includes('-');cls=' class="'+(isNeg?'neg-c':li===5?'blue-c':'pos')+'"';}
+      slide2+='<td'+cls+'>'+v+'</td>';
+    });
+    slide2+='</tr>';
+  });
+  slide2+='</table></div>';
+
+  return '<html><head><meta charset="UTF-8"><title>Relatório Resumo Executivo</title><style>'+css+'</style></head><body>'+slide1+slide2+'</body></html>';
+}
+
+function abrirPDF(html){
+  var w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(function(){w.print();},800);
+}
+
 function exportarProjecaoXLS(){
   var tbody=document.getElementById('dtm-tbody');
   if(!tbody||!tbody.querySelector('tr td:not([colspan])')){alert('Nenhum dado para exportar.');return;}
@@ -1234,6 +1492,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
         <select class="filter-select" id="fc-obra" onchange="renderCaixaInicialCampos();renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
         <span class="tbl-badge" id="fc-badge">—</span>
         <button class="btn-export" onclick="exportarFluxo()" style="padding:5px 12px;font-size:11px">&#8595; Excel</button>
+        <button onclick="abrirPDF(gerarApresentacaoFluxo())" style="background:#1a5276;color:#fff;border:none;padding:5px 12px;font-size:11px;cursor:pointer;border-radius:3px">&#128196; Apresentação</button>
       </div>
     </div>
     <div style="overflow-x:auto;overflow-y:auto;max-height:65vh;font-size:12px">
@@ -1646,6 +1905,7 @@ function exportarOrcamento(){}
       <div class="tbl-title">Projeção Mensal</div>
       <button onclick="exportarProjecaoXLS()" style="background:#1B6B35;color:#fff;border:none;padding:6px 12px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:4px">&#8595; Excel</button>
       <button onclick="simularCenario()" style="background:#7D3C98;color:#fff;border:none;padding:6px 14px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:4px">&#9881; Simular Cenario</button>
+      <button onclick="abrirPDF(gerarApresentacaoExec())" style="background:#1a5276;color:#fff;border:none;padding:6px 14px;font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;border-radius:4px">&#128196; Apresentação</button>
     </div>
 
     <!-- Totalizador de estoque -->
