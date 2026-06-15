@@ -1069,13 +1069,22 @@ function gerarApresentacaoFluxo(){
   // Extrair previsto desembolso e recebimento por mês dos dados CSV + previsto
   var obraF2=obraSel&&obraSel!=='Todas as obras'?obraSel:'';
   var mesesMap={};
-  // Previsto desembolso: DATA.previsto + Pagamentos realizados do CSV por mês
+  // Previsto desembolso LIQUIDO: previsto bruto − realizado contas 2010304/2010401 + pagamentos CSV
+  var contasDesc=['2010304','2010401'];
   Object.keys(DATA.previsto||{}).forEach(function(obra){
     if(!obraF2||ccMatch(obra,obraF2)){
       Object.entries(DATA.previsto[obra]).forEach(function(kv){
         var k=String(kv[0]),v=parseFloat(kv[1])||0;
+        if(!v)return;
+        // Desconto: realizado nas contas especificas no mesmo mes/obra
+        var ano=Math.floor(parseInt(k)/100),mes=parseInt(k)%100;
+        var realizado=csvF2.filter(function(r){
+          return r.tipo==='PAGAMENTO'&&r.ano===ano&&r.mes===mes
+            &&contasDesc.some(function(c){return r.conta&&r.conta.includes(c);});
+        }).reduce(function(s,r){return s+r.valor;},0);
+        var vLiq=Math.max(0,v-realizado);
         if(!mesesMap[k])mesesMap[k]={desp:0,rec:0};
-        mesesMap[k].desp+=v;
+        mesesMap[k].desp+=vLiq;
       });
     }
   });
