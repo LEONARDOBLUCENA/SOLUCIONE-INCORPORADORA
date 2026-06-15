@@ -431,22 +431,8 @@ function renderFluxo(){
       vals.forEach((v,i)=>tPM[i]+=v);
       rows+='<tr><td '+tdS('#fff')+'>'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';
     });
-    rows+='<tr style="background:#ffcdd2;font-weight:700"><td '+tdSB('#ffcdd2')+'>Total Pagamentos</td>'+tPM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tPM.reduce((s,v)=>s+v,0))+'</td></tr>';
+    rows+='<tr style="background:#C0392B;font-weight:700"><td style="'+SD+'#C0392B;padding:5px 12px;font-size:12px;color:#fff;font-weight:700">Total Pagamentos</td>'+tPM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#fff;font-weight:600">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:#fff;font-weight:700">'+f2(tPM.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
-  // Linha Previsto Liquido por obra
-  const obrasVis2=obraSel?[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort().filter(o=>ccMatch(o,obraSel)):[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
-  const contasDescFL=['2010304','2010401'];
-  obrasVis2.forEach(obra=>{
-    if(!DATA.previsto||!DATA.previsto[obra])return;
-    const prevVals=colKeys.map(k=>{
-      const bruto=parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0;
-      const realizado=dados.filter(r=>r.tipo==='PAGAMENTO'&&r.ano===Math.floor(k/100)&&r.mes===k%100&&contasDescFL.some(c=>r.conta&&r.conta.includes(c))).reduce((s,r)=>s+r.valor,0);
-      return Math.max(0,bruto-realizado);
-    });
-    const prevTot=prevVals.reduce((s,v)=>s+v,0);
-    if(!prevTot)return;
-    rows+='<tr style="background:#FEF9E7"><td style="'+SD+'#FEF9E7;padding:4px 8px 4px 12px;font-size:11px;color:#B7950B;font-weight:600">Previsto Líquido — '+obra+'</td>'+prevVals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#B7950B">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#FDEBD0;font-size:10px;color:#B7950B;font-weight:700">'+f2(prevTot)+'</td></tr>';
-  });
   tbody.innerHTML=rows;
   const rv=tFM.map((v,i)=>v-tPM[i]),rt=rv.reduce((s,v)=>s+v,0);
 
