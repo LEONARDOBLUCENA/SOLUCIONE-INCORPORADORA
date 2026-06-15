@@ -433,6 +433,20 @@ function renderFluxo(){
     });
     rows+='<tr style="background:#ffcdd2;font-weight:700"><td '+tdSB('#ffcdd2')+'>Total Pagamentos</td>'+tPM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tPM.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
+  // Linha Previsto Liquido por obra
+  const obrasVis2=obraSel?[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort().filter(o=>ccMatch(o,obraSel)):[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
+  const contasDescFL=['2010304','2010401'];
+  obrasVis2.forEach(obra=>{
+    if(!DATA.previsto||!DATA.previsto[obra])return;
+    const prevVals=colKeys.map(k=>{
+      const bruto=parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0;
+      const realizado=dados.filter(r=>r.tipo==='PAGAMENTO'&&r.ano===Math.floor(k/100)&&r.mes===k%100&&contasDescFL.some(c=>r.conta&&r.conta.includes(c))).reduce((s,r)=>s+r.valor,0);
+      return Math.max(0,bruto-realizado);
+    });
+    const prevTot=prevVals.reduce((s,v)=>s+v,0);
+    if(!prevTot)return;
+    rows+='<tr style="background:#FEF9E7"><td style="'+SD+'#FEF9E7;padding:4px 8px 4px 12px;font-size:11px;color:#B7950B;font-weight:600">Previsto Líquido — '+obra+'</td>'+prevVals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#B7950B">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#FDEBD0;font-size:10px;color:#B7950B;font-weight:700">'+f2(prevTot)+'</td></tr>';
+  });
   tbody.innerHTML=rows;
   const rv=tFM.map((v,i)=>v-tPM[i]),rt=rv.reduce((s,v)=>s+v,0);
 
@@ -1052,6 +1066,30 @@ function gerarApresentacaoFluxo(){
     r.forEach(function(c,ci){slide2+='<td>'+c+'</td>';});
     slide2+='</tr>';
   });
+  // Adicionar linhas do tfoot (Resultado, Previsto por obra, Caixa Inicial, Saldo)
+  var tfootEl=document.getElementById('tfoot-fluxo');
+  if(tfootEl){
+    Array.from(tfootEl.querySelectorAll('tr')).forEach(function(tr){
+      var cells=Array.from(tr.querySelectorAll('td'));
+      if(!cells.length)return;
+      var label=cells[0].textContent.trim();
+      var isPrev=label.includes('Previsto');
+      var isRes=label.includes('Resultado');
+      var isSaldo=label.includes('Saldo');
+      var isCaixa=label.includes('Caixa Inicial');
+      var bg=isPrev?'background:#FEF9E7;color:#B7950B;font-weight:600':
+               isRes?'background:#f0f0f0;font-weight:700':
+               isSaldo?'background:#1a5276;color:#fff;font-weight:700':
+               isCaixa?'background:#EAF4FB;font-weight:600':'';
+      slide2+='<tr style="'+bg+'">';
+      cells.forEach(function(td){
+        var inp=td.querySelector('input');
+        var v=inp?inp.value:(td.textContent||'').trim();
+        slide2+='<td>'+v+'</td>';
+      });
+      slide2+='</tr>';
+    });
+  }
   slide2+='</table></div>';
 
   // Slide 3: Previsto por Ano
