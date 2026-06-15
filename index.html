@@ -1008,7 +1008,7 @@ function gerarApresentacaoFluxo(){
 
   // Calcular totais de faturamento e pagamento direto dos dados
   var obraF=obraSel&&obraSel!=='Todas as obras'?obraSel:'';
-  var csvF=DATA.csv.filter(function(r){return !obraF||ccMatch(r.cc||'',obraF);});
+  var csvF=(DATA.csv||[]).filter(function(r){return !obraF||ccMatch(r.cc||'',obraF);});
   var totFatV=csvF.filter(function(r){return r.tipo==='FATURAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
   var totDescV=csvF.filter(function(r){return r.tipo==='DESCONTO';}).reduce(function(s,r){return s+r.valor;},0);
   var totPagV=csvF.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
@@ -1087,7 +1087,7 @@ function gerarApresentacaoFluxo(){
     mesesMap[k].desp+=r.valor;
   });
   // Previsto recebimento: FATURAMENTO "A RECEBER" por mês do CSV
-  var csvF2=DATA.csv.filter(function(r){return !obraF2||ccMatch(r.cc||'',obraF2);});
+  var csvF2=(DATA.csv||[]).filter(function(r){return !obraF2||ccMatch(r.cc||'',obraF2);});
   csvF2.filter(function(r){return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER');}).forEach(function(r){
     if(r.ano==null||r.mes==null)return;
     var k=r.ano*100+r.mes+'';
