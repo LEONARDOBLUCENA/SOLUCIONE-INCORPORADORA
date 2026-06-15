@@ -743,11 +743,13 @@ function renderDtlhTabela(){
     var vendaMes=estoqueRest*(pct/100);
     estoqueRest-=vendaMes;
     var entrada=vendaMes*pctEntrada;
-    var valorFinanciado=vendaMes-entrada;
-    var parcelaMes=valorFinanciado/nParcelas;
+    // Parcela sempre sobre o total da venda
+    var parcelaMes=nParcelas>0?vendaMes/nParcelas:0;
+    // Se entrada > 0, a entrada substitui 1 parcela → restam nParcelas-1
+    var parcelasRestantes=pctEntrada>0?nParcelas-1:nParcelas;
 
-    // Adicionar parcelas desta venda (sobre valor financiado)
-    if(vendaMes>0)parcelasPendentes.push({parcela:parcelaMes,restante:nParcelas});
+    // Adicionar parcelas desta venda
+    if(vendaMes>0)parcelasPendentes.push({parcela:parcelaMes,restante:parcelasRestantes});
 
     // Somar entrada do mês + parcelas pendentes de todos os meses
     var prevVendas=entrada;
