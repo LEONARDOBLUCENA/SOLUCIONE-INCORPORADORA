@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 
-const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previsao:[],dtmPct:{},dtmOrc:{}};
+const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previsao:[],dtmPct:{},dtmUnid:{},dtmOrc:{}};
 const GHUB={token:['ghp_DMtc','LFDDPZIq7QGo','GgJvmTc1TbfSMf0H9mw1'].join(''),repo:'LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA',file:'data.json',raw:'https://raw.githubusercontent.com/LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA/main/data.json'};
 let _ghubSaving=false,_ghubDirty=false,_ghubSha=null;
 const CHARTS={};
@@ -665,8 +665,14 @@ function renderDtlhTabela(){
   // Estoque total
   var estObra=DATA.estoque.filter(function(u){return !obra||ccMatch(u.obra,obra);});
   var vEstTotal=estObra.reduce(function(s,u){return s+(u.venda||0);},0);
+  var nUnidTotal=estObra.length;
+  var vlrMedio=nUnidTotal>0?vEstTotal/nUnidTotal:0;
   var el=document.getElementById('dtm-estoque-total');
   if(el)el.textContent=vEstTotal?fmt(vEstTotal):'—';
+  var elU=document.getElementById('dtm-unid-total');
+  if(elU)elU.textContent=nUnidTotal+' unidades';
+  var elM=document.getElementById('dtm-vlr-medio');
+  if(elM)elM.textContent=vlrMedio?fmt(vlrMedio):'—';
 
   // Meses disponíveis
   var csvFilt=DATA.csv.filter(function(r){return !obra||ccMatch(r.cc||'',obra);});
@@ -717,13 +723,14 @@ function renderDtlhTabela(){
   if(!DATA.dtmPct)DATA.dtmPct={};
 
   // Calcular totalizador de estoque vendido
-  var pctTotalVendido=colKeys.reduce(function(s,k){return s+(parseFloat(DATA.dtmPct[k]||0)||0);},0);
-  var vVendido=vEstTotal*(pctTotalVendido/100);
-  var vDisp=vEstTotal-vVendido;
+  var nUnidVendidas=colKeys.reduce(function(s,k){return s+(parseInt(DATA.dtmUnid[k]||0)||0);},0);
+  var vVendido=nUnidVendidas*vlrMedio;
+  var nUnidDisp=Math.max(0,nUnidTotal-nUnidVendidas);
+  var vDisp=nUnidDisp*vlrMedio;
   var set_=function(id,v){var e=document.getElementById(id);if(e)e.textContent=v;};
-  set_('dtm-pct-vendido',pctTotalVendido.toFixed(1)+'%');
+  set_('dtm-pct-vendido',nUnidVendidas+' / '+nUnidTotal+' unid.');
   set_('dtm-val-vendido',vVendido?fmt(vVendido):'—');
-  set_('dtm-pct-disp',(100-pctTotalVendido).toFixed(1)+'%');
+  set_('dtm-pct-disp',nUnidDisp+' unid. restantes');
   set_('dtm-val-disp',vDisp>0?fmt(vDisp):'—');
 
   // Thead
@@ -736,7 +743,7 @@ function renderDtlhTabela(){
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;'+SD+'">Fat. Líquido</th>'
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;color:#B7950B;'+SD+'">Saldo Orç.</th>'
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;background:#e8f5e9;'+SD+'">Nec. Caixa</th>'
-    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:70px;'+SD+'">% Est.</th>'
+    +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:70px;'+SD+'">Unid.</th>'
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:120px;color:#7D3C98;'+SD+'">Prev. Vendas</th>'
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:100px;color:#C0392B;'+SD+'">Comissão 6%</th>'
     +'<th class="r" style="padding:8px 10px;font-size:11px;min-width:110px;color:#C0392B;'+SD+'">Afet. Prevista</th>'
@@ -768,9 +775,10 @@ function renderDtlhTabela(){
     });
     var necCaixa=fatLiq-saldoOrc;
 
-    // % estoque vendido neste mês
-    var pct=parseFloat(DATA.dtmPct[k]||0)||0;
-    var vendaMes=estoqueRest*(pct/100);
+    // Unidades vendidas neste mês
+    var unidMes=Math.min(parseInt(DATA.dtmUnid[k]||0)||0,Math.round(estoqueRest/vlrMedio)||0);
+    var pct=nUnidTotal>0?unidMes/nUnidTotal*100:0;
+    var vendaMes=unidMes*vlrMedio;
     estoqueRest-=vendaMes;
 
     // Decompor venda pelas premissas
@@ -779,35 +787,30 @@ function renderDtlhTabela(){
     var valChaves=vendaMes*pctChaves;
     var parcelaMes=nParcelas>0?valParc/nParcelas:0;
 
-    // Acumular chaves a receber futuramente
-    if(vendaMes>0)chavesPend+=valChaves;
+    // Prev. Vendas deste mês — lógica limpa:
+    var prevVendas=0;
 
-    // Adicionar parcelas desta venda (distribuídas nos próximos meses)
+    // 1. Entrada: recebida no mês da venda
+    if(pctEntrada>0)prevVendas+=valEntrada;
+
+    // 2. Parcelas das vendas ANTERIORES que vencem neste mês
+    parcelasPend=parcelasPend.filter(function(p){return p.restante>0;});
+    parcelasPend.forEach(function(p){prevVendas+=p.parcela;p.restante--;});
+
+    // 3. Registrar parcelas da venda ATUAL (começam no mês seguinte)
     if(vendaMes>0&&parcelaMes>0)parcelasPend.push({parcela:parcelaMes,restante:nParcelas});
 
-    // Prev. Vendas deste mês:
-    var prevVendas=0;
-    // 1. Entrada (se > 0%) lançada no mês da venda
-    if(pctEntrada>0)prevVendas+=valEntrada;
-    // 2. Parcelas de vendas anteriores (e atual se parcelas começam no mesmo mês)
-    // Parcelas começam no mês SEGUINTE — então só conta parcelasPend que já existiam antes desta venda
-    parcelasPend=parcelasPend.filter(function(p){return p.restante>0;});
-    // A venda atual acabou de ser adicionada — suas parcelas começam no próximo mês
-    // Portanto somamos parcelas de vendas ANTERIORES (excluindo a última adicionada)
-    var pendAntes=vendaMes>0&&parcelaMes>0?parcelasPend.slice(0,-1):parcelasPend;
-    pendAntes.forEach(function(p){prevVendas+=p.parcela;p.restante--;});
-    // Atualizar restante da venda atual (não decrementada acima)
-    if(vendaMes>0&&parcelaMes>0&&parcelasPend.length>0){
-      // já foi filtrada, a última é a atual — não decrementar aqui pois começa no próximo mês
-    }
-    // 3. Chaves: receber no mês da data de entrega
+    // 4. Acumular chaves da venda atual para receber na data de entrega
+    if(vendaMes>0)chavesPend+=valChaves;
+
+    // 5. Chaves: receber no mês da data de entrega
     if(chaveKey!==null&&k===chaveKey)prevVendas+=chavesPend;
 
     var comissao=vendaMes*0.06;
     var afetPrev=prevVendas*0.04;
     var necCaixaMensal=(necCaixa+prevVendas)-(comissao+afetPrev);
     caixaAcum=rows.length===0?caixaInicialVal:caixaAcum+necCaixaMensal;
-    rows.push({k,ano,mes,aRec,afet,fatLiq,saldoOrc,necCaixa,pct,prevVendas,comissao,afetPrev,necCaixaMensal,caixaAcum});
+    rows.push({k,ano,mes,aRec,afet,fatLiq,saldoOrc,necCaixa,pct,unidMes,prevVendas,comissao,afetPrev,necCaixaMensal,caixaAcum});
   });
 
   var tbody=document.getElementById('dtm-tbody');
@@ -820,8 +823,8 @@ function renderDtlhTabela(){
       +'<td class="r" style="padding:6px 10px;font-size:12px">'+fmt2(r.fatLiq)+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;color:#B7950B">'+fmt2(r.saldoOrc)+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;font-weight:700;color:'+necColor+';background:#f0faf0">'+fmt2(r.necCaixa)+'</td>'
-      +'<td style="padding:4px 6px"><input type="number" value="'+(r.pct||'')+'" min="0" max="100" step="0.5" placeholder="0"'
-        +' data-key="'+r.k+'" onchange="if(!DATA.dtmPct)DATA.dtmPct={};DATA.dtmPct[this.dataset.key]=parseFloat(this.value)||0;renderDtlhTabela();"'
+      +'<td style="padding:4px 6px"><input type="number" value="'+(r.unidMes||'')+'" min="0" max="100" step="0.5" placeholder="0"'
+        +' data-key="'+r.k+'" onchange="if(!DATA.dtmUnid)DATA.dtmUnid={};DATA.dtmUnid[this.dataset.key]=parseInt(this.value)||0;renderDtlhTabela();"'
         +' style="width:60px;border:1px solid var(--border);background:var(--bg);padding:3px 5px;font-size:11px;text-align:right;font-family:DM Sans,sans-serif;outline:none"></td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;color:#7D3C98;font-weight:600">'+fmt2(r.prevVendas)+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;color:#C0392B">'+fmt2(r.comissao)+'</td>'
@@ -860,7 +863,7 @@ function simularCenario(){
     var estR=vEst,pend=[],chavP=0,ca=0,minC=Infinity;
     colKeys.forEach(function(k,i){
       var necC=necBase[i];
-      var pct=pcts[i]||0,vM=estR*(pct/100);estR-=vM;
+      var unidM=Math.min(pcts[i]||0,vlrMedioSim>0?Math.floor(estR/vlrMedioSim):0);var vM=unidM*vlrMedioSim;estR-=vM;
       var vE=vM*pE,vP=vM*pP,vC=vM*pC;
       if(vM>0&&vC>0)chavP+=vC;
       var pm=nP>0?vP/nP:0;
@@ -877,23 +880,26 @@ function simularCenario(){
     return minC;
   }
 
+  var nUnidSim=estObra.length;
+  var vlrMedioSim=nUnidSim>0?vEst/nUnidSim:0;
+  var maxUnidMes=Math.max(1,Math.ceil(nUnidSim*0.1));
   function distribuirPcts(pE,pP,pC,nP){
-    var pcts=colKeys.map(function(){return 0;});
+    var unids=colKeys.map(function(){return 0;});
     var pesos=necBase.map(function(n){return Math.max(0,-n);});
     var totPeso=pesos.reduce(function(s,v){return s+v;},0);
-    var rest=100;
+    var restUnid=nUnidSim;
     if(totPeso>0){
       pesos.forEach(function(p,i){
-        if(rest<=0)return;
-        var v=Math.min(10,Math.floor((p/totPeso)*100));
-        pcts[i]=v;rest-=v;
+        if(restUnid<=0)return;
+        var v=Math.min(maxUnidMes,Math.round((p/totPeso)*nUnidSim));
+        unids[i]=v;restUnid-=v;
       });
     }
-    for(var i=0;i<pcts.length&&rest>0;i++){
-      var add=Math.min(10-pcts[i],rest);
-      pcts[i]+=add;rest-=add;
+    for(var i=0;i<unids.length&&restUnid>0;i++){
+      var add=Math.min(maxUnidMes-unids[i],restUnid);
+      unids[i]+=add;restUnid-=add;
     }
-    return pcts;
+    return unids;
   }
 
   var best={minC:-Infinity,pE:10,pP:50,pC:40,nP:24,pcts:[]};
@@ -912,8 +918,8 @@ function simularCenario(){
   document.getElementById('dtm-pct-parcelas').value=best.pP;
   document.getElementById('dtm-pct-chaves').value=best.pC;
   document.getElementById('dtm-parcelas').value=best.nP;
-  if(!DATA.dtmPct)DATA.dtmPct={};
-  colKeys.forEach(function(k,i){DATA.dtmPct[k]=best.pcts[i]||0;});
+  if(!DATA.dtmUnid)DATA.dtmUnid={};
+  colKeys.forEach(function(k,i){DATA.dtmUnid[k]=best.pcts[i]||0;});
   renderDtlhTabela();
   var NL=String.fromCharCode(10);
   alert('Melhor cenario encontrado:'+NL+'Entrada: '+best.pE+'%'+NL+'Parcelas: '+best.pP+'% em '+best.nP+'x'+NL+'Chaves: '+best.pC+'%'+NL+'Caixa minimo: R$ '+best.minC.toLocaleString('pt-BR',{minimumFractionDigits:2})+NL+(best.minC>=0?'Caixa mantido positivo!':'Melhor cenario possivel, caixa ainda negativo em algum mes.'));
@@ -1645,9 +1651,11 @@ function exportarOrcamento(){}
     <!-- Totalizador de estoque -->
     <div style="display:flex;flex-wrap:wrap;gap:24px;padding:12px 20px;background:#f9f9f9;border-bottom:1px solid var(--border);align-items:center">
       <div><span style="font-size:11px;color:var(--text3);font-weight:600">ESTOQUE TOTAL</span><br><span id="dtm-estoque-total" style="font-size:14px;font-weight:700;color:var(--brand)">—</span></div>
-      <div><span style="font-size:11px;color:var(--text3);font-weight:600">% VENDIDO</span><br><span id="dtm-pct-vendido" style="font-size:14px;font-weight:700;color:#C0392B">0%</span></div>
+      <div><span style="font-size:11px;color:var(--text3);font-weight:600">TOTAL UNIDADES</span><br><span id="dtm-unid-total" style="font-size:14px;font-weight:700;color:var(--brand)">—</span></div>
+      <div><span style="font-size:11px;color:var(--text3);font-weight:600">VALOR MÉDIO/UNID.</span><br><span id="dtm-vlr-medio" style="font-size:14px;font-weight:700;color:var(--brand)">—</span></div>
+      <div><span style="font-size:11px;color:var(--text3);font-weight:600">UNID. VENDIDAS</span><br><span id="dtm-pct-vendido" style="font-size:14px;font-weight:700;color:#C0392B">0</span></div>
       <div><span style="font-size:11px;color:var(--text3);font-weight:600">VALOR VENDIDO</span><br><span id="dtm-val-vendido" style="font-size:14px;font-weight:700;color:#C0392B">—</span></div>
-      <div><span style="font-size:11px;color:var(--text3);font-weight:600">% DISPONÍVEL</span><br><span id="dtm-pct-disp" style="font-size:14px;font-weight:700;color:#1B6B35">100%</span></div>
+      <div><span style="font-size:11px;color:var(--text3);font-weight:600">UNID. DISPONÍVEIS</span><br><span id="dtm-pct-disp" style="font-size:14px;font-weight:700;color:#1B6B35">—</span></div>
       <div><span style="font-size:11px;color:var(--text3);font-weight:600">VALOR DISPONÍVEL</span><br><span id="dtm-val-disp" style="font-size:14px;font-weight:700;color:#1B6B35">—</span></div>
     </div>
 
