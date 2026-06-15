@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 
-const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previsao:[],dtmPct:{}};
+const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previsao:[],dtmPct:{},dtmOrc:{}};
 const GHUB={token:['ghp_DMtc','LFDDPZIq7QGo','GgJvmTc1TbfSMf0H9mw1'].join(''),repo:'LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA',file:'data.json',raw:'https://raw.githubusercontent.com/LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA/main/data.json'};
 let _ghubSaving=false,_ghubDirty=false,_ghubSha=null;
 const CHARTS={};
@@ -715,13 +715,8 @@ function renderDtlhTabela(){
     // Fat Liquido
     var fatLiq=aRec-afet;
 
-    // Saldo Orçamento: soma do previsto do fluxo para este mês/obra
-    var saldoOrc=0;
-    Object.keys(DATA.previsto||{}).forEach(function(o){
-      if(!obra||ccMatch(o,obra)){
-        saldoOrc+=parseFloat((DATA.previsto[o]&&(DATA.previsto[o][String(k)]||DATA.previsto[o][k]))||0)||0;
-      }
-    });
+    // Saldo Orçamento: valor manual por mês
+    var saldoOrc=parseFloat(DATA.dtmOrc[k]||0)||0;
 
     // Necessidade de Caixa
     var necCaixa=fatLiq-saldoOrc;
@@ -764,7 +759,7 @@ function renderDtlhTabela(){
       +'<td class="r" style="padding:6px 10px;font-size:12px;color:#1B6B35">'+fmt2(r.aRec)+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;color:#C0392B">'+fmt2(r.afet)+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px">'+fmt2(r.fatLiq)+'</td>'
-      +'<td class="r" style="padding:6px 10px;font-size:12px;color:#B7950B">'+fmt2(r.saldoOrc)+'</td>'
+      +'<td style="padding:2px 3px"><input type="number" value="'+(r.saldoOrc||'')+'" placeholder="0" step="0.01"'+' data-key="'+r.k+'" onchange="if(!DATA.dtmOrc)DATA.dtmOrc={};DATA.dtmOrc[this.dataset.key]=parseFloat(this.value)||0;renderDtlhTabela();"'+' style="width:90px;border:1px solid #F0D9A0;background:#FFFDE7;padding:2px 4px;font-size:11px;text-align:right;font-family:DM Sans,sans-serif;color:#7D6608;outline:none"></td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;font-weight:700;color:'+necColor+';background:#f0faf0">'+fmt2(r.necCaixa)+'</td>'
       +'<td style="padding:4px 6px"><input type="number" value="'+(r.pct||'')+'" min="0" max="100" step="0.5" placeholder="0"'
         +' data-key="'+r.k+'" onchange="if(!DATA.dtmPct)DATA.dtmPct={};DATA.dtmPct[this.dataset.key]=parseFloat(this.value)||0;renderDtlhTabela();"'
