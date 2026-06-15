@@ -444,7 +444,7 @@ function renderFluxo(){
 
   // Linhas de previsto para o tfoot
   const prevRows=obrasVis.map(obra=>{
-    const pVals=colKeys.map(k=>parseFloat(DATA.previsto[obra]?.[k]||0)||0);
+    const pVals=colKeys.map(k=>parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0);
     const pTot=pVals.reduce((s,v)=>s+v,0);
     return '<tr style="background:#FEF9E7"><td style="'+SD+'#FEF9E7;padding:4px 8px;font-size:11px;color:#B7950B;font-weight:600">Previsto — '+obra+'</td>'
       +pVals.map((v,i)=>'<td style="padding:2px 3px"><input type="number" value="'+(v||'')+'" placeholder="0"'
@@ -456,7 +456,7 @@ function renderFluxo(){
   }).join('');
 
   // Previsto total por mês (soma de todas as obras visíveis)
-  const prevTotalMes=colKeys.map((_,i)=>obrasVis.reduce((s,o)=>s+(parseFloat(DATA.previsto[o]?.[colKeys[i]]||0)||0),0));
+  const prevTotalMes=colKeys.map((_,i)=>obrasVis.reduce((s,o)=>s+(parseFloat(DATA.previsto[o]?.[String(colKeys[i])]||DATA.previsto[o]?.[colKeys[i]]||0)||0),0));
 
   // Caixa Inicial + Saldo acumulado (descontando previsto)
   const ci=obraSel?parseFloat(DATA.caixaInicial[obraSel]||0)||0:Object.values(DATA.caixaInicial).reduce((s,v)=>s+(parseFloat(v)||0),0);
@@ -714,7 +714,7 @@ function renderDtlhTabela(){
     var saldoOrc=0;
     Object.keys(DATA.previsto||{}).forEach(function(o){
       if(!obra||ccMatch(o,obra)){
-        saldoOrc+=parseFloat((DATA.previsto[o]&&DATA.previsto[o][k])||0)||0;
+        saldoOrc+=parseFloat((DATA.previsto[o]&&(DATA.previsto[o][String(k)]||DATA.previsto[o][k]))||0)||0;
       }
     });
 
