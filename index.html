@@ -675,8 +675,8 @@ function simularMelhorCenario(){
   if(!vEstTotal){alert('Nenhum estoque disponível para simular.');return;}
 
   var hoje=new Date();
-  var mesAnterior=new Date(hoje.getFullYear(),hoje.getMonth()-1,1);
-  var keyMin=mesAnterior.getFullYear()*100+mesAnterior.getMonth();
+  // Simulador começa do mês atual
+  var keyMin=hoje.getFullYear()*100+hoje.getMonth();
   var colSet=new Set();
   DATA.csv.filter(function(r){return !obra||ccMatch(r.cc||'',obra);}).forEach(function(r){if(r.ano!=null&&r.mes!=null)colSet.add(r.ano*100+r.mes);});
   Object.keys(DATA.previsto||{}).forEach(function(o){if(!obra||ccMatch(o,obra))Object.keys(DATA.previsto[o]).forEach(function(k){colSet.add(parseInt(k));});});
