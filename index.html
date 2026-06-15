@@ -652,6 +652,7 @@ function renderDtlhTabela(){
   var entregaStr=document.getElementById('dt-entrega')&&document.getElementById('dt-entrega').value||'';
   var entrega=entregaStr?new Date(entregaStr+'T23:59:59'):null;
   var nParcelas=parseInt(document.getElementById('dtm-parcelas')&&document.getElementById('dtm-parcelas').value)||10;
+  var pctEntrada=(parseFloat(document.getElementById('dtm-entrada-pct')&&document.getElementById('dtm-entrada-pct').value)||10)/100;
 
   // Estoque total
   var estObra=DATA.estoque.filter(function(u){return !obra||ccMatch(u.obra,obra);});
@@ -741,13 +742,15 @@ function renderDtlhTabela(){
     // Calcular venda deste mês
     var vendaMes=estoqueRest*(pct/100);
     estoqueRest-=vendaMes;
-    var parcelaMes=vendaMes/nParcelas;
+    var entrada=vendaMes*pctEntrada;
+    var valorFinanciado=vendaMes-entrada;
+    var parcelaMes=valorFinanciado/nParcelas;
 
-    // Adicionar parcelas desta venda
+    // Adicionar parcelas desta venda (sobre valor financiado)
     if(vendaMes>0)parcelasPendentes.push({parcela:parcelaMes,restante:nParcelas});
 
-    // Somar todas as parcelas pendentes
-    var prevVendas=0;
+    // Somar entrada do mês + parcelas pendentes de todos os meses
+    var prevVendas=entrada;
     parcelasPendentes=parcelasPendentes.filter(function(p){return p.restante>0;});
     parcelasPendentes.forEach(function(p){prevVendas+=p.parcela;p.restante--;});
 
@@ -1503,6 +1506,12 @@ function exportarOrcamento(){}
         <span style="font-size:12px;color:var(--text3);font-weight:600">Nº de Parcelas:</span>
         <input type="number" id="dtm-parcelas" value="10" min="1" step="1" onchange="renderDtlh()"
           style="width:70px;border:1px solid var(--border);background:var(--bg);padding:5px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;color:var(--text3);font-weight:600">% Entrada:</span>
+        <input type="number" id="dtm-entrada-pct" value="10" min="0" max="100" step="0.5" onchange="renderDtlh()"
+          style="width:70px;border:1px solid var(--border);background:var(--bg);padding:5px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:right">
+        <span style="font-size:12px;color:var(--text3)">%</span>
       </div>
     </div>
     <div style="overflow-x:auto;overflow-y:auto;max-height:500px">
