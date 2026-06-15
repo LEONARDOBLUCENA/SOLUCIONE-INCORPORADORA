@@ -1079,6 +1079,8 @@ function gerarApresentacaoFluxo(){
       });
     }
   });
+  // Filtrar CSV por obra
+  var csvF2=(DATA.csv||[]).filter(function(r){return !obraF2||ccMatch(r.cc||'',obraF2);});
   // Adicionar pagamentos realizados do CSV
   csvF2.filter(function(r){return r.tipo==='PAGAMENTO';}).forEach(function(r){
     if(r.ano==null||r.mes==null)return;
@@ -1087,7 +1089,6 @@ function gerarApresentacaoFluxo(){
     mesesMap[k].desp+=r.valor;
   });
   // Previsto recebimento: FATURAMENTO "A RECEBER" por mês do CSV
-  var csvF2=(DATA.csv||[]).filter(function(r){return !obraF2||ccMatch(r.cc||'',obraF2);});
   csvF2.filter(function(r){return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER');}).forEach(function(r){
     if(r.ano==null||r.mes==null)return;
     var k=r.ano*100+r.mes+'';
