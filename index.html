@@ -681,6 +681,31 @@ function renderDtlhTabela(){
   var keyMin=new Date(hoje.getFullYear(),hoje.getMonth()-1,1);
   keyMin=keyMin.getFullYear()*100+keyMin.getMonth();
   var colKeys=[...colSet].sort().filter(function(k){return k>=keyMin;});
+
+  // Pré-calcular até que mês as parcelas chegam e estender colKeys
+  if(colKeys.length>0){
+    // Descobrir o mês máximo de venda e nParcelas → último mês de parcela
+    var pctsTmp=colKeys.map(function(k){return parseFloat(DATA.dtmPct[k]||0)||0;});
+    var ultimaVendaIdx=pctsTmp.reduce(function(last,p,i){return p>0?i:last;},-1);
+    if(ultimaVendaIdx>=0){
+      var keyUltimaVenda=colKeys[ultimaVendaIdx];
+      var anoUV=Math.floor(keyUltimaVenda/100),mesUV=keyUltimaVenda%100;
+      // Último mês de parcela = mes da ultima venda + nParcelas
+      var dtUltParcela=new Date(anoUV,mesUV+nParcelas,1);
+      var keyUltParcela=dtUltParcela.getFullYear()*100+dtUltParcela.getMonth();
+      // Estender até o maior entre ultimo mês de parcela e chaveKey
+      var keyFim=Math.max(keyUltParcela,chaveKey||0);
+      // Adicionar meses faltantes
+      var cur=colKeys[colKeys.length-1];
+      while(cur<keyFim){
+        var ano_=Math.floor(cur/100),mes_=cur%100;
+        var next=new Date(ano_,mes_+1,1);
+        cur=next.getFullYear()*100+next.getMonth();
+        if(!colSet.has(cur))colKeys.push(cur);
+      }
+      colKeys.sort(function(a,b){return a-b;});
+    }
+  }
   if(!colKeys.length){
     document.getElementById('dtm-tbody').innerHTML='<tr><td colspan="12"><div class="empty-state"><p>Nenhum dado disponível</p></div></td></tr>';
     return;
