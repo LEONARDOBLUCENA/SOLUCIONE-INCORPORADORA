@@ -1068,15 +1068,16 @@ function gerarApresentacaoFluxo(){
   // Slide 3: Evolução de Caixa Mensal (Previsto Desembolso, Previsto Recebimento, Saldo)
   // Extrair previsto desembolso e recebimento por mês dos dados CSV + previsto
   var obraF2=obraSel&&obraSel!=='Todas as obras'?obraSel:'';
+  // Filtrar CSV por obra — declarar ANTES de usar
+  var csvF2=(DATA.csv||[]).filter(function(r){return !obraF2||ccMatch(r.cc||'',obraF2);});
   var mesesMap={};
-  // Previsto desembolso LIQUIDO: previsto bruto − realizado contas 2010304/2010401 + pagamentos CSV
+  // Previsto desembolso LIQUIDO: previsto bruto − realizado contas 2010304/2010401
   var contasDesc=['2010304','2010401'];
   Object.keys(DATA.previsto||{}).forEach(function(obra){
     if(!obraF2||ccMatch(obra,obraF2)){
       Object.entries(DATA.previsto[obra]).forEach(function(kv){
         var k=String(kv[0]),v=parseFloat(kv[1])||0;
         if(!v)return;
-        // Desconto: realizado nas contas especificas no mesmo mes/obra
         var ano=Math.floor(parseInt(k)/100),mes=parseInt(k)%100;
         var realizado=csvF2.filter(function(r){
           return r.tipo==='PAGAMENTO'&&r.ano===ano&&r.mes===mes
@@ -1088,8 +1089,6 @@ function gerarApresentacaoFluxo(){
       });
     }
   });
-  // Filtrar CSV por obra
-  var csvF2=(DATA.csv||[]).filter(function(r){return !obraF2||ccMatch(r.cc||'',obraF2);});
   // Adicionar pagamentos realizados do CSV
   csvF2.filter(function(r){return r.tipo==='PAGAMENTO';}).forEach(function(r){
     if(r.ano==null||r.mes==null)return;
