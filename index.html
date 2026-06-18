@@ -1250,6 +1250,109 @@ function abrirPDF(html){
   setTimeout(function(){w.print();},800);
 }
 
+function renderDash(){
+  var ano=document.getElementById('dash-ano')?.value||'';
+  var mes=document.getElementById('dash-mes')?.value||'';
+  var dia=document.getElementById('dash-dia')?.value||'';
+  var cc=document.getElementById('dash-cc')?.value||'';
+
+  var dados=(DATA.csv||[]).filter(function(r){
+    if(ano&&String(r.ano)!==ano)return false;
+    if(mes&&String(r.mes)!==mes)return false;
+    if(dia&&r.data&&String(r.data.getDate())!==dia)return false;
+    if(cc&&!ccMatch(r.cc||'',cc))return false;
+    return true;
+  });
+
+  var fat=dados.filter(function(r){return r.tipo==='FATURAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var desc=dados.filter(function(r){return r.tipo==='DESCONTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var pag=dados.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var fatLiq=fat-desc;
+  var saldo=fatLiq-pag;
+
+  var fmtK=function(v){return v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v.toFixed(0);};
+  var fmtV=function(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+
+  // KPIs
+  var set_=function(id,v,col){var e=document.getElementById(id);if(e){e.textContent=v;if(col)e.style.color=col;}};
+  set_('dash-fat',fmtV(fatLiq),'#1B6B35');
+  set_('dash-pag',fmtV(pag),'#C0392B');
+  set_('dash-saldo',fmtV(saldo),saldo>=0?'#1B6B35':'#C0392B');
+
+  // Popular filtros
+  var ccEl=document.getElementById('dash-cc');
+  if(ccEl){var ccs=[...new Set((DATA.csv||[]).map(function(r){return r.cc;}).filter(Boolean))].sort();var cur=ccEl.value;ccEl.innerHTML='<option value="">Todos os CCs</option>'+ccs.map(function(c){return'<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>';}).join('');}
+  var anoEl=document.getElementById('dash-ano');
+  if(anoEl){var anos=[...new Set((DATA.csv||[]).map(function(r){return r.ano;}).filter(function(a){return a!=null;}))].sort();var curA=anoEl.value;anoEl.innerHTML='<option value="">Todos</option>'+anos.map(function(a){return'<option value="'+a+'"'+(String(a)===curA?' selected':'')+'>'+a+'</option>';}).join('');}
+
+  // Dados por mês para gráfico
+  var MESES=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var porMes=Array.from({length:12},function(){return{fat:0,pag:0};});
+  dados.forEach(function(r){
+    if(r.mes==null)return;
+    if(r.tipo==='FATURAMENTO')porMes[r.mes].fat+=r.valor;
+    else if(r.tipo==='DESCONTO')porMes[r.mes].fat-=r.valor;
+    else if(r.tipo==='PAGAMENTO')porMes[r.mes].pag+=r.valor;
+  });
+  var mesesComDados=porMes.map(function(m,i){return{label:MESES[i],fat:m.fat,pag:m.pag};}).filter(function(m){return m.fat||m.pag;});
+
+  // Gráfico Faturamento vs Despesas
+  var ctx1=document.getElementById('dash-chart1')?.getContext('2d');
+  if(ctx1){
+    if(CHARTS['dash1']){CHARTS['dash1'].destroy();}
+    CHARTS['dash1']=new Chart(ctx1,{
+      type:'bar',
+      data:{
+        labels:mesesComDados.map(function(m){return m.label;}),
+        datasets:[
+          {label:'Faturamento Líquido',data:mesesComDados.map(function(m){return m.fat;}),backgroundColor:'rgba(27,107,53,0.75)',borderColor:'#1B6B35',borderWidth:1},
+          {label:'Despesas',data:mesesComDados.map(function(m){return m.pag;}),backgroundColor:'rgba(192,57,43,0.75)',borderColor:'#C0392B',borderWidth:1}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},scales:{y:{ticks:{callback:function(v){return fmtK(v);}}}}}
+    });
+  }
+
+  // Top 10 despesas por Complemento
+  var compMap={};
+  dados.filter(function(r){return r.tipo==='PAGAMENTO';}).forEach(function(r){
+    var k=r.complemento||'(sem complemento)';
+    compMap[k]=(compMap[k]||0)+r.valor;
+  });
+  var top10comp=Object.entries(compMap).sort(function(a,b){return b[1]-a[1];}).slice(0,10);
+
+  var ctx2=document.getElementById('dash-chart2')?.getContext('2d');
+  if(ctx2){
+    if(CHARTS['dash2']){CHARTS['dash2'].destroy();}
+    CHARTS['dash2']=new Chart(ctx2,{
+      type:'bar',
+      data:{
+        labels:top10comp.map(function(e){return e[0].length>30?e[0].slice(0,30)+'…':e[0];}),
+        datasets:[{label:'Valor',data:top10comp.map(function(e){return e[1];}),backgroundColor:'rgba(192,57,43,0.7)',borderColor:'#C0392B',borderWidth:1}]
+      },
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{callback:function(v){return fmtK(v);}}}}}
+    });
+  }
+
+  // Top 10 contas
+  var contaMap={};
+  dados.filter(function(r){return r.tipo==='PAGAMENTO';}).forEach(function(r){
+    var k=r.conta||'(sem conta)';
+    contaMap[k]=(contaMap[k]||0)+r.valor;
+  });
+  var top10conta=Object.entries(contaMap).sort(function(a,b){return b[1]-a[1];}).slice(0,10);
+  var tbody=document.getElementById('dash-top-conta');
+  if(tbody){
+    tbody.innerHTML=top10conta.map(function(e,i){
+      var pct=pag>0?(e[1]/pag*100).toFixed(1):'0';
+      return'<tr><td style="padding:6px 10px;font-size:11px;color:#888">'+(i+1)+'</td>'
+        +'<td style="padding:6px 10px;font-size:12px">'+e[0]+'</td>'
+        +'<td class="r" style="padding:6px 10px;font-size:12px;color:#C0392B;font-weight:600">'+fmtV(e[1])+'</td>'
+        +'<td class="r" style="padding:6px 10px;font-size:11px;color:#888">'+pct+'%</td>'
+        +'</tr>';
+    }).join('');
+  }
+}
 function exportarProjecaoXLS(){
   var tbody=document.getElementById('dtm-tbody');
   if(!tbody||!tbody.querySelector('tr td:not([colspan])')){alert('Nenhum dado para exportar.');return;}
@@ -1533,6 +1636,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <div class="nav-logo-text">Solucione <span>BI</span></div>
   </div>
   <div class="nav-tabs">
+    <button class="nav-tab" data-tab="dash" onclick="goTab(this);renderDash()">Dashboard</button>
     <button class="nav-tab active" data-tab="fluxo" onclick="goTab(this)">Fluxo de Caixa</button>
     <button class="nav-tab" data-tab="dtlh" onclick="goTab(this)">Dashboard Resumo Exec.</button>
     <button class="nav-tab" data-tab="orcamento" onclick="goTab(this)">Orçamento</button>
@@ -2139,5 +2243,78 @@ function exportarOrcamento(){}
     </div>
   </div>
 </div>
+<div class="page" id="page-dash">
+  <div class="sec-title">Dashboard</div>
+  <div class="sec-sub">Visão consolidada dos lançamentos por período</div>
+
+  <!-- Filtros -->
+  <div class="filters-bar" style="flex-wrap:wrap;gap:10px">
+    <span class="filter-label">Ano</span>
+    <select class="filter-select" id="dash-ano" onchange="renderDash()" style="width:90px"><option value="">Todos</option></select>
+    <span class="filter-label">Mês</span>
+    <select class="filter-select" id="dash-mes" onchange="renderDash()" style="width:90px">
+      <option value="">Todos</option>
+      <option value="0">Jan</option><option value="1">Fev</option><option value="2">Mar</option>
+      <option value="3">Abr</option><option value="4">Mai</option><option value="5">Jun</option>
+      <option value="6">Jul</option><option value="7">Ago</option><option value="8">Set</option>
+      <option value="9">Out</option><option value="10">Nov</option><option value="11">Dez</option>
+    </select>
+    <span class="filter-label">Dia</span>
+    <input type="number" id="dash-dia" min="1" max="31" placeholder="—" onchange="renderDash()"
+      style="width:60px;border:1px solid var(--border);background:var(--bg);padding:6px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:center">
+    <span class="filter-label">Centro de Custo</span>
+    <select class="filter-select" id="dash-cc" onchange="renderDash()" style="min-width:160px"><option value="">Todos os CCs</option></select>
+    <button class="btn-ghost" onclick="document.getElementById('dash-ano').value='';document.getElementById('dash-mes').value='';document.getElementById('dash-dia').value='';document.getElementById('dash-cc').value='';renderDash()">✕ Limpar</button>
+  </div>
+
+  <!-- KPIs -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px">
+    <div class="kpi-card" style="border-top:3px solid #1B6B35">
+      <div class="kpi-label">Faturamento Líquido</div>
+      <div class="kpi-val" id="dash-fat" style="color:#1B6B35">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #C0392B">
+      <div class="kpi-label">Total Despesas</div>
+      <div class="kpi-val" id="dash-pag" style="color:#C0392B">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid var(--brand)">
+      <div class="kpi-label">Saldo do Período</div>
+      <div class="kpi-val" id="dash-saldo">—</div>
+    </div>
+  </div>
+
+  <!-- Gráfico Faturamento vs Despesas -->
+  <div class="tbl-card" style="margin-top:16px;padding:16px 20px">
+    <div class="tbl-title" style="margin-bottom:12px">Faturamento vs Despesas por Mês</div>
+    <div style="height:280px"><canvas id="dash-chart1"></canvas></div>
+  </div>
+
+  <!-- Gráfico Top 10 Despesas por Complemento -->
+  <div class="tbl-card" style="margin-top:16px;padding:16px 20px">
+    <div class="tbl-title" style="margin-bottom:12px">Top 10 Despesas — por Complemento</div>
+    <div style="height:320px"><canvas id="dash-chart2"></canvas></div>
+  </div>
+
+  <!-- Top 10 Contas -->
+  <div class="tbl-card" style="margin-top:16px">
+    <div class="tbl-head"><div class="tbl-title">Top 10 Contas de Despesa</div></div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="padding:8px 10px;font-size:11px;width:40px">#</th>
+            <th style="text-align:left;padding:8px 10px;font-size:11px">Conta</th>
+            <th class="r" style="padding:8px 10px;font-size:11px;color:#C0392B">Valor</th>
+            <th class="r" style="padding:8px 10px;font-size:11px">% do Total</th>
+          </tr>
+        </thead>
+        <tbody id="dash-top-conta">
+          <tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
