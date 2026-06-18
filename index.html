@@ -1533,12 +1533,12 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <div class="nav-logo-text">Solucione <span>BI</span></div>
   </div>
   <div class="nav-tabs">
-    <button class="nav-tab" data-tab="dtlh" onclick="goTab(this)">Dashboard Resumo Exec.</button>
-    <button class="nav-tab" data-tab="csv" onclick="goTab(this)">CSV Analítico de Apropriações</button>
     <button class="nav-tab active" data-tab="fluxo" onclick="goTab(this)">Fluxo de Caixa</button>
-    <button class="nav-tab" data-tab="estoque" onclick="goTab(this)">Estoque</button>
+    <button class="nav-tab" data-tab="dtlh" onclick="goTab(this)">Dashboard Resumo Exec.</button>
     <button class="nav-tab" data-tab="orcamento" onclick="goTab(this)">Orçamento</button>
     <button class="nav-tab" data-tab="prev" onclick="goTab(this)">Previsão por Período</button>
+    <button class="nav-tab" data-tab="estoque" onclick="goTab(this)">Estoque</button>
+    <button class="nav-tab" data-tab="csv" onclick="goTab(this)">CSV Analítico de Apropriações</button>
   </div>
   <div style="margin-left:auto;display:flex;gap:8px;align-items:center">
     <span id="jbin-status" style="font-size:11px;color:#888;white-space:nowrap">⟳ Carregando...</span>
@@ -1941,12 +1941,14 @@ function exportarOrcamento(){}
           <tr>
             <th>Obra</th>
             <th>Unidade</th>
+            <th>Status</th>
+            <th class="r">Área</th>
             <th class="r">Valor (R$)</th>
             <th style="width:60px;text-align:center">Ação</th>
           </tr>
         </thead>
         <tbody id="body-estoque">
-          <tr><td colspan="4"><div class="empty-state"><p>Nenhuma unidade cadastrada</p></div></td></tr>
+          <tr><td colspan="6"><div class="empty-state"><p>Nenhuma unidade cadastrada</p></div></td></tr>
         </tbody>
       </table>
     </div>
