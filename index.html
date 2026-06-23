@@ -1430,16 +1430,23 @@ function renderOrcamentoResumo(entries, filtroObra){
 
   // Classificar por grupo (primeiro segmento do código)
   var g01={orc:0,real:0},g02={orc:0,real:0},g03={orc:0,real:0};
+  // Orçado: usar top-levels (codigo sem ponto) por grupo
+  entries.filter(function(e){return e.codigo&&!e.codigo.includes('.');}).forEach(function(e){
+    var cod=String(e.codigo||'').trim();
+    var orc=parseFloat(e.orcado||0)||0;
+    if(cod==='1'){g01.orc+=orc;}
+    else if(cod==='2'){g02.orc+=orc;}
+    else{g03.orc+=orc;}
+  });
+  // Realizado: usar folhas por grupo (primeiro segmento do codigo)
   entries.filter(isFolha).forEach(function(e){
     var cod=String(e.codigo||'').trim();
     var grupo=cod.split('.')[0];
-    // Calcular realizado (soma dos anos)
     var real=0;
     Object.values(e.anos||{}).forEach(function(meses){Object.values(meses).forEach(function(v){real+=v;});});
-    var orc=parseFloat(e.orcado||0)||0;
-    if(grupo==='01'){g01.orc+=orc;g01.real+=real;}
-    else if(grupo==='02'){g02.orc+=orc;g02.real+=real;}
-    else{g03.orc+=orc;g03.real+=real;}
+    if(grupo==='1'){g01.real+=real;}
+    else if(grupo==='2'){g02.real+=real;}
+    else{g03.real+=real;}
   });
 
   var totOrc=g01.orc+g02.orc+g03.orc;
