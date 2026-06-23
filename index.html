@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>BI Solucione — Inteligência Imobiliária</title>
+<title>Monter Adm | BI</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 
@@ -74,7 +74,7 @@ function gerarWhatsApp(){
     if(r.tipo==='RECEBER')ccs[r.cc].rec+=r.valor;
     else ccs[r.cc].pag+=r.valor;
   });
-  var msg='*📊 Resumo Financeiro Semanal — Solucione*\n';
+  var msg='*📊 Resumo Financeiro Semanal — Monter Adm*\n';
   msg+='_'+periodoStr+'_\n\n';
   msg+='*💰 Recebimentos: '+fP(tR)+'*\n';
   msg+='*💸 Pagamentos: '+fP(tP)+'*\n';
@@ -87,7 +87,7 @@ function gerarWhatsApp(){
     if(c.pag)msg+='• Pagamentos: '+fP(c.pag)+'\n';
     msg+='• Saldo: '+fP(c.rec-c.pag)+'\n\n';
   });
-  msg+='---\n_Gerado automaticamente pelo BI Solucione_';
+  msg+='---\n_Gerado automaticamente pelo Monter Adm | BI_';
   showMsgModal(msg);
 }
 function gerarWhatsAppFornecedor(){
@@ -111,7 +111,7 @@ function gerarWhatsAppFornecedor(){
   });
   var tR=filt.filter(function(r){return r.tipo==='RECEBER';}).reduce(function(s,r){return s+r.valor;},0);
   var tP=filt.filter(function(r){return r.tipo==='PAGAR';}).reduce(function(s,r){return s+r.valor;},0);
-  var msg='*📊 Relatório por Fornecedor — Solucione*\n';
+  var msg='*📊 Relatório por Fornecedor — Monter Adm*\n';
   msg+='_'+periodoStr+'_\n\n';
   Object.keys(ccs).sort().forEach(function(cc){
     msg+='*🏗️ '+cc+'*\n\n';
@@ -127,7 +127,7 @@ function gerarWhatsAppFornecedor(){
   msg+='*💰 Total Geral a Receber: '+fP(tR)+'*\n';
   msg+='*💸 Total Geral a Pagar: '+fP(tP)+'*\n';
   msg+='*📈 Saldo: '+fP(tR-tP)+'*\n\n';
-  msg+='_Gerado automaticamente pelo BI Solucione_';
+  msg+='_Gerado automaticamente pelo Monter Adm | BI_';
   showMsgModal(msg);
 }
 function showMsgModal(msg){
@@ -512,7 +512,7 @@ async function ghubSave(){
     const rr=await fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
       {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}});
     if(rr.ok){const jj=await rr.json();_ghubSha=jj.sha;}
-    const body={message:'update: Solucione BI data '+new Date().toISOString(),
+    const body={message:'update: Monter BI data '+new Date().toISOString(),
       content:btoa(encodeURIComponent(ghubPayload()).replace(/%([0-9A-F]{2})/g,(_,p)=>String.fromCharCode(parseInt(p,16))))};
     if(_ghubSha)body.sha=_ghubSha;
     const r=await fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
@@ -1306,10 +1306,14 @@ function renderDash(){
       else if(r.tipo==='PAGAMENTO')porDia[d].pag+=r.valor;
     });
     var dias=Object.keys(porDia).map(Number).sort(function(a,b){return a-b;});
+    hojeD=new Date();hojeD.setHours(0,0,0,0);
+    var anoSel=parseInt(ano)||hojeD.getFullYear();
     labFat=dias.map(function(d){return String(d);});
     labPag=dias.map(function(d){return String(d);});
     datFat=dias.map(function(d){return porDia[d].fat;});
     datPag=dias.map(function(d){return porDia[d].pag;});
+    var corFat=dias.map(function(d){var dt=new Date(anoSel,mesSel[0],d);return dt>hojeD?'rgba(27,107,53,0.25)':'rgba(27,107,53,0.78)';});
+    var corPag=dias.map(function(d){var dt=new Date(anoSel,mesSel[0],d);return dt>hojeD?'rgba(192,57,43,0.25)':'rgba(192,57,43,0.78)';});
   } else {
     // Agrupar por mês
     lblFat='Faturamento por Mês';
@@ -1322,10 +1326,14 @@ function renderDash(){
       else if(r.tipo==='PAGAMENTO')porMes[r.mes].pag+=r.valor;
     });
     var mesesDados=porMes.map(function(m,i){return{i,fat:m.fat,pag:m.pag};}).filter(function(m){return m.fat||m.pag;});
+    hojeD=new Date();hojeD.setHours(0,0,0,0);
+    var anoSelM=parseInt(ano)||hojeD.getFullYear();
     labFat=mesesDados.map(function(m){return MESES[m.i];});
     labPag=mesesDados.map(function(m){return MESES[m.i];});
     datFat=mesesDados.map(function(m){return m.fat;});
     datPag=mesesDados.map(function(m){return m.pag;});
+    var corFat=mesesDados.map(function(m){var dt=new Date(anoSelM,m.i+1,0);return dt>hojeD?'rgba(27,107,53,0.25)':'rgba(27,107,53,0.78)';});
+    var corPag=mesesDados.map(function(m){var dt=new Date(anoSelM,m.i+1,0);return dt>hojeD?'rgba(192,57,43,0.25)':'rgba(192,57,43,0.78)';});
   }
 
   // Atualizar títulos
@@ -1337,7 +1345,7 @@ function renderDash(){
   if(ctx1){
     if(CHARTS['dash1'])CHARTS['dash1'].destroy();
     CHARTS['dash1']=new Chart(ctx1,{type:'bar',
-      data:{labels:labFat,datasets:[{label:'Faturamento Líquido',data:datFat,backgroundColor:'rgba(27,107,53,0.75)',borderColor:'#1B6B35',borderWidth:1}]},
+      data:{labels:labFat,datasets:[{label:'Faturamento Líquido',data:datFat,backgroundColor:corFat,borderColor:'#1B6B35',borderWidth:1}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){return fmtK(v);}}}}}
     });
   }
@@ -1347,7 +1355,7 @@ function renderDash(){
   if(ctx2){
     if(CHARTS['dash2'])CHARTS['dash2'].destroy();
     CHARTS['dash2']=new Chart(ctx2,{type:'bar',
-      data:{labels:labPag,datasets:[{label:'Despesas',data:datPag,backgroundColor:'rgba(192,57,43,0.75)',borderColor:'#C0392B',borderWidth:1}]},
+      data:{labels:labPag,datasets:[{label:'Despesas',data:datPag,backgroundColor:corPag,borderColor:'#C0392B',borderWidth:1}]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:function(v){return fmtK(v);}}}}}
     });
   }
@@ -1667,8 +1675,8 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 
 <nav>
   <div class="nav-logo">
-    <div class="nav-logo-mark">S</div>
-    <div class="nav-logo-text">Solucione <span>BI</span></div>
+    <div class="nav-logo-mark">M</div>
+    <div class="nav-logo-text">Monter Adm | <span>BI</span></div>
   </div>
   <div class="nav-tabs">
     <button class="nav-tab" data-tab="dash" onclick="goTab(this);renderDash()">Dashboard</button>
@@ -2305,11 +2313,7 @@ function exportarOrcamento(){}
         <label style="font-size:11px;display:flex;align-items:center;gap:3px;cursor:pointer"><input type="checkbox" value="11" onchange="renderDash()"> Dez</label>
       </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <span class="filter-label">Dia</span>
-      <input type="number" id="dash-dia" min="1" max="31" placeholder="—" onchange="renderDash()"
-        style="width:60px;border:1px solid var(--border);background:var(--bg);padding:6px 8px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;text-align:center">
-    </div>
+<input type="hidden" id="dash-dia" value="">
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Centro de Custo</span>
       <select class="filter-select" id="dash-cc" onchange="renderDash()" style="min-width:160px"><option value="">Todos os CCs</option></select>
