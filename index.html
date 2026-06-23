@@ -1413,6 +1413,61 @@ function exportarProjecaoXLS(){
 function adicionarOrcamento(){const obra=document.getElementById('orc-obra').value.trim(),tot=document.getElementById('orc-totalizador').value.trim(),cod=document.getElementById('orc-codigo').value.trim(),desc=document.getElementById('orc-descricao').value.trim(),val=parseBRNum(document.getElementById('orc-valor').value);if(!obra||!desc||!val){alert('Preencha Obra, Descrição e Valor.');return;}DATA.orcamento.push({obra,totalizador:tot,codigo:cod,descricao:desc,valor:val});['orc-obra','orc-totalizador','orc-codigo','orc-descricao','orc-valor'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderOrcamentoTable();renderDtlh();}
 function fPct(r,o){return o?'<span style="font-size:10px;font-weight:600;color:'+(r/o>1?'#C0392B':'#1B6B35')+'">'+(r/o*100).toFixed(1)+'%</span>':'<span style="color:#ccc;font-size:10px">—</span>';}
 function renderOrcamentoTable(){const tbody=document.getElementById('body-orcamento');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('orc-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');if(!DATA.orcamento.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum item</p></div></td></tr>';return;}tbody.innerHTML=DATA.orcamento.map((o,i)=>'<tr><td>'+o.obra+'</td><td>'+(o.totalizador||'—')+'</td><td>'+(o.codigo||'—')+'</td><td>'+o.descricao+'</td><td class="r val-neg">'+fmt(o.valor)+'</td><td style="text-align:center"><button onclick="removerOrcamento('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
+function renderOrcamentoResumo(entries, filtroObra){
+  var tbody=document.getElementById('tbody-orc-resumo');
+  if(!tbody)return;
+  if(!entries||!entries.length){
+    tbody.innerHTML='<tr><td colspan="5"><div class="empty-state"><p>Importe o orçamento para ver o resumo</p></div></td></tr>';
+    return;
+  }
+
+  var fmtV=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var fmtP=function(r,o){if(!o)return'—';var p=r/o*100;return'<span style="color:'+(p>100?'#C0392B':p>=80?'#B7950B':'#1B6B35')+'">'+p.toFixed(1)+'%</span>';};
+
+  // Identificar entradas de cálculo: só folhas (sem filhos)
+  var allCodes=entries.map(function(e){return e.codigo;}).filter(Boolean);
+  var isFolha=function(e){return !e.codigo||!allCodes.some(function(c){return c!==e.codigo&&c.startsWith(e.codigo+'.');});};
+
+  // Classificar por grupo (primeiro segmento do código)
+  var g01={orc:0,real:0},g02={orc:0,real:0},g03={orc:0,real:0};
+  entries.filter(isFolha).forEach(function(e){
+    var cod=String(e.codigo||'').trim();
+    var grupo=cod.split('.')[0];
+    // Calcular realizado (soma dos anos)
+    var real=0;
+    Object.values(e.anos||{}).forEach(function(meses){Object.values(meses).forEach(function(v){real+=v;});});
+    var orc=parseFloat(e.orcado||0)||0;
+    if(grupo==='01'){g01.orc+=orc;g01.real+=real;}
+    else if(grupo==='02'){g02.orc+=orc;g02.real+=real;}
+    else{g03.orc+=orc;g03.real+=real;}
+  });
+
+  var totOrc=g01.orc+g02.orc+g03.orc;
+  var totReal=g01.real+g02.real+g03.real;
+
+  var row=function(num,nome,g,bg){
+    var saldo=g.orc-g.real;
+    return '<tr style="border-bottom:1px solid var(--border);'+(bg?'background:'+bg+';font-weight:700;':'')+'">'
+      +'<td style="padding:10px 16px;font-size:13px"><span style="color:var(--brand);font-weight:600;margin-right:8px">'+num+'</span>'+nome+'</td>'
+      +'<td class="r" style="padding:10px 16px;font-size:13px">'+fmtV(g.orc)+'</td>'
+      +'<td class="r" style="padding:10px 16px;font-size:13px">'+fmtV(g.real)+'</td>'
+      +'<td class="r" style="padding:10px 16px;font-size:13px">'+fmtP(g.real,g.orc)+'</td>'
+      +'<td class="r" style="padding:10px 16px;font-size:13px;color:'+(saldo>=0?'#1B6B35':'#C0392B')+';font-weight:600">'+fmtV(saldo)+'</td>'
+      +'</tr>';
+  };
+
+  tbody.innerHTML=
+    row('01','Incorporação e Despesas Iniciais',g01,'')
+    +row('02','Serviços Preliminares e Gerais',g02,'')
+    +row('03','Empreendimento',g03,'')
+    +'<tr style="background:#f0f7f0;font-weight:700;border-top:2px solid #1B6B35">'
+    +'<td style="padding:10px 16px;font-size:13px;color:var(--brand)">Total Geral</td>'
+    +'<td class="r" style="padding:10px 16px;font-size:13px">'+fmtV(totOrc)+'</td>'
+    +'<td class="r" style="padding:10px 16px;font-size:13px">'+fmtV(totReal)+'</td>'
+    +'<td class="r" style="padding:10px 16px;font-size:13px">'+fmtP(totReal,totOrc)+'</td>'
+    +'<td class="r" style="padding:10px 16px;font-size:13px;color:'+(totOrc-totReal>=0?'#1B6B35':'#C0392B')+';font-weight:600">'+fmtV(totOrc-totReal)+'</td>'
+    +'</tr>';
+}
 function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
 function importarOrcamento(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{defval:''});rows.forEach(r=>{const obra=String(r['Obra']||r['obra']||'').trim(),desc=String(r['Descrição']||r['Descricao']||'').trim(),val=parseBRNum(String(r['Valor']||r['valor']||'0'));if(obra&&desc&&val)DATA.orcamento.push({obra,totalizador:String(r['Totalizador']||'').trim(),codigo:String(r['Código']||r['Codigo']||'').trim(),descricao:desc,valor:val});});renderOrcamentoTable();renderDtlh();alert(DATA.orcamento.length+' itens.');}catch(err){alert('Erro: '+err.message);}};reader.readAsArrayBuffer(file);input.value='';}
 function exportarEstoque(){
@@ -1925,6 +1980,7 @@ function renderOrcamentoTable(){
     +'<td class="r" style="padding:5px 8px;color:#fff;background:#154360">'+fmt(runAcc)+'</td></tr>';
   tbody.innerHTML=rows;
   set('orc-badge',entries.length+' itens');
+  renderOrcamentoResumo(entries,filtroObra);
 }
 
 function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
@@ -2200,6 +2256,30 @@ function exportarOrcamento(){}
       <label class="btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">&#128194; Importar Excel<input type="file" accept=".xlsx,.xls" style="display:none" onchange="importarOrcamento(this)"></label>
       <button class="btn-secondary" onclick="limparOrcamento()">✕ Limpar tudo</button>
       <span style="font-size:11px;color:var(--text3)">Preencha o nome da obra antes de importar.</span>
+    </div>
+  </div>
+
+  <!-- Resumo por Grupo -->
+  <div class="tbl-card" style="margin-top:16px">
+    <div class="tbl-head">
+      <div class="tbl-title">Estrutura do Resumo</div>
+      <span style="font-size:11px;color:var(--text3)">Atualiza conforme filtro de obra</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="text-align:left;padding:10px 16px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Grupo</th>
+            <th class="r" style="padding:10px 16px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Orçado</th>
+            <th class="r" style="padding:10px 16px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Realizado</th>
+            <th class="r" style="padding:10px 16px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">% Exec.</th>
+            <th class="r" style="padding:10px 16px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Saldo</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-orc-resumo">
+          <tr><td colspan="5"><div class="empty-state"><p>Importe o orçamento para ver o resumo</p></div></td></tr>
+        </tbody>
+      </table>
     </div>
   </div>
 
