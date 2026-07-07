@@ -567,6 +567,21 @@ function restoreJSON(input){const file=input.files[0];if(!file)return;const read
 
 function adicionarEstoque(){const obra=document.getElementById('est-obra').value.trim(),unidade=document.getElementById('est-unidade').value.trim(),status=document.getElementById('est-status').value,area=parseBRNum(document.getElementById('est-area').value),venda=parseBRNum(document.getElementById('est-venda').value);if(!obra||!unidade){alert('Preencha Obra e Unidade.');return;}DATA.estoque.push({obra,unidade,status,area,venda});['est-obra','est-unidade','est-area','est-venda'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderEstoqueTable();}
 function renderEstoqueTable(){const tbody=document.getElementById('body-estoque');if(!tbody)return;const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))];const ol=document.getElementById('est-obra-list');if(ol)ol.innerHTML=obras.map(o=>'<option value="'+o+'">').join('');const fObra=document.getElementById('fe-obra')?.value||'';const filtered=DATA.estoque.filter(u=>!fObra||ccMatch(u.obra,fObra));const totalVal=filtered.reduce((s,u)=>s+(u.venda||0),0);set('count-estoque',filtered.length+' unidade'+(filtered.length!==1?'s':''));set('total-estoque',fmt(totalVal));if(!filtered.length){tbody.innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhuma unidade</p></div></td></tr>';return;}tbody.innerHTML=filtered.map((r,i)=>'<tr><td>'+r.obra+'</td><td>'+r.unidade+'</td><td><span class="badge '+(r.status==='Disponível'?'bg-green':r.status==='Vendido'?'bg-red':'bg-gold')+'">'+r.status+'</span></td><td class="r">'+(r.area?r.area.toLocaleString('pt-BR',{minimumFractionDigits:2})+'m²':'—')+'</td><td class="r">'+(r.venda?fmt(r.venda):'—')+'</td><td style="text-align:center"><button onclick="removerEstoque('+DATA.estoque.indexOf(r)+')" style="background:none;border:none;color:var(--danger);cursor:pointer">&#10005;</button></td></tr>').join('');}
+function renomearObra(){
+  var de=document.getElementById('est-rename-de')?.value.trim();
+  var para=document.getElementById('est-rename-para')?.value.trim();
+  if(!de||!para){alert('Preencha o nome atual e o novo nome.');return;}
+  var count=0;
+  DATA.estoque.forEach(function(u){
+    if(ccMatch(u.obra,de)){u.obra=para;count++;}
+  });
+  if(!count){alert('Nenhuma unidade encontrada com o nome "'+de+'".');return;}
+  renderEstoqueTable();
+  autoSave();
+  alert(count+' unidade(s) renomeada(s) para "'+para+'" com sucesso.');
+  document.getElementById('est-rename-de').value='';
+  document.getElementById('est-rename-para').value='';
+}
 function removerEstoque(i){DATA.estoque.splice(i,1);renderEstoqueTable();}
 function updateDtlhFilters(){const cur=document.getElementById('dt-obra')?.value||'';const obras=[...new Set([...DATA.csv.map(r=>r.cc),...Object.values(DATA.orcamentoMensal||{}).map(e=>e.obra)].filter(Boolean))].sort();const el=document.getElementById('dt-obra');if(el){el.innerHTML='<option value="">Todas as obras</option>'+obras.map(o=>'<option value="'+o+'"'+(o===cur?' selected':'')+'>'+o+'</option>').join('');}}
 function clearDtlhFilters(){const el=document.getElementById('dt-obra');if(el)el.value='';renderDtlh();}
@@ -2107,6 +2122,23 @@ function exportarOrcamento(){}
 <div class="page" id="page-estoque">
   <div class="sec-title">Estoque</div>
   <div class="sec-sub">Cadastre as unidades disponíveis por obra para cálculo de Estoque e Afetação + Comissão</div>
+
+  <div class="estoque-form" style="margin-bottom:12px">
+    <div class="estoque-form-title">Renomear Obra</div>
+    <div class="form-row" style="align-items:flex-end;gap:12px;flex-wrap:wrap">
+      <div class="form-group">
+        <label>Nome atual</label>
+        <input class="form-input" id="est-rename-de" placeholder="Ex: TERRALTA" style="min-width:200px">
+      </div>
+      <div class="form-group">
+        <label>Novo nome</label>
+        <input class="form-input" id="est-rename-para" placeholder="Ex: SPE MONTAGNES" style="min-width:200px">
+      </div>
+      <div class="form-group" style="justify-content:flex-end">
+        <button class="btn-primary" onclick="renomearObra()">Renomear</button>
+      </div>
+    </div>
+  </div>
 
   <div class="estoque-form">
     <div class="estoque-form-title">Adicionar Unidade</div>
