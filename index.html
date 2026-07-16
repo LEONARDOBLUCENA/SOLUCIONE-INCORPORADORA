@@ -1275,12 +1275,10 @@ function populateDashFilters(){
   var meses=[...new Set(csv.map(function(r){return r.mes;}).filter(function(m){return m!=null;}))].sort(function(a,b){return a-b;});
   var ccs=[...new Set(csv.map(function(r){return r.cc;}).filter(Boolean))].sort();
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  var comps=[...new Set(csv.map(function(r){return r.complemento;}).filter(Boolean))].sort();
   ['df','dd'].forEach(function(p){
     fillMultiDrop('wrap-'+p+'-ano','btn-'+p+'-ano','list-'+p+'-ano',anos,function(v){return v;},function(v){return String(v);});
     fillMultiDrop('wrap-'+p+'-mes','btn-'+p+'-mes','list-'+p+'-mes',meses,function(v){return v;},function(v){return MESES_PT[v]||v;});
     fillMultiDrop('wrap-'+p+'-cc','btn-'+p+'-cc','list-'+p+'-cc',ccs,function(v){return v;},function(v){return v;});
-    fillMultiDrop('wrap-'+p+'-comp','btn-'+p+'-comp','list-'+p+'-comp',comps,function(v){return v;},function(v){return v;});
   });
 }
 function filtraDash(dados, prefix){
@@ -2387,14 +2385,8 @@ function exportarOrcamento(){}
         <div class="multi-drop-list" id="list-df-cc"></div>
       </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <span class="filter-label">Cliente</span>
-      <div class="multi-drop-wrap" id="wrap-df-comp">
-        <button class="multi-drop-btn" id="btn-df-comp" onclick="populateDashFilters();toggleDrop('wrap-df-comp','btn-df-comp','list-df-comp')">Todos</button>
-        <div class="multi-drop-list" id="list-df-comp"></div>
-      </div>
-    </div>
-    <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc','list-df-comp'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc','btn-df-comp'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashFat()">✕ Limpar</button>
+
+    <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashFat()">✕ Limpar</button>
   </div>
 
   <!-- KPIs Faturamento -->
@@ -2462,14 +2454,8 @@ function exportarOrcamento(){}
         <div class="multi-drop-list" id="list-dd-cc"></div>
       </div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <span class="filter-label">Fornecedor</span>
-      <div class="multi-drop-wrap" id="wrap-dd-comp">
-        <button class="multi-drop-btn" id="btn-dd-comp" onclick="populateDashFilters();toggleDrop('wrap-dd-comp','btn-dd-comp','list-dd-comp')">Todos</button>
-        <div class="multi-drop-list" id="list-dd-comp"></div>
-      </div>
-    </div>
-    <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc','list-dd-comp'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc','btn-dd-comp'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashDesp()">✕ Limpar</button>
+
+    <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashDesp()">✕ Limpar</button>
   </div>
 
   <!-- KPIs Despesas -->
