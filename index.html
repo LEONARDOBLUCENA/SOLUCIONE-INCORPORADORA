@@ -1327,7 +1327,8 @@ function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoF
       totR+=e[1].realizado;totF+=e[1].futuro;
       var tot=e[1].realizado+e[1].futuro;
       return'<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:#fafafa;':'')+'">'
-        +'<td style="padding:6px 12px;font-size:12px">'+e[0]+'</td>'
+        +'<td style="padding:6px 12px;font-size:12px">'+e[1].nome+'</td>'
+        +'<td style="padding:6px 12px;font-size:11px;color:var(--text3)">'+e[1].conta+'</td>'
         +'<td class="r" style="padding:6px 12px;font-size:12px;color:'+corR+';font-weight:600">'+fmtV(e[1].realizado)+'</td>'
         +'<td class="r" style="padding:6px 12px;font-size:12px;color:'+corF+'">'+fmtV(e[1].futuro)+'</td>'
         +'<td class="r" style="padding:6px 12px;font-size:12px;font-weight:700">'+fmtV(tot)+'</td>'
@@ -1335,6 +1336,7 @@ function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoF
     }).join('');
     if(tfoot)tfoot.innerHTML='<tr style="background:#f0f7f0;font-weight:700;border-top:2px solid #1B6B35">'
       +'<td style="padding:8px 12px;font-size:12px;color:var(--brand)">Total</td>'
+      +'<td></td>'
       +'<td class="r" style="padding:8px 12px;font-size:12px;color:'+corR+'">'+fmtV(totR)+'</td>'
       +'<td class="r" style="padding:8px 12px;font-size:12px;color:'+corF+'">'+fmtV(totF)+'</td>'
       +'<td class="r" style="padding:8px 12px;font-size:12px;font-weight:700">'+fmtV(totR+totF)+'</td>'
@@ -2357,8 +2359,8 @@ function exportarOrcamento(){}
 <div class="page" id="page-dash">
 
   <!-- ══ VISÃO FATURAMENTO ══ -->
-  <div class="sec-title" style="margin-bottom:4px">Faturamento</div>
-  <div class="sec-sub" style="margin-bottom:12px">Recebimentos por complemento — passado vs futuro</div>
+  <div class="sec-title" style="margin-bottom:4px">Entradas</div>
+  <div class="sec-sub" style="margin-bottom:12px">Recebimentos por cliente — passado vs futuro</div>
   <div class="filters-bar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Ano</span>
@@ -2381,7 +2383,14 @@ function exportarOrcamento(){}
         <div class="multi-drop-list" id="list-df-cc"></div>
       </div>
     </div>
-    <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashFat()">✕ Limpar</button>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span class="filter-label">Complemento</span>
+      <div class="multi-drop-wrap" id="wrap-df-comp">
+        <button class="multi-drop-btn" id="btn-df-comp" onclick="toggleDrop('wrap-df-comp','btn-df-comp','list-df-comp')">Todos</button>
+        <div class="multi-drop-list" id="list-df-comp"></div>
+      </div>
+    </div>
+    <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc','list-df-comp'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc','btn-df-comp'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashFat()">✕ Limpar</button>
   </div>
 
   <!-- KPIs Faturamento -->
@@ -2402,20 +2411,21 @@ function exportarOrcamento(){}
 
   <div class="tbl-card" style="margin-top:12px">
     <div class="tbl-head">
-      <div class="tbl-title">Faturamento por Complemento</div>
+      <div class="tbl-title">Entradas por Cliente</div>
       <span class="tbl-badge" id="df-badge">—</span>
     </div>
     <div style="overflow-x:auto;max-height:380px;overflow-y:auto">
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="background:#f5f5f5">
-            <th style="text-align:left;padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Complemento</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Cliente</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Conta</th>
             <th class="r" style="padding:8px 12px;font-size:11px;color:#1B6B35;position:sticky;top:0;background:#f5f5f5">Recebido</th>
             <th class="r" style="padding:8px 12px;font-size:11px;color:rgba(27,107,53,0.6);position:sticky;top:0;background:#f5f5f5">A Receber</th>
             <th class="r" style="padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Total</th>
           </tr>
         </thead>
-        <tbody id="df-tbody"><tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr></tbody>
+        <tbody id="df-tbody"><tr><td colspan="5"><div class="empty-state"><p>Nenhum dado</p></div></td></tr></tbody>
         <tfoot id="df-tfoot"></tfoot>
       </table>
     </div>
@@ -2424,8 +2434,8 @@ function exportarOrcamento(){}
   <div style="border-top:2px solid var(--border);margin:28px 0"></div>
 
   <!-- ══ VISÃO DESPESAS ══ -->
-  <div class="sec-title" style="margin-bottom:4px">Despesas</div>
-  <div class="sec-sub" style="margin-bottom:12px">Pagamentos por complemento — passado vs futuro</div>
+  <div class="sec-title" style="margin-bottom:4px">Saídas</div>
+  <div class="sec-sub" style="margin-bottom:12px">Pagamentos por fornecedor — passado vs futuro</div>
   <div class="filters-bar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Ano</span>
@@ -2448,7 +2458,14 @@ function exportarOrcamento(){}
         <div class="multi-drop-list" id="list-dd-cc"></div>
       </div>
     </div>
-    <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashDesp()">✕ Limpar</button>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span class="filter-label">Complemento</span>
+      <div class="multi-drop-wrap" id="wrap-dd-comp">
+        <button class="multi-drop-btn" id="btn-dd-comp" onclick="toggleDrop('wrap-dd-comp','btn-dd-comp','list-dd-comp')">Todos</button>
+        <div class="multi-drop-list" id="list-dd-comp"></div>
+      </div>
+    </div>
+    <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc','list-dd-comp'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc','btn-dd-comp'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashDesp()">✕ Limpar</button>
   </div>
 
   <!-- KPIs Despesas -->
@@ -2469,20 +2486,21 @@ function exportarOrcamento(){}
 
   <div class="tbl-card" style="margin-top:12px">
     <div class="tbl-head">
-      <div class="tbl-title">Despesas por Complemento</div>
+      <div class="tbl-title">Saídas por Fornecedor</div>
       <span class="tbl-badge" id="dd-badge">—</span>
     </div>
     <div style="overflow-x:auto;max-height:380px;overflow-y:auto">
       <table style="width:100%;border-collapse:collapse">
         <thead>
           <tr style="background:#f5f5f5">
-            <th style="text-align:left;padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Complemento</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Fornecedor</th>
+            <th style="text-align:left;padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Conta</th>
             <th class="r" style="padding:8px 12px;font-size:11px;color:#C0392B;position:sticky;top:0;background:#f5f5f5">Pago</th>
             <th class="r" style="padding:8px 12px;font-size:11px;color:rgba(192,57,43,0.6);position:sticky;top:0;background:#f5f5f5">A Pagar</th>
             <th class="r" style="padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Total</th>
           </tr>
         </thead>
-        <tbody id="dd-tbody"><tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr></tbody>
+        <tbody id="dd-tbody"><tr><td colspan="5"><div class="empty-state"><p>Nenhum dado</p></div></td></tr></tbody>
         <tfoot id="dd-tfoot"></tfoot>
       </table>
     </div>
