@@ -1293,13 +1293,13 @@ function filtraDash(dados, prefix){
   });
 }
 function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoFat){
-  var hoje=new Date();hoje.setHours(0,0,0,0);
   var fmtV=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var map={};
   dados.forEach(function(r){
     var k=r.complemento||'(sem complemento)';
     if(!map[k])map[k]={realizado:0,futuro:0};
-    var isFut=r.data&&r.data>hoje;
+    var comp=(r.complemento||'').toLowerCase();
+    var isFut=comp.includes('a pagar')||comp.includes('a receber');
     if(isFut)map[k].futuro+=r.valor;
     else map[k].realizado+=r.valor;
   });
