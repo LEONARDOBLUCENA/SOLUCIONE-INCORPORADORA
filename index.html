@@ -1275,10 +1275,12 @@ function populateDashFilters(){
   var meses=[...new Set(csv.map(function(r){return r.mes;}).filter(function(m){return m!=null;}))].sort(function(a,b){return a-b;});
   var ccs=[...new Set(csv.map(function(r){return r.cc;}).filter(Boolean))].sort();
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var comps=[...new Set(csv.map(function(r){return r.complemento;}).filter(Boolean))].sort();
   ['df','dd'].forEach(function(p){
     fillMultiDrop('wrap-'+p+'-ano','btn-'+p+'-ano','list-'+p+'-ano',anos,function(v){return v;},function(v){return String(v);});
     fillMultiDrop('wrap-'+p+'-mes','btn-'+p+'-mes','list-'+p+'-mes',meses,function(v){return v;},function(v){return MESES_PT[v]||v;});
     fillMultiDrop('wrap-'+p+'-cc','btn-'+p+'-cc','list-'+p+'-cc',ccs,function(v){return v;},function(v){return v;});
+    fillMultiDrop('wrap-'+p+'-comp','btn-'+p+'-comp','list-'+p+'-comp',comps,function(v){return v;},function(v){return v;});
   });
 }
 function filtraDash(dados, prefix){
