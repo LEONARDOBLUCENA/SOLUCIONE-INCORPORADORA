@@ -291,6 +291,8 @@ function getMultiDrop(wrapId){
   return checked.size===total?new Set():checked;
 }
 function onMultiDropChange(wrapId,btnId,listId){
+  if(wrapId.startsWith('wrap-df-')){setTimeout(renderDashFat,0);}
+  else if(wrapId.startsWith('wrap-dd-')){setTimeout(renderDashDesp,0);}
   const list=document.getElementById(listId);
   const total=list.querySelectorAll('input[value]').length;
   const checked=list.querySelectorAll('input[value]:checked').length;
@@ -1265,37 +1267,32 @@ function abrirPDF(html){
   setTimeout(function(){w.print();},800);
 }
 
-function getMultiSel(id){
-  var el=document.getElementById(id);
-  if(!el)return[];
-  return Array.from(el.selectedOptions).map(function(o){return o.value;}).filter(function(v){return v!=='';});
-}
 function populateDashFilters(){
   var csv=DATA.csv||[];
   var anos=[...new Set(csv.map(function(r){return r.ano;}).filter(function(a){return a!=null;}))].sort();
+  var meses=[...new Set(csv.map(function(r){return r.mes;}).filter(function(m){return m!=null;}))].sort(function(a,b){return a-b;});
   var ccs=[...new Set(csv.map(function(r){return r.cc;}).filter(Boolean))].sort();
+  var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   ['df','dd'].forEach(function(p){
-    var anoEl=document.getElementById(p+'-ano');
-    var ccEl=document.getElementById(p+'-cc');
-    if(anoEl){var curA=getMultiSel(p+'-ano');anoEl.innerHTML='<option value="">Todos</option>'+anos.map(function(a){return'<option value="'+a+'"'+(curA.includes(String(a))?' selected':'')+'>'+a+'</option>';}).join('');}
-    if(ccEl){var curC=getMultiSel(p+'-cc');ccEl.innerHTML='<option value="">Todos</option>'+ccs.map(function(c){return'<option value="'+c+'"'+(curC.includes(c)?' selected':'')+'>'+c+'</option>';}).join('');}
+    fillMultiDrop('wrap-'+p+'-ano','btn-'+p+'-ano','list-'+p+'-ano',anos,function(v){return v;},function(v){return String(v);});
+    fillMultiDrop('wrap-'+p+'-mes','btn-'+p+'-mes','list-'+p+'-mes',meses,function(v){return v;},function(v){return MESES_PT[v]||v;});
+    fillMultiDrop('wrap-'+p+'-cc','btn-'+p+'-cc','list-'+p+'-cc',ccs,function(v){return v;},function(v){return v;});
   });
 }
 function filtraDash(dados, prefix){
-  var anos=getMultiSel(prefix+'-ano');
-  var meses=getMultiSel(prefix+'-mes').map(Number);
-  var ccs=getMultiSel(prefix+'-cc');
+  var anos=getMultiDrop('wrap-'+prefix+'-ano');
+  var meses=getMultiDrop('wrap-'+prefix+'-mes');
+  var ccs=getMultiDrop('wrap-'+prefix+'-cc');
   return dados.filter(function(r){
-    if(anos.length&&!anos.includes(String(r.ano)))return false;
-    if(meses.length&&!meses.includes(r.mes))return false;
-    if(ccs.length&&!ccs.some(function(c){return ccMatch(r.cc||'',c);}))return false;
+    if(anos.size&&!anos.has(String(r.ano)))return false;
+    if(meses.size&&!meses.has(String(r.mes)))return false;
+    if(ccs.size&&!Array.from(ccs).some(function(c){return ccMatch(r.cc||'',c);}))return false;
     return true;
   });
 }
-function renderTabelaDash(tbodyId, tfootId, badgeId, dados, tipoFat){
+function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoFat){
   var hoje=new Date();hoje.setHours(0,0,0,0);
   var fmtV=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
-  // Agrupar por complemento
   var map={};
   dados.forEach(function(r){
     var k=r.complemento||'(sem complemento)';
@@ -1307,50 +1304,47 @@ function renderTabelaDash(tbodyId, tfootId, badgeId, dados, tipoFat){
   var linhas=Object.entries(map).sort(function(a,b){return(b[1].realizado+b[1].futuro)-(a[1].realizado+a[1].futuro);});
   var tbody=document.getElementById(tbodyId);
   var tfoot=document.getElementById(tfootId);
-  var badge=document.getElementById(badgeId);
   if(!tbody)return;
   var corR=tipoFat?'#1B6B35':'#C0392B';
-  var corF=tipoFat?'rgba(27,107,53,0.5)':'rgba(192,57,43,0.5)';
-  var lblR=tipoFat?'Recebido':'Pago';
-  var lblF=tipoFat?'A Receber':'A Pagar';
+  var corF=tipoFat?'rgba(27,107,53,0.6)':'rgba(192,57,43,0.6)';
+  var totR=0,totF=0;
   if(!linhas.length){
     tbody.innerHTML='<tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>';
     if(tfoot)tfoot.innerHTML='';
-    if(badge)badge.textContent='0 itens';
-    return;
-  }
-  tbody.innerHTML=linhas.map(function(e,i){
-    var tot=e[1].realizado+e[1].futuro;
-    return'<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:#fafafa;':'')+'">'
-      +'<td style="padding:6px 12px;font-size:12px">'+e[0]+'</td>'
-      +'<td class="r" style="padding:6px 12px;font-size:12px;color:'+corR+';font-weight:600">'+fmtV(e[1].realizado)+'</td>'
-      +'<td class="r" style="padding:6px 12px;font-size:12px;color:'+corF+'">'+fmtV(e[1].futuro)+'</td>'
-      +'<td class="r" style="padding:6px 12px;font-size:12px;font-weight:700">'+fmtV(tot)+'</td>'
+  } else {
+    tbody.innerHTML=linhas.map(function(e,i){
+      totR+=e[1].realizado;totF+=e[1].futuro;
+      var tot=e[1].realizado+e[1].futuro;
+      return'<tr style="border-bottom:1px solid var(--border);'+(i%2?'background:#fafafa;':'')+'">'
+        +'<td style="padding:6px 12px;font-size:12px">'+e[0]+'</td>'
+        +'<td class="r" style="padding:6px 12px;font-size:12px;color:'+corR+';font-weight:600">'+fmtV(e[1].realizado)+'</td>'
+        +'<td class="r" style="padding:6px 12px;font-size:12px;color:'+corF+'">'+fmtV(e[1].futuro)+'</td>'
+        +'<td class="r" style="padding:6px 12px;font-size:12px;font-weight:700">'+fmtV(tot)+'</td>'
+        +'</tr>';
+    }).join('');
+    if(tfoot)tfoot.innerHTML='<tr style="background:#f0f7f0;font-weight:700;border-top:2px solid #1B6B35">'
+      +'<td style="padding:8px 12px;font-size:12px;color:var(--brand)">Total</td>'
+      +'<td class="r" style="padding:8px 12px;font-size:12px;color:'+corR+'">'+fmtV(totR)+'</td>'
+      +'<td class="r" style="padding:8px 12px;font-size:12px;color:'+corF+'">'+fmtV(totF)+'</td>'
+      +'<td class="r" style="padding:8px 12px;font-size:12px;font-weight:700">'+fmtV(totR+totF)+'</td>'
       +'</tr>';
-  }).join('');
-  var totR=linhas.reduce(function(s,e){return s+e[1].realizado;},0);
-  var totF=linhas.reduce(function(s,e){return s+e[1].futuro;},0);
-  if(tfoot)tfoot.innerHTML='<tr style="background:#f0f7f0;font-weight:700;border-top:2px solid #1B6B35">'
-    +'<td style="padding:8px 12px;font-size:12px;color:var(--brand)">Total</td>'
-    +'<td class="r" style="padding:8px 12px;font-size:12px;color:'+corR+'">'+fmtV(totR)+'</td>'
-    +'<td class="r" style="padding:8px 12px;font-size:12px;color:'+corF+'">'+fmtV(totF)+'</td>'
-    +'<td class="r" style="padding:8px 12px;font-size:12px;font-weight:700">'+fmtV(totR+totF)+'</td>'
-    +'</tr>';
-  if(badge)badge.textContent=linhas.length+' itens';
+  }
+  // KPIs
+  var elR=document.getElementById(kpiRealId);if(elR)elR.textContent=fmtV(totR);
+  var elF=document.getElementById(kpiFutId);if(elF)elF.textContent=fmtV(totF);
+  var badge=document.getElementById(badgeId);if(badge)badge.textContent=linhas.length+' itens';
 }
 function renderDashFat(){
   populateDashFilters();
   var csv=DATA.csv||[];
-  var fat=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO'||r.tipo==='DESCONTO';}), 'df');
-  // DESCONTO subtrai do FATURAMENTO — tratar como negativo
-  var fat2=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df');
-  renderTabelaDash('df-tbody','df-tfoot','df-badge',fat2,true);
+  var fat=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df');
+  renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-arec',fat,true);
 }
 function renderDashDesp(){
   populateDashFilters();
   var csv=DATA.csv||[];
   var pag=filtraDash(csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd');
-  renderTabelaDash('dd-tbody','dd-tfoot','dd-badge',pag,false);
+  renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-apag',pag,false);
 }
 function renderDash(){renderDashFat();renderDashDesp();}
 function exportarProjecaoXLS(){
@@ -2355,18 +2349,40 @@ function exportarOrcamento(){}
   <div class="filters-bar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Ano</span>
-      <select class="filter-select" id="df-ano" multiple size="3" onchange="renderDashFat()" style="min-width:70px;height:64px"><option value="">Todos</option></select>
+      <div class="multi-drop-wrap" id="wrap-df-ano">
+        <button class="multi-drop-btn" id="btn-df-ano" onclick="toggleMultiDrop('wrap-df-ano','btn-df-ano','list-df-ano')">Todos</button>
+        <div class="multi-drop-list" id="list-df-ano"></div>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Mês</span>
-      <select class="filter-select" id="df-mes" multiple size="3" onchange="renderDashFat()" style="min-width:70px;height:64px"><option value="">Todos</option><option value="0">Jan</option><option value="1">Fev</option><option value="2">Mar</option><option value="3">Abr</option><option value="4">Mai</option><option value="5">Jun</option><option value="6">Jul</option><option value="7">Ago</option><option value="8">Set</option><option value="9">Out</option><option value="10">Nov</option><option value="11">Dez</option></select>
+      <div class="multi-drop-wrap" id="wrap-df-mes">
+        <button class="multi-drop-btn" id="btn-df-mes" onclick="toggleMultiDrop('wrap-df-mes','btn-df-mes','list-df-mes')">Todos</button>
+        <div class="multi-drop-list" id="list-df-mes"></div>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Centro de Custo</span>
-      <select class="filter-select" id="df-cc" multiple size="3" onchange="renderDashFat()" style="min-width:160px;height:64px"><option value="">Todos</option></select>
+      <div class="multi-drop-wrap" id="wrap-df-cc">
+        <button class="multi-drop-btn" id="btn-df-cc" onclick="toggleMultiDrop('wrap-df-cc','btn-df-cc','list-df-cc')">Todos</button>
+        <div class="multi-drop-list" id="list-df-cc"></div>
+      </div>
     </div>
-    <button class="btn-ghost" onclick="Array.from(document.getElementById('df-ano').options).forEach(function(o){o.selected=false;});Array.from(document.getElementById('df-mes').options).forEach(function(o){o.selected=false;});Array.from(document.getElementById('df-cc').options).forEach(function(o){o.selected=false;});renderDashFat()">✕ Limpar</button>
+    <button class="btn-ghost" onclick="resetMultiDrop('wrap-df-ano','btn-df-ano','list-df-ano');resetMultiDrop('wrap-df-mes','btn-df-mes','list-df-mes');resetMultiDrop('wrap-df-cc','btn-df-cc','list-df-cc');renderDashFat()">✕ Limpar</button>
   </div>
+
+  <!-- KPIs Faturamento -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
+    <div class="kpi-card" style="border-top:3px solid #1B6B35">
+      <div class="kpi-label">Total Recebido</div>
+      <div class="kpi-val" id="df-kpi-rec" style="color:#1B6B35">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid rgba(27,107,53,0.4)">
+      <div class="kpi-label">Total a Receber</div>
+      <div class="kpi-val" id="df-kpi-arec" style="color:rgba(27,107,53,0.6)">—</div>
+    </div>
+  </div>
+
   <div class="tbl-card" style="margin-top:12px">
     <div class="tbl-head">
       <div class="tbl-title">Faturamento por Complemento</div>
@@ -2378,13 +2394,11 @@ function exportarOrcamento(){}
           <tr style="background:#f5f5f5">
             <th style="text-align:left;padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Complemento</th>
             <th class="r" style="padding:8px 12px;font-size:11px;color:#1B6B35;position:sticky;top:0;background:#f5f5f5">Recebido</th>
-            <th class="r" style="padding:8px 12px;font-size:11px;color:rgba(27,107,53,0.5);position:sticky;top:0;background:#f5f5f5">A Receber</th>
+            <th class="r" style="padding:8px 12px;font-size:11px;color:rgba(27,107,53,0.6);position:sticky;top:0;background:#f5f5f5">A Receber</th>
             <th class="r" style="padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Total</th>
           </tr>
         </thead>
-        <tbody id="df-tbody">
-          <tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>
-        </tbody>
+        <tbody id="df-tbody"><tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr></tbody>
         <tfoot id="df-tfoot"></tfoot>
       </table>
     </div>
@@ -2398,18 +2412,40 @@ function exportarOrcamento(){}
   <div class="filters-bar" style="flex-wrap:wrap;gap:12px;align-items:flex-end">
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Ano</span>
-      <select class="filter-select" id="dd-ano" multiple size="3" onchange="renderDashDesp()" style="min-width:70px;height:64px"><option value="">Todos</option></select>
+      <div class="multi-drop-wrap" id="wrap-dd-ano">
+        <button class="multi-drop-btn" id="btn-dd-ano" onclick="toggleMultiDrop('wrap-dd-ano','btn-dd-ano','list-dd-ano')">Todos</button>
+        <div class="multi-drop-list" id="list-dd-ano"></div>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Mês</span>
-      <select class="filter-select" id="dd-mes" multiple size="3" onchange="renderDashDesp()" style="min-width:70px;height:64px"><option value="">Todos</option><option value="0">Jan</option><option value="1">Fev</option><option value="2">Mar</option><option value="3">Abr</option><option value="4">Mai</option><option value="5">Jun</option><option value="6">Jul</option><option value="7">Ago</option><option value="8">Set</option><option value="9">Out</option><option value="10">Nov</option><option value="11">Dez</option></select>
+      <div class="multi-drop-wrap" id="wrap-dd-mes">
+        <button class="multi-drop-btn" id="btn-dd-mes" onclick="toggleMultiDrop('wrap-dd-mes','btn-dd-mes','list-dd-mes')">Todos</button>
+        <div class="multi-drop-list" id="list-dd-mes"></div>
+      </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Centro de Custo</span>
-      <select class="filter-select" id="dd-cc" multiple size="3" onchange="renderDashDesp()" style="min-width:160px;height:64px"><option value="">Todos</option></select>
+      <div class="multi-drop-wrap" id="wrap-dd-cc">
+        <button class="multi-drop-btn" id="btn-dd-cc" onclick="toggleMultiDrop('wrap-dd-cc','btn-dd-cc','list-dd-cc')">Todos</button>
+        <div class="multi-drop-list" id="list-dd-cc"></div>
+      </div>
     </div>
-    <button class="btn-ghost" onclick="Array.from(document.getElementById('dd-ano').options).forEach(function(o){o.selected=false;});Array.from(document.getElementById('dd-mes').options).forEach(function(o){o.selected=false;});Array.from(document.getElementById('dd-cc').options).forEach(function(o){o.selected=false;});renderDashDesp()">✕ Limpar</button>
+    <button class="btn-ghost" onclick="resetMultiDrop('wrap-dd-ano','btn-dd-ano','list-dd-ano');resetMultiDrop('wrap-dd-mes','btn-dd-mes','list-dd-mes');resetMultiDrop('wrap-dd-cc','btn-dd-cc','list-dd-cc');renderDashDesp()">✕ Limpar</button>
   </div>
+
+  <!-- KPIs Despesas -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
+    <div class="kpi-card" style="border-top:3px solid #C0392B">
+      <div class="kpi-label">Total Pago</div>
+      <div class="kpi-val" id="dd-kpi-pag" style="color:#C0392B">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid rgba(192,57,43,0.4)">
+      <div class="kpi-label">Total a Pagar</div>
+      <div class="kpi-val" id="dd-kpi-apag" style="color:rgba(192,57,43,0.6)">—</div>
+    </div>
+  </div>
+
   <div class="tbl-card" style="margin-top:12px">
     <div class="tbl-head">
       <div class="tbl-title">Despesas por Complemento</div>
@@ -2421,18 +2457,15 @@ function exportarOrcamento(){}
           <tr style="background:#f5f5f5">
             <th style="text-align:left;padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Complemento</th>
             <th class="r" style="padding:8px 12px;font-size:11px;color:#C0392B;position:sticky;top:0;background:#f5f5f5">Pago</th>
-            <th class="r" style="padding:8px 12px;font-size:11px;color:rgba(192,57,43,0.5);position:sticky;top:0;background:#f5f5f5">A Pagar</th>
+            <th class="r" style="padding:8px 12px;font-size:11px;color:rgba(192,57,43,0.6);position:sticky;top:0;background:#f5f5f5">A Pagar</th>
             <th class="r" style="padding:8px 12px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Total</th>
           </tr>
         </thead>
-        <tbody id="dd-tbody">
-          <tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr>
-        </tbody>
+        <tbody id="dd-tbody"><tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr></tbody>
         <tfoot id="dd-tfoot"></tfoot>
       </table>
     </div>
   </div>
 </div>
-
 </body>
 </html>
