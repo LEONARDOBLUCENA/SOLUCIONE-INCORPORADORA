@@ -1305,8 +1305,10 @@ function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoF
   };
   var map={};
   dados.forEach(function(r){
-    var k=extrairNome(r.complemento);
-    if(!map[k])map[k]={realizado:0,futuro:0};
+    var nome=extrairNome(r.complemento);
+    var conta=r.conta||'(sem conta)';
+    var k=nome+'|||'+conta;
+    if(!map[k])map[k]={nome:nome,conta:conta,realizado:0,futuro:0};
     var comp=(r.complemento||'').toLowerCase();
     var isFut=comp.includes('a pagar')||comp.includes('a receber');
     if(isFut)map[k].futuro+=r.valor;
