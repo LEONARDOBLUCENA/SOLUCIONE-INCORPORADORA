@@ -1294,9 +1294,18 @@ function filtraDash(dados, prefix){
 }
 function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoFat){
   var fmtV=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  // Extrair nome do cliente/fornecedor do complemento
+  var extrairNome=function(comp){
+    if(!comp)return '(sem complemento)';
+    var c=comp.trim();
+    var m=c.match(/^A receber de (.+)$/i)||c.match(/^Recebimento\s*[-–]\s*(.+)$/i)
+      ||c.match(/^A pagar para (.+)$/i)||c.match(/^Pagamento\s*[-–]\s*(.+)$/i)
+      ||c.match(/^Pagamento para (.+)$/i);
+    return m?m[1].trim():c;
+  };
   var map={};
   dados.forEach(function(r){
-    var k=r.complemento||'(sem complemento)';
+    var k=extrairNome(r.complemento);
     if(!map[k])map[k]={realizado:0,futuro:0};
     var comp=(r.complemento||'').toLowerCase();
     var isFut=comp.includes('a pagar')||comp.includes('a receber');
