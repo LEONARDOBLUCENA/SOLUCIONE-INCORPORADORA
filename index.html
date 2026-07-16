@@ -291,14 +291,14 @@ function getMultiDrop(wrapId){
   return checked.size===total?new Set():checked;
 }
 function onMultiDropChange(wrapId,btnId,listId){
-  if(wrapId.startsWith('wrap-df-')){setTimeout(renderDashFat,0);}
-  else if(wrapId.startsWith('wrap-dd-')){setTimeout(renderDashDesp,0);}
   const list=document.getElementById(listId);
   const total=list.querySelectorAll('input[value]').length;
   const checked=list.querySelectorAll('input[value]:checked').length;
   document.getElementById('chk-all-'+wrapId).checked=checked===total;
   updateMultiDropBtn(wrapId,btnId,listId);
-  renderDashboard();
+  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
+  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+  else renderDashboard();
 }
 function toggleAllMultiDrop(wrapId,btnId,listId){
   const list=document.getElementById(listId);
@@ -307,7 +307,9 @@ function toggleAllMultiDrop(wrapId,btnId,listId){
   allChk.checked=newState;
   list.querySelectorAll('input[value]').forEach(cb=>cb.checked=newState);
   updateMultiDropBtn(wrapId,btnId,listId);
-  renderDashboard();
+  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
+  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+  else renderDashboard();
 }
 function updateMultiDropBtn(wrapId,btnId,listId,lFn){
   const btn=document.getElementById(btnId);if(!btn)return;
@@ -1332,6 +1334,8 @@ function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoF
   // KPIs
   var elR=document.getElementById(kpiRealId);if(elR)elR.textContent=fmtV(totR);
   var elF=document.getElementById(kpiFutId);if(elF)elF.textContent=fmtV(totF);
+  var kpiTotId=kpiRealId.replace('-rec','-tot').replace('-pag','-tot');
+  var elT=document.getElementById(kpiTotId);if(elT)elT.textContent=fmtV(totR+totF);
   var badge=document.getElementById(badgeId);if(badge)badge.textContent=linhas.length+' itens';
 }
 function renderDashFat(){
@@ -2350,29 +2354,29 @@ function exportarOrcamento(){}
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Ano</span>
       <div class="multi-drop-wrap" id="wrap-df-ano">
-        <button class="multi-drop-btn" id="btn-df-ano" onclick="toggleMultiDrop('wrap-df-ano','btn-df-ano','list-df-ano')">Todos</button>
+        <button class="multi-drop-btn" id="btn-df-ano" onclick="toggleDrop('wrap-df-ano','btn-df-ano','list-df-ano')">Todos</button>
         <div class="multi-drop-list" id="list-df-ano"></div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Mês</span>
       <div class="multi-drop-wrap" id="wrap-df-mes">
-        <button class="multi-drop-btn" id="btn-df-mes" onclick="toggleMultiDrop('wrap-df-mes','btn-df-mes','list-df-mes')">Todos</button>
+        <button class="multi-drop-btn" id="btn-df-mes" onclick="toggleDrop('wrap-df-mes','btn-df-mes','list-df-mes')">Todos</button>
         <div class="multi-drop-list" id="list-df-mes"></div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Centro de Custo</span>
       <div class="multi-drop-wrap" id="wrap-df-cc">
-        <button class="multi-drop-btn" id="btn-df-cc" onclick="toggleMultiDrop('wrap-df-cc','btn-df-cc','list-df-cc')">Todos</button>
+        <button class="multi-drop-btn" id="btn-df-cc" onclick="toggleDrop('wrap-df-cc','btn-df-cc','list-df-cc')">Todos</button>
         <div class="multi-drop-list" id="list-df-cc"></div>
       </div>
     </div>
-    <button class="btn-ghost" onclick="resetMultiDrop('wrap-df-ano','btn-df-ano','list-df-ano');resetMultiDrop('wrap-df-mes','btn-df-mes','list-df-mes');resetMultiDrop('wrap-df-cc','btn-df-cc','list-df-cc');renderDashFat()">✕ Limpar</button>
+    <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashFat()">✕ Limpar</button>
   </div>
 
   <!-- KPIs Faturamento -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px">
     <div class="kpi-card" style="border-top:3px solid #1B6B35">
       <div class="kpi-label">Total Recebido</div>
       <div class="kpi-val" id="df-kpi-rec" style="color:#1B6B35">—</div>
@@ -2380,6 +2384,10 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid rgba(27,107,53,0.4)">
       <div class="kpi-label">Total a Receber</div>
       <div class="kpi-val" id="df-kpi-arec" style="color:rgba(27,107,53,0.6)">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid var(--brand)">
+      <div class="kpi-label">Total Geral</div>
+      <div class="kpi-val" id="df-kpi-tot" style="color:var(--brand)">—</div>
     </div>
   </div>
 
@@ -2413,29 +2421,29 @@ function exportarOrcamento(){}
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Ano</span>
       <div class="multi-drop-wrap" id="wrap-dd-ano">
-        <button class="multi-drop-btn" id="btn-dd-ano" onclick="toggleMultiDrop('wrap-dd-ano','btn-dd-ano','list-dd-ano')">Todos</button>
+        <button class="multi-drop-btn" id="btn-dd-ano" onclick="toggleDrop('wrap-dd-ano','btn-dd-ano','list-dd-ano')">Todos</button>
         <div class="multi-drop-list" id="list-dd-ano"></div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Mês</span>
       <div class="multi-drop-wrap" id="wrap-dd-mes">
-        <button class="multi-drop-btn" id="btn-dd-mes" onclick="toggleMultiDrop('wrap-dd-mes','btn-dd-mes','list-dd-mes')">Todos</button>
+        <button class="multi-drop-btn" id="btn-dd-mes" onclick="toggleDrop('wrap-dd-mes','btn-dd-mes','list-dd-mes')">Todos</button>
         <div class="multi-drop-list" id="list-dd-mes"></div>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Centro de Custo</span>
       <div class="multi-drop-wrap" id="wrap-dd-cc">
-        <button class="multi-drop-btn" id="btn-dd-cc" onclick="toggleMultiDrop('wrap-dd-cc','btn-dd-cc','list-dd-cc')">Todos</button>
+        <button class="multi-drop-btn" id="btn-dd-cc" onclick="toggleDrop('wrap-dd-cc','btn-dd-cc','list-dd-cc')">Todos</button>
         <div class="multi-drop-list" id="list-dd-cc"></div>
       </div>
     </div>
-    <button class="btn-ghost" onclick="resetMultiDrop('wrap-dd-ano','btn-dd-ano','list-dd-ano');resetMultiDrop('wrap-dd-mes','btn-dd-mes','list-dd-mes');resetMultiDrop('wrap-dd-cc','btn-dd-cc','list-dd-cc');renderDashDesp()">✕ Limpar</button>
+    <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashDesp()">✕ Limpar</button>
   </div>
 
   <!-- KPIs Despesas -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px">
     <div class="kpi-card" style="border-top:3px solid #C0392B">
       <div class="kpi-label">Total Pago</div>
       <div class="kpi-val" id="dd-kpi-pag" style="color:#C0392B">—</div>
@@ -2443,6 +2451,10 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid rgba(192,57,43,0.4)">
       <div class="kpi-label">Total a Pagar</div>
       <div class="kpi-val" id="dd-kpi-apag" style="color:rgba(192,57,43,0.6)">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #7D3C98">
+      <div class="kpi-label">Total Geral</div>
+      <div class="kpi-val" id="dd-kpi-tot" style="color:#7D3C98">—</div>
     </div>
   </div>
 
