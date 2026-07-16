@@ -548,7 +548,7 @@ async function jbinLoad(){
       {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}})
       .then(r=>r.json()).then(j=>{_ghubSha=j.sha;}).catch(()=>{});
     renderCSVTable();renderEstoqueTable();renderOrcamentoTable();
-    updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();
+    updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderDash();
     setJbinStatus('ok');
   }catch(e){console.error(e);setJbinStatus('error');}
 }
@@ -2388,7 +2388,7 @@ function exportarOrcamento(){}
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Complemento</span>
       <div class="multi-drop-wrap" id="wrap-df-comp">
-        <button class="multi-drop-btn" id="btn-df-comp" onclick="toggleDrop('wrap-df-comp','btn-df-comp','list-df-comp')">Todos</button>
+        <button class="multi-drop-btn" id="btn-df-comp" onclick="populateDashFilters();toggleDrop('wrap-df-comp','btn-df-comp','list-df-comp')">Todos</button>
         <div class="multi-drop-list" id="list-df-comp"></div>
       </div>
     </div>
@@ -2463,7 +2463,7 @@ function exportarOrcamento(){}
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Complemento</span>
       <div class="multi-drop-wrap" id="wrap-dd-comp">
-        <button class="multi-drop-btn" id="btn-dd-comp" onclick="toggleDrop('wrap-dd-comp','btn-dd-comp','list-dd-comp')">Todos</button>
+        <button class="multi-drop-btn" id="btn-dd-comp" onclick="populateDashFilters();toggleDrop('wrap-dd-comp','btn-dd-comp','list-dd-comp')">Todos</button>
         <div class="multi-drop-list" id="list-dd-comp"></div>
       </div>
     </div>
