@@ -261,13 +261,99 @@ function updateDashFilters(){
   fillMultiDrop('wrap-d-mes','btn-d-mes','list-d-mes',[...new Set(DATA.csv.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b),v=>v,v=>MESES_PT[v]);
   fillSelect('d-cc',[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort(),v=>v,v=>v);
 }
+function createSearchDrop(wrapId,listId,btnId,values,onChangeFn){
+  const list=document.getElementById(listId);if(!list)return;
+  const btn=document.getElementById(btnId);if(!btn)return;
+  // Guardar todos os valores
+  list.dataset.allValues=JSON.stringify(values);
+  list.dataset.onchange=onChangeFn;
+  renderSearchDrop(wrapId,listId,btnId,values,'');
+}
+function renderSearchDrop(wrapId,listId,btnId,values,q){
+  const list=document.getElementById(listId);if(!list)return;
+  const filtered=q?values.filter(function(v){return v.toLowerCase().includes(q.toLowerCase());}):values;
+  const selSet=list.dataset.selected?new Set(JSON.parse(list.dataset.selected)):new Set();
+  list.innerHTML='';
+  // Input de busca
+  const searchDiv=document.createElement('div');
+  searchDiv.style.cssText='padding:6px 8px;border-bottom:1px solid #eee';
+  searchDiv.innerHTML='<input type="text" placeholder="Buscar..." value="'+q+'" style="width:100%;border:1px solid #ddd;padding:4px 8px;font-family:DM Sans,sans-serif;font-size:12px;outline:none" oninput="filterSearchDrop(event,\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" onclick="event.stopPropagation()">';
+  list.appendChild(searchDiv);
+  // Selecionar/Desmarcar todos
+  const ctrlDiv=document.createElement('div');
+  ctrlDiv.style.cssText='padding:4px 8px;border-bottom:1px solid #eee;display:flex;gap:12px';
+  ctrlDiv.innerHTML='<span onclick="selectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:var(--brand)">Selecionar todos</span>'
+    +'<span onclick="deselectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:#C0392B">✕ Desmarcar</span>';
+  list.appendChild(ctrlDiv);
+  // Itens
+  filtered.forEach(function(v){
+    const chk=selSet.has(v)||selSet.size===0;
+    const item=document.createElement('div');item.className='multi-drop-item';
+    item.innerHTML='<input type="checkbox" value="'+v.replace(/"/g,'&quot;')+'" '+(chk?'checked':'')+' onclick="event.stopPropagation();onSearchDropChange(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')">&nbsp;<label style="cursor:pointer">'+v+'</label>';
+    item.querySelector('label').onclick=function(){item.querySelector('input').click();};
+    list.appendChild(item);
+  });
+  updateSearchDropBtn(wrapId,listId,btnId);
+}
+function filterSearchDrop(e,wrapId,listId,btnId){
+  const q=e.target.value;
+  const list=document.getElementById(listId);
+  const values=JSON.parse(list.dataset.allValues||'[]');
+  // Salvar seleção atual antes de re-renderizar
+  const sel=[];
+  list.querySelectorAll('input[type=checkbox][value]:checked').forEach(function(cb){sel.push(cb.value);});
+  list.dataset.selected=JSON.stringify(sel);
+  renderSearchDrop(wrapId,listId,btnId,values,q);
+  // Restaurar foco
+  const inp=list.querySelector('input[type=text]');if(inp){inp.focus();inp.setSelectionRange(q.length,q.length);}
+}
+function onSearchDropChange(wrapId,listId,btnId){
+  const list=document.getElementById(listId);
+  const sel=[];
+  list.querySelectorAll('input[type=checkbox][value]:checked').forEach(function(cb){sel.push(cb.value);});
+  list.dataset.selected=JSON.stringify(sel);
+  updateSearchDropBtn(wrapId,listId,btnId);
+  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
+  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+}
+function selectAllSearchDrop(wrapId,listId,btnId){
+  const list=document.getElementById(listId);
+  list.querySelectorAll('input[type=checkbox][value]').forEach(function(cb){cb.checked=true;});
+  const sel=[];list.querySelectorAll('input[type=checkbox][value]').forEach(function(cb){sel.push(cb.value);});list.dataset.selected=JSON.stringify(sel);
+  updateSearchDropBtn(wrapId,listId,btnId);
+  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
+  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+}
+function deselectAllSearchDrop(wrapId,listId,btnId){
+  const list=document.getElementById(listId);
+  list.querySelectorAll('input[type=checkbox][value]').forEach(function(cb){cb.checked=false;});list.dataset.selected='[]';
+  updateSearchDropBtn(wrapId,listId,btnId);
+  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
+  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+}
+function getSearchDrop(listId){
+  const list=document.getElementById(listId);if(!list)return new Set();
+  const sel=list.dataset.selected?JSON.parse(list.dataset.selected):[];
+  const total=list.querySelectorAll('input[type=checkbox][value]').length;
+  // Se nenhum selecionado ou todos = sem filtro
+  return sel.length===0||sel.length===total?new Set():new Set(sel);
+}
+function updateSearchDropBtn(wrapId,listId,btnId){
+  const btn=document.getElementById(btnId);if(!btn)return;
+  const sel=JSON.parse(document.getElementById(listId)?.dataset.selected||'[]');
+  const total=JSON.parse(document.getElementById(listId)?.dataset.allValues||'[]').length;
+  if(sel.length===0||sel.length===total){btn.textContent='Todos ▾';btn.classList.remove('active');}
+  else{btn.textContent=sel.length+' selecionado(s) ▾';btn.classList.add('active');}
+}
 function fillMultiDrop(wrapId,btnId,listId,values,vFn,lFn){
   const list=document.getElementById(listId);if(!list)return;
   const checked=getMultiDrop(wrapId);
   const allDiv=document.createElement('div');
   allDiv.className='multi-drop-item';
-  allDiv.innerHTML='<input type="checkbox" id="chk-all-'+wrapId+'">&nbsp;<label style="cursor:pointer">Selecionar todos</label>';
-  allDiv.addEventListener('click',function(e){if(e.target.tagName!=='INPUT')toggleAllMultiDrop(wrapId,btnId,listId);});
+  allDiv.style.cssText='display:flex;gap:8px;align-items:center';
+  allDiv.innerHTML='<label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="chk-all-'+wrapId+'">&nbsp;Selecionar todos</label>'
+    +'<span onclick="desmarcarTodosDrop(event,\''+wrapId+'\',\''+btnId+'\',\''+listId+'\')" style="font-size:10px;color:#C0392B;cursor:pointer;margin-left:4px;white-space:nowrap">✕ Desmarcar</span>';
+  allDiv.querySelector('label').addEventListener('click',function(){toggleAllMultiDrop(wrapId,btnId,listId);});
   list.innerHTML='';
   list.appendChild(allDiv);
   const div=document.createElement('div');div.className='multi-drop-divider';list.appendChild(div);
@@ -295,6 +381,17 @@ function onMultiDropChange(wrapId,btnId,listId){
   const total=list.querySelectorAll('input[value]').length;
   const checked=list.querySelectorAll('input[value]:checked').length;
   document.getElementById('chk-all-'+wrapId).checked=checked===total;
+  updateMultiDropBtn(wrapId,btnId,listId);
+  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
+  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+  else renderDashboard();
+}
+function desmarcarTodosDrop(e,wrapId,btnId,listId){
+  e.stopPropagation();
+  const list=document.getElementById(listId);
+  const allChk=document.getElementById('chk-all-'+wrapId);
+  list.querySelectorAll('input[value]').forEach(function(cb){cb.checked=false;});
+  if(allChk)allChk.checked=false;
   updateMultiDropBtn(wrapId,btnId,listId);
   if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
   else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
@@ -1275,20 +1372,26 @@ function populateDashFilters(){
   var meses=[...new Set(csv.map(function(r){return r.mes;}).filter(function(m){return m!=null;}))].sort(function(a,b){return a-b;});
   var ccs=[...new Set(csv.map(function(r){return r.cc;}).filter(Boolean))].sort();
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var nomesFat=[...new Set(csv.filter(function(r){return r.tipo==='FATURAMENTO';}).map(function(r){return extrairNome(r.complemento);}).filter(Boolean))].sort(function(a,b){return a.toLowerCase().localeCompare(b.toLowerCase());});
+  var nomesDesp=[...new Set(csv.filter(function(r){return r.tipo==='PAGAMENTO';}).map(function(r){return extrairNome(r.complemento);}).filter(Boolean))].sort(function(a,b){return a.toLowerCase().localeCompare(b.toLowerCase());});
   ['df','dd'].forEach(function(p){
     fillMultiDrop('wrap-'+p+'-ano','btn-'+p+'-ano','list-'+p+'-ano',anos,function(v){return v;},function(v){return String(v);});
     fillMultiDrop('wrap-'+p+'-mes','btn-'+p+'-mes','list-'+p+'-mes',meses,function(v){return v;},function(v){return MESES_PT[v]||v;});
     fillMultiDrop('wrap-'+p+'-cc','btn-'+p+'-cc','list-'+p+'-cc',ccs,function(v){return v;},function(v){return v;});
   });
+  createSearchDrop('wrap-df-nome','list-df-nome','btn-df-nome',nomesFat,'renderDashFat');
+  createSearchDrop('wrap-dd-nome','list-dd-nome','btn-dd-nome',nomesDesp,'renderDashDesp');
 }
 function filtraDash(dados, prefix){
   var anos=getMultiDrop('wrap-'+prefix+'-ano');
   var meses=getMultiDrop('wrap-'+prefix+'-mes');
   var ccs=getMultiDrop('wrap-'+prefix+'-cc');
+  var nomes=getSearchDrop('list-'+prefix+'-nome');
   return dados.filter(function(r){
     if(anos.size&&!anos.has(String(r.ano)))return false;
     if(meses.size&&!meses.has(String(r.mes)))return false;
     if(ccs.size&&!Array.from(ccs).some(function(c){return ccMatch(r.cc||'',c);}))return false;
+    if(nomes.size&&!nomes.has(extrairNome(r.complemento)))return false;
     return true;
   });
 }
