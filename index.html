@@ -2533,7 +2533,15 @@ function exportarOrcamento(){}
       </div>
     </div>
 
-    <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashFat()">✕ Limpar</button>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span class="filter-label">Cliente</span>
+      <div class="multi-drop-wrap" id="wrap-df-nome">
+        <button class="multi-drop-btn" id="btn-df-nome" onclick="populateDashFilters();toggleDrop('wrap-df-nome','btn-df-nome','list-df-nome')">Todos ▾</button>
+        <div class="multi-drop-list" id="list-df-nome" style="min-width:280px"></div>
+      </div>
+    </div>
+
+    <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});var ln=document.getElementById('list-df-nome');if(ln)ln.dataset.selected='[]';renderDashFat()">✕ Limpar</button>
   </div>
 
   <!-- KPIs Faturamento -->
@@ -2607,7 +2615,15 @@ function exportarOrcamento(){}
       </div>
     </div>
 
-    <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});renderDashDesp()">✕ Limpar</button>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span class="filter-label">Fornecedor</span>
+      <div class="multi-drop-wrap" id="wrap-dd-nome">
+        <button class="multi-drop-btn" id="btn-dd-nome" onclick="populateDashFilters();toggleDrop('wrap-dd-nome','btn-dd-nome','list-dd-nome')">Todos ▾</button>
+        <div class="multi-drop-list" id="list-dd-nome" style="min-width:280px"></div>
+      </div>
+    </div>
+
+    <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});var ld=document.getElementById('list-dd-nome');if(ld)ld.dataset.selected='[]';renderDashDesp()">✕ Limpar</button>
   </div>
 
   <!-- KPIs Despesas -->
