@@ -1356,12 +1356,54 @@ function renderDashFat(){
   var csv=DATA.csv||[];
   var fat=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df');
   renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-arec',fat,true);
+  var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var porMesFat=Array.from({length:12},function(){return{rec:0,arec:0};});
+  fat.forEach(function(r){
+    if(r.mes==null)return;
+    var comp=(r.complemento||'').toLowerCase();
+    if(comp.includes('a receber'))porMesFat[r.mes].arec+=r.valor;
+    else porMesFat[r.mes].rec+=r.valor;
+  });
+  var mFatDados=porMesFat.map(function(m,i){return{label:MESES_PT[i],rec:m.rec,arec:m.arec};}).filter(function(m){return m.rec||m.arec;});
+  var ctxFat=document.getElementById('dash-chart-fat')?.getContext('2d');
+  if(ctxFat){
+    if(CHARTS['dashFat'])CHARTS['dashFat'].destroy();
+    CHARTS['dashFat']=new Chart(ctxFat,{type:'bar',
+      data:{labels:mFatDados.map(function(m){return m.label;}),datasets:[
+        {label:'Recebido',data:mFatDados.map(function(m){return m.rec;}),backgroundColor:'rgba(27,107,53,0.78)',borderColor:'#1B6B35',borderWidth:1},
+        {label:'A Receber',data:mFatDados.map(function(m){return m.arec;}),backgroundColor:'rgba(27,107,53,0.25)',borderColor:'rgba(27,107,53,0.5)',borderWidth:1}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+        scales:{y:{ticks:{callback:function(v){return v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}
+    });
+  }
 }
 function renderDashDesp(){
   populateDashFilters();
   var csv=DATA.csv||[];
   var pag=filtraDash(csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd');
   renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-apag',pag,false);
+  var MESES_PT2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var porMesDesp=Array.from({length:12},function(){return{pag:0,apag:0};});
+  pag.forEach(function(r){
+    if(r.mes==null)return;
+    var comp=(r.complemento||'').toLowerCase();
+    if(comp.includes('a pagar'))porMesDesp[r.mes].apag+=r.valor;
+    else porMesDesp[r.mes].pag+=r.valor;
+  });
+  var mDespDados=porMesDesp.map(function(m,i){return{label:MESES_PT2[i],pag:m.pag,apag:m.apag};}).filter(function(m){return m.pag||m.apag;});
+  var ctxDesp=document.getElementById('dash-chart-desp')?.getContext('2d');
+  if(ctxDesp){
+    if(CHARTS['dashDesp'])CHARTS['dashDesp'].destroy();
+    CHARTS['dashDesp']=new Chart(ctxDesp,{type:'bar',
+      data:{labels:mDespDados.map(function(m){return m.label;}),datasets:[
+        {label:'Pago',data:mDespDados.map(function(m){return m.pag;}),backgroundColor:'rgba(192,57,43,0.78)',borderColor:'#C0392B',borderWidth:1},
+        {label:'A Pagar',data:mDespDados.map(function(m){return m.apag;}),backgroundColor:'rgba(192,57,43,0.25)',borderColor:'rgba(192,57,43,0.5)',borderWidth:1}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'}},
+        scales:{y:{ticks:{callback:function(v){return v>=1000000?(v/1000000).toFixed(1)+'M':v>=1000?(v/1000).toFixed(0)+'k':v;}}}}}
+    });
+  }
 }
 function renderDash(){renderDashFat();renderDashDesp();}
 function exportarProjecaoXLS(){
@@ -2494,6 +2536,10 @@ function exportarOrcamento(){}
         <tfoot id="dd-tfoot"></tfoot>
       </table>
     </div>
+  </div>
+  <div class="tbl-card" style="margin-top:16px;padding:16px 20px">
+    <div class="tbl-title" style="margin-bottom:12px">Despesas Mensais</div>
+    <div style="height:260px"><canvas id="dash-chart-desp"></canvas></div>
   </div>
 </div>
 </body>
