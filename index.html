@@ -479,7 +479,7 @@ function renderFluxo(){
   // Colunas dinâmicas: todas as combinações ano-mes presentes nos dados, ordenadas
   const colSet=new Set();
   dados.forEach(r=>{if(r.ano!=null&&r.mes!=null)colSet.add(r.ano*100+r.mes);});
-  const colKeys=[...colSet].sort();// cada key = ano*100+mes
+  const colKeys=[...colSet].sort().filter(k=>Math.floor(k/100)>=2026);// apenas 2026+
   const colAno=colKeys.map(k=>Math.floor(k/100));
   const colMes=colKeys.map(k=>k%100);
   const NC=colKeys.length;
@@ -1398,14 +1398,7 @@ function filtraDash(dados, prefix){
 function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoFat){
   var fmtV=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
   // Extrair nome do cliente/fornecedor do complemento
-  var extrairNome=function(comp){
-    if(!comp)return '(sem complemento)';
-    var c=comp.trim();
-    var m=c.match(/^A receber de (.+)$/i)||c.match(/^Recebimento\s*[-–]\s*(.+)$/i)
-      ||c.match(/^A pagar para (.+)$/i)||c.match(/^Pagamento\s*[-–]\s*(.+)$/i)
-      ||c.match(/^Pagamento para (.+)$/i);
-    return m?m[1].trim():c;
-  };
+  // extrairNome movida para global
   var map={};
   dados.forEach(function(r){
     var nome=extrairNome(r.complemento);
@@ -1454,6 +1447,14 @@ function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoF
   var kpiTotId=kpiRealId.replace('-rec','-tot').replace('-pag','-tot');
   var elT=document.getElementById(kpiTotId);if(elT)elT.textContent=fmtV(totR+totF);
   var badge=document.getElementById(badgeId);if(badge)badge.textContent=linhas.length+' itens';
+}
+function extrairNome(comp){
+  if(!comp)return '(sem complemento)';
+  var c=comp.trim();
+  var m=c.match(/^A receber de (.+)$/i)||c.match(/^Recebimento\s*[-\u2013]\s*(.+)$/i)
+    ||c.match(/^A pagar para (.+)$/i)||c.match(/^Pagamento\s*[-\u2013]\s*(.+)$/i)
+    ||c.match(/^Pagamento para (.+)$/i);
+  return m?m[1].trim():c;
 }
 function renderDashFat(){
   populateDashFilters();
