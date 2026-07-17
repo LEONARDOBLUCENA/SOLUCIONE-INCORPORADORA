@@ -283,8 +283,7 @@ function renderSearchDrop(wrapId,listId,btnId,values,q){
   const ctrlDiv=document.createElement('div');
   ctrlDiv.style.cssText='padding:4px 8px;border-bottom:1px solid #eee;display:flex;gap:12px';
   ctrlDiv.addEventListener('click',function(e){e.stopPropagation();});
-  ctrlDiv.innerHTML='<span onclick="selectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:var(--brand)">Selecionar todos</span>'
-    +'<span onclick="deselectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:#C0392B">✕ Desmarcar</span>';
+  ctrlDiv.innerHTML='<span onclick="selectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:var(--brand)">Selecionar todos</span>';
   list.appendChild(ctrlDiv);
   // Itens
   filtered.forEach(function(v){
@@ -353,8 +352,7 @@ function fillMultiDrop(wrapId,btnId,listId,values,vFn,lFn){
   const allDiv=document.createElement('div');
   allDiv.className='multi-drop-item';
   allDiv.style.cssText='display:flex;gap:8px;align-items:center';
-  allDiv.innerHTML='<label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="chk-all-'+wrapId+'">&nbsp;Selecionar todos</label>'
-    +'<span onclick="desmarcarTodosDrop(event,\''+wrapId+'\',\''+btnId+'\',\''+listId+'\')" style="font-size:10px;color:#C0392B;cursor:pointer;margin-left:4px;white-space:nowrap">✕ Desmarcar</span>';
+    allDiv.innerHTML='<label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="chk-all-'+wrapId+'">&nbsp;Selecionar todos</label>';
   allDiv.querySelector('label').addEventListener('click',function(){toggleAllMultiDrop(wrapId,btnId,listId);});
   list.innerHTML='';
   list.appendChild(allDiv);
