@@ -1307,7 +1307,8 @@ function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoF
   dados.forEach(function(r){
     var nome=extrairNome(r.complemento);
     var conta=r.conta||'(sem conta)';
-    var k=nome+'|||'+conta;
+    // Normalizar chave: lowercase+trim para agrupar independente de capitalização
+    var k=nome.toLowerCase().trim()+'|||'+conta.toLowerCase().trim();
     if(!map[k])map[k]={nome:nome,conta:conta,realizado:0,futuro:0};
     var comp=(r.complemento||'').toLowerCase();
     var isFut=comp.includes('a pagar')||comp.includes('a receber');
