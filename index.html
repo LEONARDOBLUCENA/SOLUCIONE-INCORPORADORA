@@ -353,7 +353,7 @@ function fillMultiDrop(wrapId,btnId,listId,values,vFn,lFn){
   allDiv.style.cssText='display:flex;gap:8px;align-items:center';
   allDiv.innerHTML='<label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="chk-all-'+wrapId+'">&nbsp;Selecionar todos</label>'
     +'<span onclick="desmarcarTodosDrop(event,\''+wrapId+'\',\''+btnId+'\',\''+listId+'\')" style="font-size:10px;color:#C0392B;cursor:pointer;margin-left:4px;white-space:nowrap">✕ Desmarcar</span>';
-  allDiv.querySelector('label').addEventListener('click',function(){toggleAllMultiDrop(wrapId,btnId,listId);});
+  allDiv.querySelector('label').addEventListener('click',function(){selecionarTodosDrop(wrapId,btnId,listId);});
   list.innerHTML='';
   list.appendChild(allDiv);
   const div=document.createElement('div');div.className='multi-drop-divider';list.appendChild(div);
@@ -381,6 +381,16 @@ function onMultiDropChange(wrapId,btnId,listId){
   const total=list.querySelectorAll('input[value]').length;
   const checked=list.querySelectorAll('input[value]:checked').length;
   document.getElementById('chk-all-'+wrapId).checked=checked===total;
+  updateMultiDropBtn(wrapId,btnId,listId);
+  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
+  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+  else renderDashboard();
+}
+function selecionarTodosDrop(wrapId,btnId,listId){
+  const list=document.getElementById(listId);
+  const allChk=document.getElementById('chk-all-'+wrapId);
+  list.querySelectorAll('input[value]').forEach(function(cb){cb.checked=true;});
+  if(allChk)allChk.checked=true;
   updateMultiDropBtn(wrapId,btnId,listId);
   if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
   else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
