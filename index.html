@@ -282,8 +282,8 @@ function renderSearchDrop(wrapId,listId,btnId,values,q){
   // Selecionar/Desmarcar todos
   const ctrlDiv=document.createElement('div');
   ctrlDiv.style.cssText='padding:4px 8px;border-bottom:1px solid #eee;display:flex;gap:12px';
-  ctrlDiv.addEventListener('click',function(e){e.stopPropagation();});
-  ctrlDiv.innerHTML='<span onclick="selectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:var(--brand)">Selecionar todos</span>';
+  ctrlDiv.innerHTML='<span onclick="selectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:var(--brand)">Selecionar todos</span>'
+    +'<span onclick="deselectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:#C0392B">✕ Desmarcar</span>';
   list.appendChild(ctrlDiv);
   // Itens
   filtered.forEach(function(v){
@@ -291,7 +291,6 @@ function renderSearchDrop(wrapId,listId,btnId,values,q){
     const item=document.createElement('div');item.className='multi-drop-item';
     item.innerHTML='<input type="checkbox" value="'+v.replace(/"/g,'&quot;')+'" '+(chk?'checked':'')+' onclick="event.stopPropagation();onSearchDropChange(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')">&nbsp;<label style="cursor:pointer">'+v+'</label>';
     item.querySelector('label').onclick=function(){item.querySelector('input').click();};
-    item.addEventListener('click',function(e){e.stopPropagation();});
     list.appendChild(item);
   });
   updateSearchDropBtn(wrapId,listId,btnId);
@@ -314,23 +313,20 @@ function onSearchDropChange(wrapId,listId,btnId){
   list.querySelectorAll('input[type=checkbox][value]:checked').forEach(function(cb){sel.push(cb.value);});
   list.dataset.selected=JSON.stringify(sel);
   updateSearchDropBtn(wrapId,listId,btnId);
-  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
-  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+  // render adiado até botão Aplicar
 }
 function selectAllSearchDrop(wrapId,listId,btnId){
   const list=document.getElementById(listId);
   list.querySelectorAll('input[type=checkbox][value]').forEach(function(cb){cb.checked=true;});
   const sel=[];list.querySelectorAll('input[type=checkbox][value]').forEach(function(cb){sel.push(cb.value);});list.dataset.selected=JSON.stringify(sel);
   updateSearchDropBtn(wrapId,listId,btnId);
-  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
-  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+  // render adiado até botão Aplicar
 }
 function deselectAllSearchDrop(wrapId,listId,btnId){
   const list=document.getElementById(listId);
   list.querySelectorAll('input[type=checkbox][value]').forEach(function(cb){cb.checked=false;});list.dataset.selected='[]';
   updateSearchDropBtn(wrapId,listId,btnId);
-  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
-  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
+  // render adiado até botão Aplicar
 }
 function getSearchDrop(listId){
   const list=document.getElementById(listId);if(!list)return new Set();
@@ -352,7 +348,8 @@ function fillMultiDrop(wrapId,btnId,listId,values,vFn,lFn){
   const allDiv=document.createElement('div');
   allDiv.className='multi-drop-item';
   allDiv.style.cssText='display:flex;gap:8px;align-items:center';
-    allDiv.innerHTML='<label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="chk-all-'+wrapId+'">&nbsp;Selecionar todos</label>';
+  allDiv.innerHTML='<label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" id="chk-all-'+wrapId+'">&nbsp;Selecionar todos</label>'
+    +'<span onclick="desmarcarTodosDrop(event,\''+wrapId+'\',\''+btnId+'\',\''+listId+'\')" style="font-size:10px;color:#C0392B;cursor:pointer;margin-left:4px;white-space:nowrap">✕ Desmarcar</span>';
   allDiv.querySelector('label').addEventListener('click',function(){toggleAllMultiDrop(wrapId,btnId,listId);});
   list.innerHTML='';
   list.appendChild(allDiv);
@@ -382,9 +379,7 @@ function onMultiDropChange(wrapId,btnId,listId){
   const checked=list.querySelectorAll('input[value]:checked').length;
   document.getElementById('chk-all-'+wrapId).checked=checked===total;
   updateMultiDropBtn(wrapId,btnId,listId);
-  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
-  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
-  else renderDashboard();
+  // render adiado até botão Aplicar
 }
 function desmarcarTodosDrop(e,wrapId,btnId,listId){
   e.stopPropagation();
@@ -393,9 +388,7 @@ function desmarcarTodosDrop(e,wrapId,btnId,listId){
   list.querySelectorAll('input[value]').forEach(function(cb){cb.checked=false;});
   if(allChk)allChk.checked=false;
   updateMultiDropBtn(wrapId,btnId,listId);
-  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
-  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
-  else renderDashboard();
+  // render adiado até botão Aplicar
 }
 function toggleAllMultiDrop(wrapId,btnId,listId){
   const list=document.getElementById(listId);
@@ -404,9 +397,7 @@ function toggleAllMultiDrop(wrapId,btnId,listId){
   allChk.checked=newState;
   list.querySelectorAll('input[value]').forEach(cb=>cb.checked=newState);
   updateMultiDropBtn(wrapId,btnId,listId);
-  if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
-  else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
-  else renderDashboard();
+  // render adiado até botão Aplicar
 }
 function updateMultiDropBtn(wrapId,btnId,listId,lFn){
   const btn=document.getElementById(btnId);if(!btn)return;
@@ -2540,7 +2531,7 @@ function exportarOrcamento(){}
         <div class="multi-drop-list" id="list-df-nome" style="min-width:280px"></div>
       </div>
     </div>
-
+    <button onclick="renderDashFat()" style="background:#1B6B35;color:#fff;border:none;padding:6px 18px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;border-radius:4px;font-weight:600">Aplicar</button>
     <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});var ln=document.getElementById('list-df-nome');if(ln)ln.dataset.selected='[]';renderDashFat()">✕ Limpar</button>
   </div>
 
@@ -2622,7 +2613,7 @@ function exportarOrcamento(){}
         <div class="multi-drop-list" id="list-dd-nome" style="min-width:280px"></div>
       </div>
     </div>
-
+    <button onclick="renderDashDesp()" style="background:#1B6B35;color:#fff;border:none;padding:6px 18px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;border-radius:4px;font-weight:600">Aplicar</button>
     <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});var ld=document.getElementById('list-dd-nome');if(ld)ld.dataset.selected='[]';renderDashDesp()">✕ Limpar</button>
   </div>
 
