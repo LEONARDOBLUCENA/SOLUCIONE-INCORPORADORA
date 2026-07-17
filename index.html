@@ -282,6 +282,7 @@ function renderSearchDrop(wrapId,listId,btnId,values,q){
   // Selecionar/Desmarcar todos
   const ctrlDiv=document.createElement('div');
   ctrlDiv.style.cssText='padding:4px 8px;border-bottom:1px solid #eee;display:flex;gap:12px';
+  ctrlDiv.addEventListener('click',function(e){e.stopPropagation();});
   ctrlDiv.innerHTML='<span onclick="selectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:var(--brand)">Selecionar todos</span>'
     +'<span onclick="deselectAllSearchDrop(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')" style="font-size:11px;cursor:pointer;color:#C0392B">✕ Desmarcar</span>';
   list.appendChild(ctrlDiv);
@@ -291,6 +292,7 @@ function renderSearchDrop(wrapId,listId,btnId,values,q){
     const item=document.createElement('div');item.className='multi-drop-item';
     item.innerHTML='<input type="checkbox" value="'+v.replace(/"/g,'&quot;')+'" '+(chk?'checked':'')+' onclick="event.stopPropagation();onSearchDropChange(\''+wrapId+'\',\''+listId+'\',\''+btnId+'\')">&nbsp;<label style="cursor:pointer">'+v+'</label>';
     item.querySelector('label').onclick=function(){item.querySelector('input').click();};
+    item.addEventListener('click',function(e){e.stopPropagation();});
     list.appendChild(item);
   });
   updateSearchDropBtn(wrapId,listId,btnId);
@@ -299,12 +301,11 @@ function filterSearchDrop(e,wrapId,listId,btnId){
   const q=e.target.value;
   const list=document.getElementById(listId);
   const values=JSON.parse(list.dataset.allValues||'[]');
-  // Salvar seleção atual antes de re-renderizar
   const sel=[];
   list.querySelectorAll('input[type=checkbox][value]:checked').forEach(function(cb){sel.push(cb.value);});
   list.dataset.selected=JSON.stringify(sel);
+  list.dataset.searchq=q;
   renderSearchDrop(wrapId,listId,btnId,values,q);
-  // Restaurar foco
   const inp=list.querySelector('input[type=text]');if(inp){inp.focus();inp.setSelectionRange(q.length,q.length);}
 }
 function onSearchDropChange(wrapId,listId,btnId){
@@ -312,6 +313,9 @@ function onSearchDropChange(wrapId,listId,btnId){
   const sel=[];
   list.querySelectorAll('input[type=checkbox][value]:checked').forEach(function(cb){sel.push(cb.value);});
   list.dataset.selected=JSON.stringify(sel);
+  // Preservar texto de busca atual
+  const inp=list.querySelector('input[type=text]');
+  if(inp)list.dataset.searchq=inp.value;
   updateSearchDropBtn(wrapId,listId,btnId);
   if(wrapId.startsWith('wrap-df-'))setTimeout(renderDashFat,0);
   else if(wrapId.startsWith('wrap-dd-'))setTimeout(renderDashDesp,0);
