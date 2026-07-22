@@ -526,7 +526,6 @@ function renderFluxo(){
     rows+='<tr style="background:#C0392B;font-weight:700"><td style="'+SD+'#C0392B;padding:5px 12px;font-size:12px;color:#fff;font-weight:700">Total Pagamentos</td>'+tPM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#fff;font-weight:600">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:#fff;font-weight:700">'+f2(tPM.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
   tbody.innerHTML=rows;
-  const rv=tFM.map((v,i)=>v-tPM[i]),rt=rv.reduce((s,v)=>s+v,0);
 
   // Previsto editável por obra — DATA.previsto[obra][colKey] = valor
   const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
@@ -559,15 +558,22 @@ function renderFluxo(){
   // Previsto total por mês — usa valores líquidos (já descontado realizado das contas específicas)
   const prevTotalMes=colKeys.map((_,i)=>obrasVis.reduce((s,o)=>s+((prevLiqMap[o]&&prevLiqMap[o][i])||0),0));
 
+  // Total Pagamentos + Previsto, e Resultado do Período recalculado com base nele
+  const pagPrevMes=tPM.map((v,i)=>v+prevTotalMes[i]);
+  const pagPrevTot=pagPrevMes.reduce((s,v)=>s+v,0);
+  const rv2=tFM.map((v,i)=>v-pagPrevMes[i]);
+  const rt2=rv2.reduce((s,v)=>s+v,0);
+
   // Caixa Inicial + Saldo acumulado (descontando previsto)
   const ci=obraSel?parseFloat(DATA.caixaInicial[obraSel]||0)||0:Object.values(DATA.caixaInicial).reduce((s,v)=>s+(parseFloat(v)||0),0);
-  const saldo=[];let acc=ci;rv.forEach((v,i)=>{acc+=v-prevTotalMes[i];saldo.push(acc);});
-  const ciMeses=rv.map((_,i)=>i===0?ci:saldo[i-1]);
+  const saldo=[];let acc=ci;rv2.forEach((v,i)=>{acc+=v;saldo.push(acc);});
+  const ciMeses=rv2.map((_,i)=>i===0?ci:saldo[i-1]);
   tfoot.innerHTML=
-    '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="'+SD+'#f0f0f0;padding:6px 12px;font-size:11px">Resultado do Período</td>'+rv.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt>=0?'#1B6B35':'#C0392B')+'">'+f2(rt)+'</td></tr>'+
     prevRows+
-    '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial</td>'+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
-    '<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa</td>'+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
+    '<tr style="background:#922B21;font-weight:700"><td style="'+SD+'#922B21;padding:6px 12px;font-size:11px;color:#fff">Total Pagamentos + Previsto</td>'+pagPrevMes.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#fff;font-weight:600">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:#fff;font-weight:700">'+f2(pagPrevTot)+'</td></tr>'+
+    '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="'+SD+'#f0f0f0;padding:6px 12px;font-size:11px">Resultado do Período</td>'+rv2.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt2>=0?'#1B6B35':'#C0392B')+'">'+f2(rt2)+'</td></tr>'+
+    '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial do Mês</td>'+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
+    '<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa do Mês</td>'+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
   set('fc-badge',nomes.length+(nomes.length===1?' conta':' contas'));
 
   // Resumo — Faturamento / Despesas (Pagamentos + Previsto) / Saldo de Caixa
@@ -578,15 +584,13 @@ function renderFluxo(){
       +'<th style="'+thSDr+'"></th>'
       +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
       +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
-    const despM=tPM.map((v,i)=>v+prevTotalMes[i]);
-    const despT=despM.reduce((s,v)=>s+v,0);
     const rowsR=
       '<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Faturamento</td>'
       +tFM.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
       +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(tFM.reduce((s,v)=>s+v,0))+'</td></tr>'
       +'<tr style="background:#FADBD8;font-weight:700"><td '+tdSB('#FADBD8')+'>Despesas</td>'
-      +despM.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
-      +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(despT)+'</td></tr>'
+      +pagPrevMes.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
+      +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(pagPrevTot)+'</td></tr>'
       +'<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa</td>'
       +saldo.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')
       +'<td class="r" style="padding:5px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
@@ -1184,7 +1188,9 @@ function gerarApresentacaoFluxo(){
       var isRes=label.includes('Resultado');
       var isSaldo=label.includes('Saldo');
       var isCaixa=label.includes('Caixa Inicial');
-      var bg=isPrev?'background:#FEF9E7;color:#B7950B;font-weight:600':
+      var isPagPrev=label.includes('Total Pagamentos + Previsto');
+      var bg=isPagPrev?'background:#922B21;color:#fff;font-weight:700':
+               isPrev?'background:#FEF9E7;color:#B7950B;font-weight:600':
                isRes?'background:#f0f0f0;font-weight:700':
                isSaldo?'background:#1a5276;color:#fff;font-weight:700':
                isCaixa?'background:#EAF4FB;font-weight:600':'';
