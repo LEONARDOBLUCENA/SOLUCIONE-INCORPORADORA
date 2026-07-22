@@ -490,11 +490,11 @@ function renderFluxo(){
   const nomes=Object.keys(contas);
   if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';set('fc-badge','—');const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');if(theadR)theadR.innerHTML='';if(tbodyR)tbodyR.innerHTML='';return;}
 
-  const thSD='text-align:left;padding:8px 12px;min-width:200px;'+SD+'#f5f5f5;top:0';
+  const thSD='text-align:left;padding:8px 12px;width:200px;'+SD+'#f5f5f5;top:0';
   thead.innerHTML='<tr style="background:#f5f5f5">'
     +'<th style="'+thSD+'">Conta</th>'
-    +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;min-width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
-    +'<th class="r" style="padding:6px 10px;min-width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
+    +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
+    +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
 
   const f2=v=>v===0?'<span style="color:#ccc;font-size:10px">—</span>':(v<0?'<span style="color:#C0392B">'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}));
   const tdS=(bg)=>'style="'+SD+bg+';padding:5px 6px 5px 12px;font-size:11px"';
@@ -573,11 +573,11 @@ function renderFluxo(){
   // Resumo — Faturamento / Despesas (Pagamentos + Previsto) / Saldo de Caixa
   const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');
   if(theadR&&tbodyR){
-    const thSDr='text-align:left;padding:8px 12px;min-width:200px;'+SD+'#f5f5f5;top:0';
+    const thSDr='text-align:left;padding:8px 12px;width:200px;'+SD+'#f5f5f5;top:0';
     theadR.innerHTML='<tr style="background:#f5f5f5">'
       +'<th style="'+thSDr+'"></th>'
-      +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;min-width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
-      +'<th class="r" style="padding:6px 10px;min-width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
+      +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
+      +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
     const despM=tPM.map((v,i)=>v+prevTotalMes[i]);
     const despT=despM.reduce((s,v)=>s+v,0);
     const rowsR=
@@ -591,6 +591,15 @@ function renderFluxo(){
       +saldo.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')
       +'<td class="r" style="padding:5px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
     tbodyR.innerHTML=rowsR;
+  }
+  if(!window._fcScrollWired){
+    const sA=document.getElementById('fc-resumo-scroll'),sB=document.getElementById('fc-fluxo-scroll');
+    if(sA&&sB){
+      let syncing=false;
+      sA.addEventListener('scroll',()=>{if(syncing)return;syncing=true;sB.scrollLeft=sA.scrollLeft;syncing=false;});
+      sB.addEventListener('scroll',()=>{if(syncing)return;syncing=true;sA.scrollLeft=sB.scrollLeft;syncing=false;});
+      window._fcScrollWired=true;
+    }
   }
 
   renderCaixaInicialCampos();
@@ -1895,8 +1904,8 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <div class="tbl-head">
       <div class="tbl-title">Resumo</div>
     </div>
-    <div style="overflow-x:auto;font-size:12px">
-      <table id="tbl-fc-resumo" style="width:100%;border-collapse:collapse;min-width:900px">
+    <div style="overflow-x:auto;font-size:12px" id="fc-resumo-scroll">
+      <table id="tbl-fc-resumo" style="width:100%;border-collapse:collapse;min-width:900px;table-layout:fixed">
         <thead id="thead-fc-resumo"></thead>
         <tbody id="tbody-fc-resumo"></tbody>
       </table>
@@ -1914,8 +1923,8 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
         <button onclick="abrirPDF(gerarApresentacaoFluxo())" style="background:#1a5276;color:#fff;border:none;padding:5px 12px;font-size:11px;cursor:pointer;border-radius:3px">&#128196; Apresentação</button>
       </div>
     </div>
-    <div style="overflow-x:auto;overflow-y:auto;max-height:65vh;font-size:12px">
-      <table id="tbl-fluxo" style="width:100%;border-collapse:collapse;min-width:900px">
+    <div style="overflow-x:auto;overflow-y:auto;max-height:65vh;font-size:12px" id="fc-fluxo-scroll">
+      <table id="tbl-fluxo" style="width:100%;border-collapse:collapse;min-width:900px;table-layout:fixed">
         <thead id="thead-fluxo"></thead>
         <tbody id="tbody-fluxo">
           <tr><td colspan="14"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>
