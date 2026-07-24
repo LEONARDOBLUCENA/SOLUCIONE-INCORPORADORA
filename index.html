@@ -516,7 +516,7 @@ function renderFluxo(){
   const acumAnt={};
   dados.forEach(r=>{
     if(r.ano==null||r.mes==null)return;
-    if(r.ano*100+r.mes>=202601)return;
+    if(r.ano>=2026)return;
     const c=r.conta||'(Sem conta)';
     if(!acumAnt[c])acumAnt[c]={FAT:0,DESC:0,PAG:0};
     if(r.tipo==='FATURAMENTO')acumAnt[c].FAT+=r.valor;
@@ -540,8 +540,8 @@ function renderFluxo(){
   let rows='';
   const spacerRow='<tr class="fc-group-spacer" style="border:none"><td colspan="'+(NC+3)+'" style="padding:0;height:14px;border:none;background:transparent"></td></tr>';
   const tFM=Array(NC).fill(0),tPM=Array(NC).fill(0);
-  const fatN=nomes.filter(c=>contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)).sort();
-  const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)).sort();
+  const fatN=nomes.filter(c=>contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)||acumFat(c)!==0).sort();
+  const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)||acumPag(c)!==0).sort();
 
   if(fatN.length){
     rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ FATURAMENTO</td></tr>';
