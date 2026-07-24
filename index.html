@@ -15,6 +15,28 @@ const MESES_PT=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','A
 const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
 const PAL=['#1B6B35','#1A5276','#B7950B','#7D3C98','#C0392B','#784212','#1A6161','#2E4057'];
 
+// Agrupamento de contas do Fluxo de Caixa em 5 grupos fixos (apenas visual/organizacional, não altera nenhum cálculo)
+const GRUPO_CONTA={
+  // CUSTO DE OBRAS
+  '2010105':'CUSTO_OBRA','2010106':'CUSTO_OBRA','2010401':'CUSTO_OBRA','2010302':'CUSTO_OBRA','2010303':'CUSTO_OBRA',
+  '20505':'CUSTO_OBRA','2010304':'CUSTO_OBRA','2010305':'CUSTO_OBRA','2010402':'CUSTO_OBRA','2020101':'CUSTO_OBRA',
+  '2020203':'CUSTO_OBRA','2010201':'CUSTO_OBRA','2010306':'CUSTO_OBRA','2020205':'CUSTO_OBRA','2010498':'CUSTO_OBRA',
+  '2900102':'CUSTO_OBRA','2900202':'CUSTO_OBRA','2900302':'CUSTO_OBRA','2900402':'CUSTO_OBRA',
+  // DESPESAS DE MARKETING
+  '20613':'MARKETING','20615':'MARKETING',
+  // DESPESAS ADMINISTRATIVAS
+  '2020102':'ADMIN','2020104':'ADMIN','2020111':'ADMIN','2020207':'ADMIN','2020209':'ADMIN','2020210':'ADMIN',
+  '2020212':'ADMIN','2020216':'ADMIN','2020219':'ADMIN','2020220':'ADMIN','2020221':'ADMIN','2020224':'ADMIN',
+  '2020225':'ADMIN','2020222':'ADMIN','2020299':'ADMIN',
+  // DESPESAS FINANCEIRAS (inclui tributárias sobre faturamento)
+  '20301':'FINANCEIRAS','20303':'FINANCEIRAS','20307':'FINANCEIRAS','20403':'FINANCEIRAS','20410':'FINANCEIRAS',
+  '20411':'FINANCEIRAS','20412':'FINANCEIRAS'
+};
+function grupoDeConta(c){
+  const cod=(c||'').split(' - ')[0].trim();
+  return GRUPO_CONTA[cod]||'OUTRAS';
+}
+
 function goTab(btn){document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));document.getElementById('page-'+btn.dataset.tab).classList.add('active');btn.classList.add('active');}
 function fmt(v){if(v==null||isNaN(v))return'—';return'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function set(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}
@@ -506,38 +528,28 @@ function renderFluxo(){
   const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)).sort();
 
   if(fatN.length){
-    rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+2)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ FATURAMENTOS</td></tr>';
-    fatN.forEach(c=>{
+    rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+2)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ FATURAMENTO</td></tr>';
+    fatN.forEach((c,idx)=>{
       const vals=contas[c].FAT.map((v,i)=>v-contas[c].DESC[i]);
       const tot=vals.reduce((s,v)=>s+v,0);
       vals.forEach((v,i)=>tFM[i]+=v);
-      rows+='<tr><td '+tdS('#fff')+'>'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';
+      const zebra=idx%2===0?'#ffffff':'#f4faf5';
+      rows+='<tr style="border-left:3px solid #A9DFBF;border-bottom:1px solid #edf2ee">'
+        +'<td '+tdS(zebra)+'>'+c+'</td>'
+        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#eef6ef;font-size:10px">'+f2(tot)+'</td></tr>';
     });
     rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Faturamento</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
-  if(pagN.length){
-    rows+='<tr style="background:#FADBD8"><td colspan="'+(NC+2)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#C0392B;'+SD+'#FADBD8">▶ PAGAMENTOS</td></tr>';
-    pagN.forEach(c=>{
-      const vals=contas[c].PAG;
-      const tot=vals.reduce((s,v)=>s+v,0);
-      vals.forEach((v,i)=>tPM[i]+=v);
-      rows+='<tr><td '+tdS('#fff')+'>'+c+'</td>'+vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;font-weight:600;background:#f4f4f4;font-size:10px">'+f2(tot)+'</td></tr>';
-    });
-    rows+='<tr style="background:#C0392B;font-weight:700"><td style="'+SD+'#C0392B;padding:5px 12px;font-size:12px;color:#fff;font-weight:700">Total Pagamentos</td>'+tPM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#fff;font-weight:600">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:#fff;font-weight:700">'+f2(tPM.reduce((s,v)=>s+v,0))+'</td></tr>';
-  }
-  tbody.innerHTML=rows;
 
-  // Previsto editável por obra — DATA.previsto[obra][colKey] = valor
+  // Previsto editável por obra — DATA.previsto[obra][colKey] = valor (calculado aqui para poder entrar no grupo Custo de Obra abaixo)
   const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
   const obrasVis=obraSel?obras.filter(o=>ccMatch(o,obraSel)):obras;
   if(!DATA.previsto)DATA.previsto={};
   obrasVis.forEach(o=>{if(!DATA.previsto[o])DATA.previsto[o]={};});
-
-  // Linhas de previsto para o tfoot
   const contasDesc=['2010304','2010401'];
-  const prevLiqMap={}; // {obra: [val por colKey]}
+  const prevLiqMap={};
   const prevRows=obrasVis.map(obra=>{
-    // Descontar realizado das contas 2010304 e 2010401 no mesmo mes/obra
     const pVals=colKeys.map(k=>{
       const prevBruto=parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0;
       const ano=Math.floor(k/100),mes=k%100;
@@ -554,9 +566,38 @@ function renderFluxo(){
         +' style="width:72px;border:1px solid #F0D9A0;background:#FFFDE7;padding:2px 4px;font-size:10px;text-align:right;font-family:DM Sans,sans-serif;color:#7D6608;outline:none"></td>').join('')
       +'<td class="r" style="padding:4px 6px;font-size:10px;color:#B7950B;font-weight:700;background:#FDEBD0">'+f2(pTot)+'</td></tr>';
   }).join('');
-
-  // Previsto total por mês — usa valores líquidos (já descontado realizado das contas específicas)
   const prevTotalMes=colKeys.map((_,i)=>obrasVis.reduce((s,o)=>s+((prevLiqMap[o]&&prevLiqMap[o][i])||0),0));
+
+  // Sub-agrupamento das contas de Pagamento em 4 grupos fixos (+ fallback Outras Despesas, se houver conta não mapeada)
+  const gruposDef=[
+    {key:'CUSTO_OBRA',   titulo:'CUSTO DE OBRA',           hdrBg:'#FDEBD0',hdrText:'#9C640C',borda:'#F5CBA7',divisor:'#f5eee4',zebra:'#fdf6ec',totBg:'#fbe8d0',totLabelBg:'#F5CBA7',totLabel:'Total Custo de Obra'},
+    {key:'MARKETING',    titulo:'DESPESAS DE MARKETING',   hdrBg:'#E8DAEF',hdrText:'#6C3483',borda:'#D2B4DE',divisor:'#f2ecf5',zebra:'#f8f4fb',totBg:'#eee3f4',totLabelBg:'#D2B4DE',totLabel:'Total Despesas de Marketing'},
+    {key:'ADMIN',        titulo:'DESPESAS ADMINISTRATIVAS',hdrBg:'#D6EAF8',hdrText:'#1A5276',borda:'#AED6F1',divisor:'#eaf2f8',zebra:'#f3f9fd',totBg:'#dbeefb',totLabelBg:'#AED6F1',totLabel:'Total Despesas Administrativas'},
+    {key:'FINANCEIRAS',  titulo:'DESPESAS FINANCEIRAS',    hdrBg:'#FADBD8',hdrText:'#943126',borda:'#F1948A',divisor:'#f5e8e7',zebra:'#fdf5f4',totBg:'#fbeeed',totLabelBg:'#F1948A',totLabel:'Total Despesas Financeiras'},
+    {key:'OUTRAS',       titulo:'OUTRAS DESPESAS',         hdrBg:'#EAEDED',hdrText:'#424949',borda:'#CCD1D1',divisor:'#f0f1f1',zebra:'#f7f8f8',totBg:'#e8eaea',totLabelBg:'#CCD1D1',totLabel:'Total Outras Despesas'}
+  ];
+  gruposDef.forEach(g=>{
+    const lista=pagN.filter(c=>grupoDeConta(c)===g.key);
+    if(!lista.length)return;
+    rows+='<tr style="background:'+g.hdrBg+'"><td colspan="'+(NC+2)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:'+g.hdrText+';'+SD+g.hdrBg+'">▶ '+g.titulo+'</td></tr>';
+    const totGrupo=Array(NC).fill(0);
+    lista.forEach((c,idx)=>{
+      const vals=contas[c].PAG;
+      const tot=vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>{totGrupo[i]+=v;tPM[i]+=v;});
+      const zebra=idx%2===0?'#ffffff':g.zebra;
+      rows+='<tr style="border-left:3px solid '+g.borda+';border-bottom:1px solid '+g.divisor+'">'
+        +'<td '+tdS(zebra)+'>'+c+'</td>'
+        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:'+g.totBg+';font-size:10px">'+f2(tot)+'</td></tr>';
+    });
+    if(g.key==='CUSTO_OBRA'){
+      rows+=prevRows;
+      prevTotalMes.forEach((v,i)=>totGrupo[i]+=v);
+    }
+    rows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+totGrupo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(totGrupo.reduce((s,v)=>s+v,0))+'</td></tr>';
+  });
+  tbody.innerHTML=rows;
 
   // Total Pagamentos + Previsto, e Resultado do Período recalculado com base nele
   const pagPrevMes=tPM.map((v,i)=>v+prevTotalMes[i]);
@@ -569,7 +610,6 @@ function renderFluxo(){
   const saldo=[];let acc=ci;rv2.forEach((v,i)=>{acc+=v;saldo.push(acc);});
   const ciMeses=rv2.map((_,i)=>i===0?ci:saldo[i-1]);
   tfoot.innerHTML=
-    prevRows+
     '<tr style="background:#922B21;font-weight:700"><td style="'+SD+'#922B21;padding:6px 12px;font-size:11px;color:#fff">Total Pagamentos + Previsto</td>'+pagPrevMes.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#fff;font-weight:600">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:#fff;font-weight:700">'+f2(pagPrevTot)+'</td></tr>'+
     '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="'+SD+'#f0f0f0;padding:6px 12px;font-size:11px">Resultado do Período</td>'+rv2.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt2>=0?'#1B6B35':'#C0392B')+'">'+f2(rt2)+'</td></tr>'+
     '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial do Mês</td>'+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
@@ -1084,7 +1124,10 @@ function gerarApresentacaoFluxo(){
   var thCols=Array.from(thead.querySelectorAll('th')).map(function(th){return th.textContent.trim();});
   // Extrair linhas do tbody
   var tbRows=Array.from(tbody.querySelectorAll('tr')).map(function(tr){
-    return Array.from(tr.querySelectorAll('td')).map(function(td){return td.textContent.trim();});
+    return Array.from(tr.querySelectorAll('td')).map(function(td){
+      var inp=td.querySelector('input');
+      return inp?inp.value:td.textContent.trim();
+    });
   });
   // Extrair linhas do tfoot
   var tfRows=Array.from(tfoot.querySelectorAll('tr')).map(function(tr){
@@ -1173,7 +1216,13 @@ function gerarApresentacaoFluxo(){
   tbRows.forEach(function(r,i){
     if(!r.length)return;
     var isSec=r.length===1||(r[0]&&r[0].includes('▶'));
-    slide2+='<tr style="'+(isSec?'background:#f0f7f0;font-weight:700;':i%2===0?'background:#fafafa;':'')+'">';
+    var isPrevRow=r[0]&&r[0].includes('Previsto —');
+    var isTotGrupo=r[0]&&r[0].indexOf('Total ')===0;
+    var bgRow=isSec?'background:#f0f7f0;font-weight:700;':
+              isPrevRow?'background:#FEF9E7;color:#B7950B;font-weight:600;':
+              isTotGrupo?'background:#f0f0f0;font-weight:700;':
+              i%2===0?'background:#fafafa;':'';
+    slide2+='<tr style="'+bgRow+'">';
     r.forEach(function(c,ci){slide2+='<td>'+c+'</td>';});
     slide2+='</tr>';
   });
