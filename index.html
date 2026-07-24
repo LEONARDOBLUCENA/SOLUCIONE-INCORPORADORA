@@ -508,7 +508,10 @@ function renderFluxo(){
     if(ci<0)return;
     if(r.tipo==='FATURAMENTO')contas[c].FAT[ci]+=r.valor;
     else if(r.tipo==='DESCONTO')contas[c].DESC[ci]+=r.valor;
-    else if(r.tipo==='PAGAMENTO')contas[c].PAG[ci]+=r.valor;
+    else if(r.tipo==='PAGAMENTO'){
+      if(grupoDeConta(c)==='CUSTO_OBRA'&&(r.complemento||'').toLowerCase().includes('a pagar'))return;
+      contas[c].PAG[ci]+=r.valor;
+    }
   });
   const nomes=Object.keys(contas);
   if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';set('fc-badge','—');const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');if(theadR)theadR.innerHTML='';if(tbodyR)tbodyR.innerHTML='';return;}
@@ -522,7 +525,10 @@ function renderFluxo(){
     if(!acumAnt[c])acumAnt[c]={FAT:0,DESC:0,PAG:0};
     if(r.tipo==='FATURAMENTO')acumAnt[c].FAT+=r.valor;
     else if(r.tipo==='DESCONTO')acumAnt[c].DESC+=r.valor;
-    else if(r.tipo==='PAGAMENTO')acumAnt[c].PAG+=r.valor;
+    else if(r.tipo==='PAGAMENTO'){
+      if(grupoDeConta(c)==='CUSTO_OBRA'&&(r.complemento||'').toLowerCase().includes('a pagar'))return;
+      acumAnt[c].PAG+=r.valor;
+    }
   });
   const acumFat=c=>acumAnt[c]?acumAnt[c].FAT-acumAnt[c].DESC:0;
   const acumPag=c=>acumAnt[c]?acumAnt[c].PAG:0;
