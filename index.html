@@ -545,7 +545,8 @@ function renderFluxo(){
 
   // Previsto editável por obra — DATA.previsto[obra][colKey] = valor (calculado aqui para poder entrar no grupo Custo de Obra abaixo)
   const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
-  const obrasVis=obraSel?obras.filter(o=>ccMatch(o,obraSel)):obras;
+  const SEM_PREVISTO=['MONTER','SOLUCIONE IMOVEIS'];
+  const obrasVis=(obraSel?obras.filter(o=>ccMatch(o,obraSel)):obras).filter(o=>!SEM_PREVISTO.some(x=>o.toUpperCase().includes(x)));
   if(!DATA.previsto)DATA.previsto={};
   obrasVis.forEach(o=>{if(!DATA.previsto[o])DATA.previsto[o]={};});
   const contasDesc=['2010304','2010401'];
