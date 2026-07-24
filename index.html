@@ -541,7 +541,14 @@ function renderFluxo(){
   let rows='';
   const spacerRow='<tr class="fc-group-spacer" style="border:none"><td colspan="'+(NC+3)+'" style="padding:0;height:14px;border:none;background:transparent"></td></tr>';
   const tFM=Array(NC).fill(0),tPM=Array(NC).fill(0);
-  const fatN=nomes.filter(c=>contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)||acumFat(c)!==0).sort();
+  const ULTIMAS_FAT=['1.05.03 - (-) Devolução de Empréstimos/Financiamentos','10198 - (-) Descontos Concedidos Incorporação','2020199 - (-) Reembolso de Mão de Obra e Encargos Indiretos','20499 - (-) Reembolso de Despesas Tributárias'];
+  const fatN=nomes.filter(c=>contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)||acumFat(c)!==0).sort((a,b)=>{
+    const ia=ULTIMAS_FAT.indexOf(a),ib=ULTIMAS_FAT.indexOf(b);
+    if(ia===-1&&ib===-1)return a.localeCompare(b);
+    if(ia===-1)return -1;
+    if(ib===-1)return 1;
+    return ia-ib;
+  });
   const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)||acumPag(c)!==0).sort();
 
   if(fatN.length){
