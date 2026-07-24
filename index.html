@@ -575,15 +575,9 @@ function renderFluxo(){
   const obrasVis=(obraSel?obras.filter(o=>ccMatch(o,obraSel)):obras).filter(o=>!SEM_PREVISTO.some(x=>o.toUpperCase().includes(x)));
   if(!DATA.previsto)DATA.previsto={};
   obrasVis.forEach(o=>{if(!DATA.previsto[o])DATA.previsto[o]={};});
-  const contasDesc=['2010304','2010401'];
   const prevLiqMap={};
   const prevRows=obrasVis.map(obra=>{
-    const pVals=colKeys.map(k=>{
-      const prevBruto=parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0;
-      const ano=Math.floor(k/100),mes=k%100;
-      const realizado=DATA.csv.filter(r=>ccMatch(r.cc||'',obra)&&r.ano===ano&&r.mes===mes&&r.tipo==='PAGAMENTO'&&contasDesc.some(c=>r.conta&&r.conta.includes(c))).reduce((s,r)=>s+r.valor,0);
-      return Math.max(0,prevBruto-realizado);
-    });
+    const pVals=colKeys.map(k=>parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0);
     prevLiqMap[obra]=pVals;
     const pTot=pVals.reduce((s,v)=>s+v,0);
     return '<tr style="background:#FEF9E7"><td style="'+SD+'#FEF9E7;padding:4px 8px;font-size:11px;color:#B7950B;font-weight:600">Previsto — '+obra+'</td>'
