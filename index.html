@@ -529,7 +529,7 @@ function renderFluxo(){
   const thSD='text-align:left;padding:8px 12px;width:200px;'+SD+'#f5f5f5;top:0';
   thead.innerHTML='<tr style="background:#f5f5f5">'
     +'<th style="'+thSD+'">Conta</th>'
-    +'<th class="r" style="padding:6px 8px;width:90px;font-size:10px;background:#e6e6e6;position:sticky;top:0;color:#666">Acum.<br>Anterior</th>'
+    +'<th class="r" style="padding:6px 8px;width:90px;font-size:10px;background:#f5f5f5;position:sticky;top:0;color:#666">Acum.<br>Anterior</th>'
     +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
     +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
 
@@ -554,11 +554,11 @@ function renderFluxo(){
       const zebra=idx%2===0?'#ffffff':'#f4faf5';
       rows+='<tr style="border-left:3px solid #A9DFBF;border-bottom:1px solid #edf2ee">'
         +'<td '+tdS(zebra)+'>'+c+'</td>'
-        +'<td class="r" style="padding:4px 6px;font-size:10px;background:#f2f2f2;color:#777">'+f2(aa)+'</td>'
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
         +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
         +'<td class="r" style="padding:4px 8px;font-weight:600;background:#eef6ef;font-size:10px">'+f2(tot)+'</td></tr>';
     });
-    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Faturamento</td>'+'<td class="r" style="padding:4px 6px;font-size:10px;background:#dcdcdc">'+f2(acumFatTot)+'</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
+    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Faturamento</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumFatTot)+'</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
 
   // Previsto editável por obra — DATA.previsto[obra][colKey] = valor (calculado aqui para poder entrar no grupo Custo de Obra abaixo)
@@ -579,7 +579,7 @@ function renderFluxo(){
     prevLiqMap[obra]=pVals;
     const pTot=pVals.reduce((s,v)=>s+v,0);
     return '<tr style="background:#FEF9E7"><td style="'+SD+'#FEF9E7;padding:4px 8px;font-size:11px;color:#B7950B;font-weight:600">Previsto — '+obra+'</td>'
-      +'<td class="r" style="padding:4px 6px;font-size:10px;background:#f2f2f2;color:#bbb">—</td>'
+      +'<td class="r" style="padding:4px 6px;font-size:10px;background:#FEF9E7;color:#bbb">—</td>'
       +pVals.map((v,i)=>'<td style="padding:2px 3px"><input type="number" value="'+(v||'')+'" placeholder="0"'
         +' data-obra="'+encodeURIComponent(obra)+'" data-key="'+colKeys[i]+'"'
         +' onchange="if(!DATA.previsto[decodeURIComponent(this.dataset.obra)])DATA.previsto[decodeURIComponent(this.dataset.obra)]={};'
@@ -612,7 +612,7 @@ function renderFluxo(){
       const zebra=idx%2===0?'#ffffff':g.zebra;
       rows+='<tr style="border-left:3px solid '+g.borda+';border-bottom:1px solid '+g.divisor+'">'
         +'<td '+tdS(zebra)+'>'+c+'</td>'
-        +'<td class="r" style="padding:4px 6px;font-size:10px;background:#f2f2f2;color:#777">'+f2(aa)+'</td>'
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
         +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
         +'<td class="r" style="padding:4px 8px;font-weight:600;background:'+g.totBg+';font-size:10px">'+f2(tot)+'</td></tr>';
     });
@@ -620,7 +620,7 @@ function renderFluxo(){
       rows+=prevRows;
       prevTotalMes.forEach((v,i)=>totGrupo[i]+=v);
     }
-    rows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px;background:#dcdcdc">'+f2(acumGrupoTot)+'</td>'+totGrupo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(totGrupo.reduce((s,v)=>s+v,0))+'</td></tr>';
+    rows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumGrupoTot)+'</td>'+totGrupo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(totGrupo.reduce((s,v)=>s+v,0))+'</td></tr>';
   });
   tbody.innerHTML=rows;
 
@@ -634,12 +634,15 @@ function renderFluxo(){
   const ci=obraSel?parseFloat(DATA.caixaInicial[obraSel]||0)||0:Object.values(DATA.caixaInicial).reduce((s,v)=>s+(parseFloat(v)||0),0);
   const saldo=[];let acc=ci;rv2.forEach((v,i)=>{acc+=v;saldo.push(acc);});
   const ciMeses=rv2.map((_,i)=>i===0?ci:saldo[i-1]);
-  const tdAcumDash='<td class="r" style="padding:4px 6px;font-size:10px;background:#f2f2f2;color:#bbb">—</td>';
+  const tdAcumDashRed='<td class="r" style="padding:4px 6px;font-size:10px;background:#922B21;color:rgba(255,255,255,.5)">—</td>';
+  const tdAcumDashCinza='<td class="r" style="padding:4px 6px;font-size:10px;background:#f0f0f0;color:#bbb">—</td>';
+  const tdAcumDashAzulClaro='<td class="r" style="padding:4px 6px;font-size:10px;background:#EAF4FB;color:#9bb8cc">—</td>';
+  const tdAcumDashAzulEscuro='<td class="r" style="padding:4px 6px;font-size:10px;background:#1a5276;color:rgba(255,255,255,.4)">—</td>';
   tfoot.innerHTML=
-    '<tr style="background:#922B21;font-weight:700"><td style="'+SD+'#922B21;padding:6px 12px;font-size:11px;color:#fff">Total Pagamentos + Previsto</td>'+tdAcumDash+pagPrevMes.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#fff;font-weight:600">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:#fff;font-weight:700">'+f2(pagPrevTot)+'</td></tr>'+
-    '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="'+SD+'#f0f0f0;padding:6px 12px;font-size:11px">Resultado do Período</td>'+tdAcumDash+rv2.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt2>=0?'#1B6B35':'#C0392B')+'">'+f2(rt2)+'</td></tr>'+
-    '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial do Mês</td>'+tdAcumDash+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
-    '<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa do Mês</td>'+tdAcumDash+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
+    '<tr style="background:#922B21;font-weight:700"><td style="'+SD+'#922B21;padding:6px 12px;font-size:11px;color:#fff">Total Pagamentos + Previsto</td>'+tdAcumDashRed+pagPrevMes.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#fff;font-weight:600">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:#fff;font-weight:700">'+f2(pagPrevTot)+'</td></tr>'+
+    '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="'+SD+'#f0f0f0;padding:6px 12px;font-size:11px">Resultado do Período</td>'+tdAcumDashCinza+rv2.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt2>=0?'#1B6B35':'#C0392B')+'">'+f2(rt2)+'</td></tr>'+
+    '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial do Mês</td>'+tdAcumDashAzulClaro+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
+    '<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa do Mês</td>'+tdAcumDashAzulEscuro+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
   set('fc-badge',nomes.length+(nomes.length===1?' conta':' contas'));
 
   // Resumo — Faturamento / Despesas (Pagamentos + Previsto) / Saldo de Caixa
@@ -648,19 +651,19 @@ function renderFluxo(){
     const thSDr='text-align:left;padding:8px 12px;width:200px;'+SD+'#f5f5f5;top:0';
     theadR.innerHTML='<tr style="background:#f5f5f5">'
       +'<th style="'+thSDr+'"></th>'
-      +'<th class="r" style="padding:6px 8px;width:90px;font-size:10px;background:#e6e6e6;position:sticky;top:0;color:#666">Acum.<br>Anterior</th>'
+      +'<th class="r" style="padding:6px 8px;width:90px;font-size:10px;background:#f5f5f5;position:sticky;top:0;color:#666">Acum.<br>Anterior</th>'
       +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
       +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
     const acumFatTotal=fatN.reduce((s,c)=>s+acumFat(c),0);
     const acumPagTotal=pagN.reduce((s,c)=>s+acumPag(c),0);
-    const tdAcumDashR='<td class="r" style="padding:5px 6px;font-size:11px;background:#eee;color:#bbb">—</td>';
+    const tdAcumDashR='<td class="r" style="padding:5px 6px;font-size:11px;background:#1a5276;color:rgba(255,255,255,.4)">—</td>';
     const rowsR=
       '<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Faturamento</td>'
-      +'<td class="r" style="padding:5px 6px;font-size:11px;background:#dcdcdc">'+f2(acumFatTotal)+'</td>'
+      +'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(acumFatTotal)+'</td>'
       +tFM.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
       +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(tFM.reduce((s,v)=>s+v,0))+'</td></tr>'
       +'<tr style="background:#FADBD8;font-weight:700"><td '+tdSB('#FADBD8')+'>Despesas</td>'
-      +'<td class="r" style="padding:5px 6px;font-size:11px;background:#dcdcdc">'+f2(acumPagTotal)+'</td>'
+      +'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(acumPagTotal)+'</td>'
       +pagPrevMes.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
       +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(pagPrevTot)+'</td></tr>'
       +'<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa</td>'
