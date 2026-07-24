@@ -19,7 +19,7 @@ const PAL=['#1B6B35','#1A5276','#B7950B','#7D3C98','#C0392B','#784212','#1A6161'
 const GRUPO_CONTA={
   // CUSTO DE OBRAS
   '2010105':'CUSTO_OBRA','2010106':'CUSTO_OBRA','2010401':'CUSTO_OBRA','2010302':'CUSTO_OBRA','2010303':'CUSTO_OBRA',
-  '20505':'CUSTO_OBRA','2010304':'CUSTO_OBRA','2010305':'CUSTO_OBRA','2010402':'CUSTO_OBRA','2020101':'CUSTO_OBRA',
+  '20505':'CUSTO_OBRA','2010304':'CUSTO_OBRA','2010305':'CUSTO_OBRA','2010402':'CUSTO_OBRA','2020101':'CUSTO_OBRA','2020201':'CUSTO_OBRA',
   '2020203':'CUSTO_OBRA','2010201':'CUSTO_OBRA','2010306':'CUSTO_OBRA','2020205':'CUSTO_OBRA','2010498':'CUSTO_OBRA',
   '2900102':'CUSTO_OBRA','2900202':'CUSTO_OBRA','2900302':'CUSTO_OBRA','2900402':'CUSTO_OBRA',
   // DESPESAS DE MARKETING
@@ -523,6 +523,7 @@ function renderFluxo(){
   const tdSB=(bg)=>'style="'+SD+bg+';padding:5px 12px;font-size:11px;font-weight:700"';
 
   let rows='';
+  const spacerRow='<tr class="fc-group-spacer" style="border:none"><td colspan="'+(NC+2)+'" style="padding:0;height:14px;border:none;background:transparent"></td></tr>';
   const tFM=Array(NC).fill(0),tPM=Array(NC).fill(0);
   const fatN=nomes.filter(c=>contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)).sort();
   const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)).sort();
@@ -579,6 +580,7 @@ function renderFluxo(){
   gruposDef.forEach(g=>{
     const lista=pagN.filter(c=>grupoDeConta(c)===g.key);
     if(!lista.length)return;
+    if(rows)rows+=spacerRow;
     rows+='<tr style="background:'+g.hdrBg+'"><td colspan="'+(NC+2)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:'+g.hdrText+';'+SD+g.hdrBg+'">▶ '+g.titulo+'</td></tr>';
     const totGrupo=Array(NC).fill(0);
     lista.forEach((c,idx)=>{
