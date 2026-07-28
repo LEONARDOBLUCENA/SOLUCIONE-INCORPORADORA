@@ -2124,7 +2124,11 @@ function renderOrcamentoTable(){
   if(!entries.length){
     thead.innerHTML='';
     tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado de orçamento ainda</p></div></td></tr>';
-    set('orc-badge','—');return;
+    set('orc-badge','—');
+    const theadA=document.getElementById('thead-orc-resumo-ano'),tbodyA=document.getElementById('tbody-orc-resumo-ano');
+    if(theadA)theadA.innerHTML='';
+    if(tbodyA)tbodyA.innerHTML='<tr><td colspan="2"><div class="empty-state"><p>Importe o orçamento para ver o resumo</p></div></td></tr>';
+    return;
   }
 
   const anoMeses=new Set();
@@ -2247,6 +2251,26 @@ function renderOrcamentoTable(){
   tbody.innerHTML=rows;
   set('orc-badge',entries.length+' itens');
   renderOrcamentoResumo(entries,filtroObra);
+
+  // Resumo Anual — agrupa os mesmos totais (totais/grandAccVals) por ano, sem recalcular nada
+  const theadA=document.getElementById('thead-orc-resumo-ano'),tbodyA=document.getElementById('tbody-orc-resumo-ano');
+  if(theadA&&tbodyA){
+    const anos=[...new Set(cols.map(c=>c.split('-')[0]))].sort();
+    const totalPorAno=anos.map(a=>cols.reduce((s,c,i)=>c.split('-')[0]===a?s+totais[i]:s,0));
+    let accAno=0;
+    const acumPorAno=totalPorAno.map(v=>{accAno+=v;return accAno;});
+    theadA.innerHTML='<tr style="background:#f5f5f5">'
+      +'<th style="text-align:left;padding:8px 12px;min-width:180px;position:sticky;left:0;background:#f5f5f5">Ano</th>'
+      +anos.map(a=>'<th class="r" style="padding:6px 10px;min-width:110px;font-size:11px">'+a+'</th>').join('')
+      +'</tr>';
+    tbodyA.innerHTML=
+      '<tr style="background:#e8f5e9;font-weight:700"><td style="padding:6px 12px;position:sticky;left:0;background:#e8f5e9">Total do Ano</td>'
+      +totalPorAno.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px">'+fmt(v)+'</td>').join('')
+      +'</tr>'
+      +'<tr style="background:#1a5276;font-weight:700"><td style="padding:6px 12px;color:#fff;position:sticky;left:0;background:#1a5276">Total Acumulado</td>'
+      +acumPorAno.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px;color:#fff">'+fmt(v)+'</td>').join('')
+      +'</tr>';
+  }
 }
 
 function removerOrcamento(i){DATA.orcamento.splice(i,1);renderOrcamentoTable();renderDtlh();}
@@ -2561,6 +2585,22 @@ function exportarOrcamento(){}
         </thead>
         <tbody id="tbody-orc-resumo">
           <tr><td colspan="5"><div class="empty-state"><p>Importe o orçamento para ver o resumo</p></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Resumo Anual -->
+  <div class="tbl-card" style="margin-top:16px" id="orc-resumo-ano-card">
+    <div class="tbl-head">
+      <div class="tbl-title">Resumo Anual</div>
+      <span style="font-size:11px;color:var(--text3)">Acumulado por ano — mesma lógica do Total do Mês / Total Acumulado abaixo</span>
+    </div>
+    <div style="overflow-x:auto;font-size:12px">
+      <table id="tbl-orc-resumo-ano" style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:600px">
+        <thead id="thead-orc-resumo-ano"></thead>
+        <tbody id="tbody-orc-resumo-ano">
+          <tr><td colspan="2"><div class="empty-state"><p>Importe o orçamento para ver o resumo</p></div></td></tr>
         </tbody>
       </table>
     </div>
