@@ -430,7 +430,8 @@ function updateMultiDropBtn(wrapId,btnId,listId,lFn){
   const items=list.querySelectorAll('input[value]:checked');
   const total=list.querySelectorAll('input[value]').length;
   if(items.length===0||items.length===total){
-    btn.textContent=(wrapId.includes('ano')?'Todos os anos':'Todos os meses')+' ▾';
+    var lbl0=wrapId.includes('ano')?'Todos os anos':wrapId.includes('mes')?'Todos os meses':wrapId.includes('conta')?'Todas':'Todos';
+    btn.textContent=lbl0+' ▾';
     btn.classList.remove('active');
   } else {
     const labels=[...items].map(cb=>{const lbl=cb.parentElement.querySelector('label');return lbl?lbl.textContent:cb.value;});
@@ -1509,11 +1510,15 @@ function populateDashFilters(){
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var nomesFat=[...new Set(csv.filter(function(r){return r.tipo==='FATURAMENTO';}).map(function(r){return extrairNome(r.complemento);}).filter(Boolean))].sort(function(a,b){return a.toLowerCase().localeCompare(b.toLowerCase());});
   var nomesDesp=[...new Set(csv.filter(function(r){return r.tipo==='PAGAMENTO';}).map(function(r){return extrairNome(r.complemento);}).filter(Boolean))].sort(function(a,b){return a.toLowerCase().localeCompare(b.toLowerCase());});
+  var contasFat=[...new Set(csv.filter(function(r){return r.tipo==='FATURAMENTO';}).map(function(r){return r.conta;}).filter(Boolean))].sort();
+  var contasDesp=[...new Set(csv.filter(function(r){return r.tipo==='PAGAMENTO';}).map(function(r){return r.conta;}).filter(Boolean))].sort();
   ['df','dd'].forEach(function(p){
     fillMultiDrop('wrap-'+p+'-ano','btn-'+p+'-ano','list-'+p+'-ano',anos,function(v){return v;},function(v){return String(v);});
     fillMultiDrop('wrap-'+p+'-mes','btn-'+p+'-mes','list-'+p+'-mes',meses,function(v){return v;},function(v){return MESES_PT[v]||v;});
     fillMultiDrop('wrap-'+p+'-cc','btn-'+p+'-cc','list-'+p+'-cc',ccs,function(v){return v;},function(v){return v;});
   });
+  fillMultiDrop('wrap-df-conta','btn-df-conta','list-df-conta',contasFat,function(v){return v;},function(v){return v;});
+  fillMultiDrop('wrap-dd-conta','btn-dd-conta','list-dd-conta',contasDesp,function(v){return v;},function(v){return v;});
   createSearchDrop('wrap-df-nome','list-df-nome','btn-df-nome',nomesFat,'renderDashFat');
   createSearchDrop('wrap-dd-nome','list-dd-nome','btn-dd-nome',nomesDesp,'renderDashDesp');
 }
@@ -1521,11 +1526,13 @@ function filtraDash(dados, prefix){
   var anos=getMultiDrop('wrap-'+prefix+'-ano');
   var meses=getMultiDrop('wrap-'+prefix+'-mes');
   var ccs=getMultiDrop('wrap-'+prefix+'-cc');
+  var contas=getMultiDrop('wrap-'+prefix+'-conta');
   var nomes=getSearchDrop('list-'+prefix+'-nome');
   return dados.filter(function(r){
     if(anos.size&&!anos.has(String(r.ano)))return false;
     if(meses.size&&!meses.has(String(r.mes)))return false;
     if(ccs.size&&!Array.from(ccs).some(function(c){return ccMatch(r.cc||'',c);}))return false;
+    if(contas.size&&!contas.has(r.conta||''))return false;
     if(nomes.size&&!nomes.has(extrairNome(r.complemento)))return false;
     return true;
   });
@@ -2757,6 +2764,13 @@ function exportarOrcamento(){}
         <div class="multi-drop-list" id="list-df-cc"></div>
       </div>
     </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span class="filter-label">Conta</span>
+      <div class="multi-drop-wrap" id="wrap-df-conta">
+        <button class="multi-drop-btn" id="btn-df-conta" onclick="toggleDrop('wrap-df-conta','btn-df-conta','list-df-conta')">Todas</button>
+        <div class="multi-drop-list" id="list-df-conta" style="min-width:280px"></div>
+      </div>
+    </div>
 
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Cliente</span>
@@ -2769,7 +2783,7 @@ function exportarOrcamento(){}
       <span class="filter-label" style="visibility:hidden">_</span>
       <div style="display:flex;gap:6px">
         <button onclick="renderDashFat()" style="background:#1B6B35;color:#fff;border:none;padding:6px 16px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;border-radius:4px;font-weight:600">Aplicar</button>
-        <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});var ln=document.getElementById('list-df-nome');if(ln)ln.dataset.selected='[]';renderDashFat()">✕ Limpar</button>
+        <button class="btn-ghost" onclick="['list-df-ano','list-df-mes','list-df-cc','list-df-conta'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-df-ano','btn-df-mes','btn-df-cc','btn-df-conta'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent=(id==='btn-df-conta'?'Todas ▾':'Todos ▾');b.classList.remove('active');}});var ln=document.getElementById('list-df-nome');if(ln)ln.dataset.selected='[]';renderDashFat()">✕ Limpar</button>
       </div>
     </div>
   </div>
@@ -2844,6 +2858,13 @@ function exportarOrcamento(){}
         <div class="multi-drop-list" id="list-dd-cc"></div>
       </div>
     </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span class="filter-label">Conta</span>
+      <div class="multi-drop-wrap" id="wrap-dd-conta">
+        <button class="multi-drop-btn" id="btn-dd-conta" onclick="toggleDrop('wrap-dd-conta','btn-dd-conta','list-dd-conta')">Todas</button>
+        <div class="multi-drop-list" id="list-dd-conta" style="min-width:280px"></div>
+      </div>
+    </div>
 
     <div style="display:flex;flex-direction:column;gap:4px">
       <span class="filter-label">Fornecedor</span>
@@ -2856,7 +2877,7 @@ function exportarOrcamento(){}
       <span class="filter-label" style="visibility:hidden">_</span>
       <div style="display:flex;gap:6px">
         <button onclick="renderDashDesp()" style="background:#1B6B35;color:#fff;border:none;padding:6px 16px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;border-radius:4px;font-weight:600">Aplicar</button>
-        <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent='Todos ▾';b.classList.remove('active');}});var ld=document.getElementById('list-dd-nome');if(ld)ld.dataset.selected='[]';renderDashDesp()">✕ Limpar</button>
+        <button class="btn-ghost" onclick="['list-dd-ano','list-dd-mes','list-dd-cc','list-dd-conta'].forEach(function(id){var l=document.getElementById(id);if(l)l.querySelectorAll('input[type=checkbox]').forEach(function(c){c.checked=true;});});['btn-dd-ano','btn-dd-mes','btn-dd-cc','btn-dd-conta'].forEach(function(id){var b=document.getElementById(id);if(b){b.textContent=(id==='btn-dd-conta'?'Todas ▾':'Todos ▾');b.classList.remove('active');}});var ld=document.getElementById('list-dd-nome');if(ld)ld.dataset.selected='[]';renderDashDesp()">✕ Limpar</button>
       </div>
     </div>
   </div>
