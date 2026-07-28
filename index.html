@@ -2252,24 +2252,53 @@ function renderOrcamentoTable(){
   set('orc-badge',entries.length+' itens');
   renderOrcamentoResumo(entries,filtroObra);
 
-  // Resumo Anual — agrupa os mesmos totais (totais/grandAccVals) por ano, sem recalcular nada
+  // Resumo Anual — por grupo (mesma classificação de Grupo 01/02/03 da Estrutura do Resumo) + Total Geral
   const theadA=document.getElementById('thead-orc-resumo-ano'),tbodyA=document.getElementById('tbody-orc-resumo-ano');
   if(theadA&&tbodyA){
     const anos=[...new Set(cols.map(c=>c.split('-')[0]))].sort();
     const totalPorAno=anos.map(a=>cols.reduce((s,c,i)=>c.split('-')[0]===a?s+totais[i]:s,0));
     let accAno=0;
     const acumPorAno=totalPorAno.map(v=>{accAno+=v;return accAno;});
+
+    // Classificar por grupo (mesma lógica de renderOrcamentoResumo): só folhas, primeiro segmento do código
+    const allCodesG=entries.map(e=>e.codigo).filter(Boolean);
+    const isFolhaG=e=>!e.codigo||!allCodesG.some(c=>c!==e.codigo&&c.startsWith(e.codigo+'.'));
+    const grupoDe=e=>{const g=String(e.codigo||'').trim().split('.')[0];return g==='1'?'01':g==='2'?'02':'03';};
+    const gruposDefOrc=[{key:'01',nome:'Grupo 01',bg:'#e8f5e9'},{key:'02',nome:'Grupo 02',bg:'#e3f2fd'},{key:'03',nome:'Grupo 03',bg:'#fdf3e3'}];
+    const porGrupoAno={};
+    gruposDefOrc.forEach(g=>{porGrupoAno[g.key]=anos.map(()=>0);});
+    entries.filter(isFolhaG).forEach(e=>{
+      const gk=grupoDe(e);
+      Object.entries(e.anos||{}).forEach(([ano,meses])=>{
+        const ai=anos.indexOf(ano);
+        if(ai<0)return;
+        Object.values(meses).forEach(v=>{porGrupoAno[gk][ai]+=(v||0);});
+      });
+    });
+
     theadA.innerHTML='<tr style="background:#f5f5f5">'
       +'<th style="text-align:left;padding:8px 12px;min-width:180px;position:sticky;left:0;background:#f5f5f5">Ano</th>'
       +anos.map(a=>'<th class="r" style="padding:6px 10px;min-width:110px;font-size:11px">'+a+'</th>').join('')
       +'</tr>';
-    tbodyA.innerHTML=
-      '<tr style="background:#e8f5e9;font-weight:700"><td style="padding:6px 12px;position:sticky;left:0;background:#e8f5e9">Total do Ano</td>'
+
+    let rowsA='';
+    gruposDefOrc.forEach(g=>{
+      const vals=porGrupoAno[g.key];
+      let acc=0;const acumVals=vals.map(v=>{acc+=v;return acc;});
+      rowsA+='<tr style="background:'+g.bg+';font-weight:600"><td style="padding:6px 12px;position:sticky;left:0;background:'+g.bg+'">'+g.nome+' — Total do Ano</td>'
+        +vals.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px">'+fmt(v)+'</td>').join('')
+        +'</tr>'
+        +'<tr style="background:'+g.bg+'"><td style="padding:5px 12px 5px 24px;position:sticky;left:0;background:'+g.bg+';font-size:11px;color:var(--text3)">'+g.nome+' — Acumulado</td>'
+        +acumVals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px;color:var(--text3)">'+fmt(v)+'</td>').join('')
+        +'</tr>';
+    });
+    rowsA+='<tr style="background:#e8f5e9;font-weight:700;border-top:2px solid #bbb"><td style="padding:6px 12px;position:sticky;left:0;background:#e8f5e9">Total Geral — Total do Ano</td>'
       +totalPorAno.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px">'+fmt(v)+'</td>').join('')
       +'</tr>'
-      +'<tr style="background:#1a5276;font-weight:700"><td style="padding:6px 12px;color:#fff;position:sticky;left:0;background:#1a5276">Total Acumulado</td>'
+      +'<tr style="background:#1a5276;font-weight:700"><td style="padding:6px 12px;color:#fff;position:sticky;left:0;background:#1a5276">Total Geral — Acumulado</td>'
       +acumPorAno.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px;color:#fff">'+fmt(v)+'</td>').join('')
       +'</tr>';
+    tbodyA.innerHTML=rowsA;
   }
 }
 
