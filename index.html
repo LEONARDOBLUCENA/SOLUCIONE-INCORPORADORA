@@ -20,7 +20,7 @@ const GRUPO_CONTA={
   // CUSTO DE OBRAS
   '2010105':'CUSTO_OBRA','2010106':'CUSTO_OBRA','2010107':'CUSTO_OBRA','2010401':'CUSTO_OBRA','2010302':'CUSTO_OBRA','2010303':'CUSTO_OBRA',
   '20505':'CUSTO_OBRA','2010304':'CUSTO_OBRA','2010305':'CUSTO_OBRA','2010402':'CUSTO_OBRA','2020101':'CUSTO_OBRA','2020201':'CUSTO_OBRA',
-  '2020203':'CUSTO_OBRA','2010201':'CUSTO_OBRA','2010306':'CUSTO_OBRA','2020205':'CUSTO_OBRA','2010498':'CUSTO_OBRA','20501':'CUSTO_OBRA',
+  '2020203':'CUSTO_OBRA','2010201':'CUSTO_OBRA','2010306':'CUSTO_OBRA','2020205':'CUSTO_OBRA','2010498':'CUSTO_OBRA','20501':'CUSTO_OBRA','2020199':'CUSTO_OBRA',
   '2900102':'CUSTO_OBRA','2900202':'CUSTO_OBRA','2900302':'CUSTO_OBRA','2900402':'CUSTO_OBRA',
   // DESPESAS DE MARKETING
   '20613':'MARKETING','20615':'MARKETING',
@@ -31,7 +31,7 @@ const GRUPO_CONTA={
   // DESPESAS FINANCEIRAS (inclui tributárias sobre faturamento)
   '20301':'FINANCEIRAS','20303':'FINANCEIRAS','20305':'FINANCEIRAS','20307':'FINANCEIRAS','20401':'FINANCEIRAS','20402':'FINANCEIRAS',
   '20403':'FINANCEIRAS','20407':'FINANCEIRAS','20409':'FINANCEIRAS','20410':'FINANCEIRAS','20411':'FINANCEIRAS','20412':'FINANCEIRAS',
-  '1.05.03':'FINANCEIRAS','10501':'FINANCEIRAS'
+  '1.05.03':'FINANCEIRAS','20499':'FINANCEIRAS'
 };
 function grupoDeConta(c){
   const cod=(c||'').split(' - ')[0].trim();
@@ -255,7 +255,8 @@ function processCSVText(txt){
     let tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
     // Contas específicas com valor negativo em pagamentos
     let valorFinal=valor;
-    if(conta.includes('2020299')||conta.includes('2010498')){tipo='PAGAMENTO';valorFinal=-valor;}
+    if(conta.includes('2020299')||conta.includes('2010498')||conta.includes('2020199')||conta.includes('20499')){tipo='PAGAMENTO';valorFinal=-valor;}
+    if(conta.includes('10501')){tipo='FATURAMENTO';}
     if(conta.includes('20301')||conta.includes('20307')){tipo='PAGAMENTO';}
     return{data,complemento,valor:valorFinal,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
   }).filter(r=>r.valor!==0||r.cc);
@@ -548,7 +549,7 @@ function renderFluxo(){
   let rows='';
   const spacerRow='<tr class="fc-group-spacer" style="border:none"><td colspan="'+(NC+3)+'" style="padding:0;height:14px;border:none;background:transparent"></td></tr>';
   const tFM=Array(NC).fill(0),tPM=Array(NC).fill(0);
-  const ULTIMAS_FAT=['1.05.03 - (-) Devolução de Empréstimos/Financiamentos','10198 - (-) Descontos Concedidos Incorporação','2020199 - (-) Reembolso de Mão de Obra e Encargos Indiretos','20499 - (-) Reembolso de Despesas Tributárias'];
+  const ULTIMAS_FAT=['1.05.03 - (-) Devolução de Empréstimos/Financiamentos','10198 - (-) Descontos Concedidos Incorporação'];
   const fatN=nomes.filter(c=>contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)||acumFat(c)!==0).sort((a,b)=>{
     const ia=ULTIMAS_FAT.indexOf(a),ib=ULTIMAS_FAT.indexOf(b);
     if(ia===-1&&ib===-1)return a.localeCompare(b);
@@ -559,7 +560,7 @@ function renderFluxo(){
   const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)||acumPag(c)!==0).sort();
 
   if(fatN.length){
-    rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ FATURAMENTO</td></tr>';
+    rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ ENTRADAS</td></tr>';
     let acumFatTot=0;
     fatN.forEach((c,idx)=>{
       const vals=contas[c].FAT.map((v,i)=>v-contas[c].DESC[i]);
@@ -573,7 +574,7 @@ function renderFluxo(){
         +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
         +'<td class="r" style="padding:4px 8px;font-weight:600;background:#eef6ef;font-size:10px">'+f2(tot)+'</td></tr>';
     });
-    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Faturamento</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumFatTot)+'</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumFatTot+tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
+    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Entradas</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumFatTot)+'</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumFatTot+tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
 
   // Previsto editável por obra — DATA.previsto[obra][colKey] = valor (calculado aqui para poder entrar no grupo Custo de Obra abaixo)
@@ -667,7 +668,7 @@ function renderFluxo(){
     const acumPagTotal=pagN.reduce((s,c)=>s+acumPag(c),0);
     const tdAcumDashR='<td class="r" style="padding:5px 6px;font-size:11px;background:#1a5276;color:rgba(255,255,255,.4)">—</td>';
     const rowsR=
-      '<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Faturamento</td>'
+      '<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Entradas</td>'
       +'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(acumFatTotal)+'</td>'
       +tFM.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
       +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(acumFatTotal+tFM.reduce((s,v)=>s+v,0))+'</td></tr>'
@@ -749,10 +750,15 @@ async function jbinLoad(){
     const d=await r.json();
     if(!d||!d.csv)return setJbinStatus('empty');
     DATA.csv=(d.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
-    // Correção automática: contas que são sempre Despesa Financeira, independente do texto do complemento
+    // Correção automática: contas que são sempre Despesa Financeira/Custo de Obra ou sempre Faturamento, independente do texto do complemento
     DATA.csv.forEach(r=>{
       const c=r.conta||'';
       if((c.includes('20301')||c.includes('20307'))&&r.tipo!=='PAGAMENTO'){r.tipo='PAGAMENTO';}
+      if(c.includes('2020199')||c.includes('20499')){
+        if(r.tipo!=='PAGAMENTO'){r.tipo='PAGAMENTO';}
+        if(r.valor>0){r.valor=-r.valor;}
+      }
+      if(c.includes('10501')&&r.tipo!=='FATURAMENTO'){r.tipo='FATURAMENTO';}
     });
     DATA.estoque=d.estoque||[];
     DATA.orcamento=d.orcamento||[];
