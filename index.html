@@ -256,6 +256,7 @@ function processCSVText(txt){
     // Contas específicas com valor negativo em pagamentos
     let valorFinal=valor;
     if(conta.includes('2020299')||conta.includes('2010498')){tipo='PAGAMENTO';valorFinal=-valor;}
+    if(conta.includes('20301')||conta.includes('20307')){tipo='PAGAMENTO';}
     return{data,complemento,valor:valorFinal,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
@@ -748,6 +749,11 @@ async function jbinLoad(){
     const d=await r.json();
     if(!d||!d.csv)return setJbinStatus('empty');
     DATA.csv=(d.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
+    // Correção automática: contas que são sempre Despesa Financeira, independente do texto do complemento
+    DATA.csv.forEach(r=>{
+      const c=r.conta||'';
+      if((c.includes('20301')||c.includes('20307'))&&r.tipo!=='PAGAMENTO'){r.tipo='PAGAMENTO';}
+    });
     DATA.estoque=d.estoque||[];
     DATA.orcamento=d.orcamento||[];
     DATA.orcamentoMensal=d.orcamentoMensal||{};
