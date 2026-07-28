@@ -2264,7 +2264,7 @@ function renderOrcamentoTable(){
     const allCodesG=entries.map(e=>e.codigo).filter(Boolean);
     const isFolhaG=e=>!e.codigo||!allCodesG.some(c=>c!==e.codigo&&c.startsWith(e.codigo+'.'));
     const grupoDe=e=>{const g=String(e.codigo||'').trim().split('.')[0];return g==='1'?'01':g==='2'?'02':'03';};
-    const gruposDefOrc=[{key:'01',nome:'Grupo 01',bg:'#e8f5e9'},{key:'02',nome:'Grupo 02',bg:'#e3f2fd'},{key:'03',nome:'Grupo 03',bg:'#fdf3e3'}];
+    const gruposDefOrc=[{key:'01',nome:'Incorporação e Despesas Iniciais'},{key:'02',nome:'Serviços Preliminares e Gerais'},{key:'03',nome:'Empreendimento'}];
     const porGrupoAno={};
     gruposDefOrc.forEach(g=>{porGrupoAno[g.key]=anos.map(()=>0);});
     entries.filter(isFolhaG).forEach(e=>{
@@ -2277,26 +2277,26 @@ function renderOrcamentoTable(){
     });
 
     theadA.innerHTML='<tr style="background:#f5f5f5">'
-      +'<th style="text-align:left;padding:8px 12px;min-width:180px;position:sticky;left:0;background:#f5f5f5">Ano</th>'
-      +anos.map(a=>'<th class="r" style="padding:6px 10px;min-width:110px;font-size:11px">'+a+'</th>').join('')
+      +'<th style="text-align:left;padding:10px 16px;min-width:220px;position:sticky;left:0;background:#f5f5f5;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Ano</th>'
+      +anos.map(a=>'<th class="r" style="padding:10px 16px;min-width:110px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">'+a+'</th>').join('')
       +'</tr>';
 
     let rowsA='';
     gruposDefOrc.forEach(g=>{
       const vals=porGrupoAno[g.key];
       let acc=0;const acumVals=vals.map(v=>{acc+=v;return acc;});
-      rowsA+='<tr style="background:'+g.bg+';font-weight:600"><td style="padding:6px 12px;position:sticky;left:0;background:'+g.bg+'">'+g.nome+' — Total do Ano</td>'
-        +vals.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px">'+fmt(v)+'</td>').join('')
+      rowsA+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 16px;font-size:13px;position:sticky;left:0;background:#fff"><span style="color:var(--brand);font-weight:600;margin-right:8px">'+g.key+'</span>'+g.nome+'</td>'
+        +vals.map(v=>'<td class="r" style="padding:10px 16px;font-size:13px">'+fmt(v)+'</td>').join('')
         +'</tr>'
-        +'<tr style="background:'+g.bg+'"><td style="padding:5px 12px 5px 24px;position:sticky;left:0;background:'+g.bg+';font-size:11px;color:var(--text3)">'+g.nome+' — Acumulado</td>'
-        +acumVals.map(v=>'<td class="r" style="padding:4px 8px;font-size:11px;color:var(--text3)">'+fmt(v)+'</td>').join('')
+        +'<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 16px 6px 40px;font-size:12px;color:var(--text3);position:sticky;left:0;background:#fff">Acumulado</td>'
+        +acumVals.map(v=>'<td class="r" style="padding:6px 16px;font-size:12px;color:var(--text3)">'+fmt(v)+'</td>').join('')
         +'</tr>';
     });
-    rowsA+='<tr style="background:#e8f5e9;font-weight:700;border-top:2px solid #bbb"><td style="padding:6px 12px;position:sticky;left:0;background:#e8f5e9">Total Geral — Total do Ano</td>'
-      +totalPorAno.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px">'+fmt(v)+'</td>').join('')
+    rowsA+='<tr style="background:#f0f7f0;font-weight:700;border-top:2px solid #1B6B35"><td style="padding:10px 16px;font-size:13px;color:var(--brand);position:sticky;left:0;background:#f0f7f0">Total Geral</td>'
+      +totalPorAno.map(v=>'<td class="r" style="padding:10px 16px;font-size:13px">'+fmt(v)+'</td>').join('')
       +'</tr>'
-      +'<tr style="background:#1a5276;font-weight:700"><td style="padding:6px 12px;color:#fff;position:sticky;left:0;background:#1a5276">Total Geral — Acumulado</td>'
-      +acumPorAno.map(v=>'<td class="r" style="padding:5px 8px;font-size:11px;color:#fff">'+fmt(v)+'</td>').join('')
+      +'<tr style="background:#f0f7f0;font-weight:600"><td style="padding:6px 16px 6px 40px;font-size:12px;color:var(--brand);position:sticky;left:0;background:#f0f7f0">Acumulado</td>'
+      +acumPorAno.map(v=>'<td class="r" style="padding:6px 16px;font-size:12px;color:var(--brand)">'+fmt(v)+'</td>').join('')
       +'</tr>';
     tbodyA.innerHTML=rowsA;
   }
