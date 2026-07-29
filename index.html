@@ -560,6 +560,9 @@ function renderFluxo(){
   });
   const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)||acumPag(c)!==0).sort();
 
+  const EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307'];
+  const codigoDe=c=>(c||'').split(' - ')[0].trim();
+
   if(fatN.length){
     rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ ENTRADAS</td></tr>';
     let acumFatTot=0;
@@ -568,6 +571,7 @@ function renderFluxo(){
       const aa=acumFat(c);acumFatTot+=aa;
       const tot=aa+vals.reduce((s,v)=>s+v,0);
       vals.forEach((v,i)=>tFM[i]+=v);
+      if(EMPR_FAT_COD.includes(codigoDe(c)))return; // exibido no grupo Empréstimos, mas já contabilizado acima
       const zebra=idx%2===0?'#ffffff':'#f4faf5';
       rows+='<tr style="border-left:3px solid #A9DFBF;border-bottom:1px solid #edf2ee">'
         +'<td '+tdS(zebra)+'>'+c+'</td>'
@@ -577,6 +581,7 @@ function renderFluxo(){
     });
     rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Entradas</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumFatTot)+'</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumFatTot+tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
+
 
   // Previsto editável por obra — DATA.previsto[obra][colKey] = valor (calculado aqui para poder entrar no grupo Custo de Obra abaixo)
   const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
@@ -620,6 +625,7 @@ function renderFluxo(){
       const aa=acumPag(c);acumGrupoTot+=aa;
       const tot=aa+vals.reduce((s,v)=>s+v,0);
       vals.forEach((v,i)=>{totGrupo[i]+=v;tPM[i]+=v;});
+      if(EMPR_PAG_COD.includes(codigoDe(c)))return; // exibido no grupo Empréstimos, mas já contabilizado acima
       const zebra=idx%2===0?'#ffffff':g.zebra;
       rows+='<tr style="border-left:3px solid '+g.borda+';border-bottom:1px solid '+g.divisor+'">'
         +'<td '+tdS(zebra)+'>'+c+'</td>'
@@ -633,6 +639,43 @@ function renderFluxo(){
     }
     rows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumGrupoTot)+'</td>'+totGrupo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0))+'</td></tr>';
   });
+
+  // Grupo Empréstimos (visual) — reúne 10501 + 1.05.03 (lado Entrada) e 20307 (lado Despesa)
+  // Os valores já foram somados normalmente em tFM/tPM/totGrupo acima; aqui é só uma exibição separada
+  const emprContasFat=nomes.filter(c=>EMPR_FAT_COD.includes(codigoDe(c))&&(contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)||acumFat(c)!==0));
+  const emprContasPag=nomes.filter(c=>EMPR_PAG_COD.includes(codigoDe(c))&&(contas[c].PAG.some(v=>v)||acumPag(c)!==0));
+  if(emprContasFat.length||emprContasPag.length){
+    if(rows)rows+=spacerRow;
+    rows+='<tr style="background:#FFE9CC"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#B35C00;'+SD+'#FFE9CC">▶ EMPRÉSTIMOS</td></tr>';
+    const totEmprFat=Array(NC).fill(0),totEmprPag=Array(NC).fill(0);
+    let acumEmprFat=0,acumEmprPag=0,idxE=0;
+    emprContasFat.forEach(c=>{
+      const vals=contas[c].FAT.map((v,i)=>v-contas[c].DESC[i]);
+      const aa=acumFat(c);acumEmprFat+=aa;
+      const tot=aa+vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>totEmprFat[i]+=v);
+      const zebra=idxE%2===0?'#ffffff':'#fff6ec';idxE++;
+      rows+='<tr style="border-left:3px solid #FFCC80;border-bottom:1px solid #f5ebe0">'
+        +'<td '+tdS(zebra)+'>'+c+' <span style="font-size:9px;color:#B35C00;font-weight:600">· Entrada</span></td>'
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
+        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#fff3e0;font-size:10px">'+f2(tot)+'</td></tr>';
+    });
+    emprContasPag.forEach(c=>{
+      const vals=contas[c].PAG;
+      const aa=acumPag(c);acumEmprPag+=aa;
+      const tot=aa+vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>totEmprPag[i]+=v);
+      const zebra=idxE%2===0?'#ffffff':'#fff6ec';idxE++;
+      rows+='<tr style="border-left:3px solid #FFB74D;border-bottom:1px solid #f5ebe0">'
+        +'<td '+tdS(zebra)+'>'+c+' <span style="font-size:9px;color:#943126;font-weight:600">· Despesa</span></td>'
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
+        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#fff3e0;font-size:10px">'+f2(tot)+'</td></tr>';
+    });
+    if(emprContasFat.length)rows+='<tr style="background:#FFCC80;font-weight:700"><td '+tdSB('#FFCC80')+'>Total Entradas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprFat)+'</td>'+totEmprFat.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0))+'</td></tr>';
+    if(emprContasPag.length)rows+='<tr style="background:#F1948A;font-weight:700"><td '+tdSB('#F1948A')+'>Total Despesas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprPag)+'</td>'+totEmprPag.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0))+'</td></tr>';
+  }
   tbody.innerHTML=rows;
 
   // Total Pagamentos + Previsto, e Resultado do Período recalculado com base nele
