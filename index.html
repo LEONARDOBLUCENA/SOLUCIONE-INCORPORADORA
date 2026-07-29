@@ -680,6 +680,7 @@ function renderFluxo(){
       const aa=acumPag(c);acumEmprPag+=aa;
       const tot=aa+vals.reduce((s,v)=>s+v,0);
       vals.forEach((v,i)=>totEmprPag[i]+=v);
+      if(codigoDe(c)==='1.05.03')return; // já exibida como Entrada acima; não repete linha de Despesa
       const zebra=idxE%2===0?'#ffffff':'#fff6ec';idxE++;
       rows+='<tr style="border-left:3px solid #FFB74D;border-bottom:1px solid #f5ebe0">'
         +'<td '+tdS(zebra)+'>'+c+' <span style="font-size:9px;color:#943126;font-weight:600">· Despesa</span></td>'
