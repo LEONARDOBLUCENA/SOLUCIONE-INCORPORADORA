@@ -560,12 +560,12 @@ function renderFluxo(){
   });
   const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)||acumPag(c)!==0).sort();
 
-  const EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307'];
+  const EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307','1.05.03'];
   const codigoDe=c=>(c||'').split(' - ')[0].trim();
 
+  let acumFatTot=0;
   if(fatN.length){
     rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ ENTRADAS</td></tr>';
-    let acumFatTot=0;
     fatN.forEach((c,idx)=>{
       const vals=contas[c].FAT.map((v,i)=>v-contas[c].DESC[i]);
       const aa=acumFat(c);acumFatTot+=aa;
@@ -581,6 +581,15 @@ function renderFluxo(){
     });
     rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Entradas</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumFatTot)+'</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumFatTot+tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
+  // Saldo em cascata: começa nas Entradas e vai descontando cada grupo de despesa, para mostrar o quanto cada um pesa no caixa
+  let saldoAcum=acumFatTot,saldoMensal=tFM.slice();
+  const linhaSaldo=()=>{
+    const saldoTot=saldoAcum+saldoMensal.reduce((s,v)=>s+v,0);
+    return '<tr style="background:#f7f7f7"><td style="'+SD+'#f7f7f7;padding:5px 12px;font-size:11px;color:var(--text3);font-style:italic">Saldo</td>'
+      +'<td class="r" style="padding:4px 6px;font-size:10px;color:var(--text3)">'+f2(saldoAcum)+'</td>'
+      +saldoMensal.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')
+      +'<td class="r" style="padding:4px 8px;font-weight:600;color:'+(saldoTot>=0?'#1B6B35':'#C0392B')+'">'+f2(saldoTot)+'</td></tr>';
+  };
 
 
   // Previsto editável por obra — DATA.previsto[obra][colKey] = valor (calculado aqui para poder entrar no grupo Custo de Obra abaixo)
@@ -622,10 +631,12 @@ function renderFluxo(){
     let acumGrupoTot=0;
     lista.forEach((c,idx)=>{
       const vals=contas[c].PAG;
-      const aa=acumPag(c);acumGrupoTot+=aa;
+      const aa=acumPag(c);
       const tot=aa+vals.reduce((s,v)=>s+v,0);
-      vals.forEach((v,i)=>{totGrupo[i]+=v;tPM[i]+=v;});
-      if(EMPR_PAG_COD.includes(codigoDe(c)))return; // exibido no grupo Empréstimos, mas já contabilizado acima
+      vals.forEach((v,i)=>{tPM[i]+=v;});
+      if(EMPR_PAG_COD.includes(codigoDe(c)))return; // exibido no grupo Empréstimos — não conta no subtotal deste grupo (só no total geral tPM acima)
+      acumGrupoTot+=aa;
+      vals.forEach((v,i)=>{totGrupo[i]+=v;});
       const zebra=idx%2===0?'#ffffff':g.zebra;
       rows+='<tr style="border-left:3px solid '+g.borda+';border-bottom:1px solid '+g.divisor+'">'
         +'<td '+tdS(zebra)+'>'+c+'</td>'
@@ -638,6 +649,9 @@ function renderFluxo(){
       prevTotalMes.forEach((v,i)=>totGrupo[i]+=v);
     }
     rows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumGrupoTot)+'</td>'+totGrupo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0))+'</td></tr>';
+    saldoAcum-=acumGrupoTot;
+    saldoMensal=saldoMensal.map((v,i)=>v-totGrupo[i]);
+    rows+=linhaSaldo();
   });
 
   // Grupo Empréstimos (visual) — reúne 10501 + 1.05.03 (lado Entrada) e 20307 (lado Despesa)
@@ -675,6 +689,11 @@ function renderFluxo(){
     });
     if(emprContasFat.length)rows+='<tr style="background:#FFCC80;font-weight:700"><td '+tdSB('#FFCC80')+'>Total Entradas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprFat)+'</td>'+totEmprFat.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0))+'</td></tr>';
     if(emprContasPag.length)rows+='<tr style="background:#F1948A;font-weight:700"><td '+tdSB('#F1948A')+'>Total Despesas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprPag)+'</td>'+totEmprPag.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0))+'</td></tr>';
+    if(emprContasPag.length){
+      saldoAcum-=acumEmprPag;
+      saldoMensal=saldoMensal.map((v,i)=>v-totEmprPag[i]);
+      rows+=linhaSaldo();
+    }
   }
   tbody.innerHTML=rows;
 
