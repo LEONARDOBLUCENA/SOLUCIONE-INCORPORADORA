@@ -2141,10 +2141,14 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   <div class="sec-title">Fluxo de Caixa</div>
   <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
   <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)" id="fc-resumo-fin-card">
-    <div class="tbl-head">
+    <div class="tbl-head" style="justify-content:flex-start">
       <div>
         <div class="tbl-title">Resumo Financeiro</div>
         <span style="font-size:11px;color:var(--text3)">Visão executiva — Receitas x Despesas por grupo, acumulado até o mês selecionado</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:16px">
+        <span class="filter-label">Obra</span>
+        <select class="filter-select" id="fc-obra" onchange="renderCaixaInicialCampos();renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:11px;color:var(--text3)">Acumulado até</span>
@@ -2175,8 +2179,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <div class="tbl-head">
       <div class="tbl-title">Fluxo de Caixa por Conta</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <span class="filter-label">Obra</span>
-        <select class="filter-select" id="fc-obra" onchange="renderCaixaInicialCampos();renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
         <span class="tbl-badge" id="fc-badge">—</span>
         <button class="btn-export" onclick="exportarFluxo()" style="padding:5px 12px;font-size:11px">&#8595; Excel</button>
         <button onclick="abrirPDF(gerarApresentacaoFluxo())" style="background:#1a5276;color:#fff;border:none;padding:5px 12px;font-size:11px;cursor:pointer;border-radius:3px">&#128196; Apresentação</button>
