@@ -711,7 +711,7 @@ function renderFluxo(){
   const rt2=rv2.reduce((s,v)=>s+v,0);
 
   // Caixa Inicial + Saldo acumulado (descontando previsto)
-  const ci=obraSel?parseFloat(DATA.caixaInicial[obraSel]||0)||0:Object.values(DATA.caixaInicial).reduce((s,v)=>s+(parseFloat(v)||0),0);
+  const ci=obraSel?parseFloat(DATA.caixaInicial[obraSel]||0)||0:obras.reduce((s,o)=>s+(parseFloat(DATA.caixaInicial[o]||0)||0),0);
   const saldo=[];let acc=ci;rv2.forEach((v,i)=>{acc+=v;saldo.push(acc);});
   const ciMeses=rv2.map((_,i)=>i===0?ci:saldo[i-1]);
   const tdAcumDashRed='<td class="r" style="padding:4px 6px;font-size:10px;background:#922B21;color:rgba(255,255,255,.5)">—</td>';
