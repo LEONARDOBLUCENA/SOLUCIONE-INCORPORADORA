@@ -257,7 +257,7 @@ function processCSVText(txt){
     let valorFinal=valor;
     if(conta.includes('2020299')||conta.includes('2010498')||conta.includes('2020199')||conta.includes('20499')){tipo='PAGAMENTO';valorFinal=-valor;}
     if(conta.includes('10501')){tipo='FATURAMENTO';}
-    if(conta.includes('20301')||conta.includes('20307')){tipo='PAGAMENTO';}
+    if(conta.includes('20301')||conta.includes('20307')||conta.includes('2010305')){tipo='PAGAMENTO';}
     return{data,complemento,valor:valorFinal,cc,conta,tipo,mes:data?data.getMonth():null,ano:data?data.getFullYear():null};
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
@@ -769,6 +769,7 @@ function renderFluxo(){
     let rowsF='<tr><td colspan="2" style="padding:8px 16px 4px;font-size:10px;font-weight:700;color:#1B6B35;text-transform:uppercase;letter-spacing:.06em;background:#f4faf5">▸ Receitas</td></tr>';
     rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'#1B6B35',valCor:'#1B6B35'});
     if(gruposResumoFin['EMPRESTIMOS_ENTRADA'])rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'#B35C00',valCor:'#B35C00'});
+    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{bg:'#eaf6ec',fw:'700',labelCor:'#1B6B35',valCor:'#1B6B35'});
     rowsF+='<tr><td colspan="2" style="padding:8px 16px 4px;font-size:10px;font-weight:700;color:#943126;text-transform:uppercase;letter-spacing:.06em;background:#fdf3f2">▸ Despesas</td></tr>';
     ordemGrupos.forEach(k=>{
       const g=gruposResumoFin[k];
@@ -853,7 +854,7 @@ async function jbinLoad(){
     // Correção automática: contas que são sempre Despesa Financeira/Custo de Obra ou sempre Faturamento, independente do texto do complemento
     DATA.csv.forEach(r=>{
       const c=r.conta||'';
-      if((c.includes('20301')||c.includes('20307'))&&r.tipo!=='PAGAMENTO'){r.tipo='PAGAMENTO';}
+      if((c.includes('20301')||c.includes('20307')||c.includes('2010305'))&&r.tipo!=='PAGAMENTO'){r.tipo='PAGAMENTO';}
       if(c.includes('2020199')||c.includes('20499')){
         if(r.tipo!=='PAGAMENTO'){r.tipo='PAGAMENTO';}
         if(r.valor>0){r.valor=-r.valor;}
