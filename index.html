@@ -582,11 +582,12 @@ function renderFluxo(){
     rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Entradas</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumFatTot)+'</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumFatTot+tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
   // Saldo em cascata: começa nas Entradas e vai descontando cada grupo de despesa, para mostrar o quanto cada um pesa no caixa
-  let saldoAcum=acumFatTot,saldoMensal=tFM.slice();
+  // Só considera os meses 2026+ (mesmo critério do Resultado do Período) — Acum. Anterior nunca entra em nenhum saldo
+  let saldoMensal=tFM.slice();
   const linhaSaldo=()=>{
-    const saldoTot=saldoAcum+saldoMensal.reduce((s,v)=>s+v,0);
+    const saldoTot=saldoMensal.reduce((s,v)=>s+v,0);
     return '<tr style="background:#f7f7f7"><td style="'+SD+'#f7f7f7;padding:5px 12px;font-size:11px;color:var(--text3);font-style:italic">Saldo</td>'
-      +'<td class="r" style="padding:4px 6px;font-size:10px;color:var(--text3)">'+f2(saldoAcum)+'</td>'
+      +'<td class="r" style="padding:4px 6px;font-size:10px;background:#f2f2f2;color:#bbb">—</td>'
       +saldoMensal.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')
       +'<td class="r" style="padding:4px 8px;font-weight:600;color:'+(saldoTot>=0?'#1B6B35':'#C0392B')+'">'+f2(saldoTot)+'</td></tr>';
   };
@@ -622,6 +623,7 @@ function renderFluxo(){
     {key:'FINANCEIRAS',  titulo:'DESPESAS FINANCEIRAS',    hdrBg:'#FADBD8',hdrText:'#943126',borda:'#F1948A',divisor:'#f5e8e7',zebra:'#fdf5f4',totBg:'#fbeeed',totLabelBg:'#F1948A',totLabel:'Total Despesas Financeiras'},
     {key:'OUTRAS',       titulo:'OUTRAS DESPESAS',         hdrBg:'#EAEDED',hdrText:'#424949',borda:'#CCD1D1',divisor:'#f0f1f1',zebra:'#f7f8f8',totBg:'#e8eaea',totLabelBg:'#CCD1D1',totLabel:'Total Outras Despesas'}
   ];
+  const gruposResumoFin={};
   gruposDef.forEach(g=>{
     const lista=pagN.filter(c=>grupoDeConta(c)===g.key);
     if(!lista.length)return;
@@ -649,7 +651,7 @@ function renderFluxo(){
       prevTotalMes.forEach((v,i)=>totGrupo[i]+=v);
     }
     rows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumGrupoTot)+'</td>'+totGrupo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0))+'</td></tr>';
-    saldoAcum-=acumGrupoTot;
+    gruposResumoFin[g.key]={total:acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0),label:g.totLabel,cor:g.hdrText};
     saldoMensal=saldoMensal.map((v,i)=>v-totGrupo[i]);
     rows+=linhaSaldo();
   });
@@ -690,8 +692,8 @@ function renderFluxo(){
     });
     if(emprContasFat.length)rows+='<tr style="background:#FFCC80;font-weight:700"><td '+tdSB('#FFCC80')+'>Total Entradas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprFat)+'</td>'+totEmprFat.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0))+'</td></tr>';
     if(emprContasPag.length)rows+='<tr style="background:#F1948A;font-weight:700"><td '+tdSB('#F1948A')+'>Total Despesas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprPag)+'</td>'+totEmprPag.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0))+'</td></tr>';
+    if(emprContasPag.length)gruposResumoFin['EMPRESTIMOS']={total:acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0),label:'Despesas com Empréstimos',cor:'#943126'};
     if(emprContasPag.length){
-      saldoAcum-=acumEmprPag;
       saldoMensal=saldoMensal.map((v,i)=>v-totEmprPag[i]);
       rows+=linhaSaldo();
     }
@@ -746,6 +748,28 @@ function renderFluxo(){
       +saldo.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')
       +'<td class="r" style="padding:5px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
     tbodyR.innerHTML=rowsR;
+  }
+
+  // Resumo Financeiro — Total gasto por grupo de despesa + Faturamento, período completo
+  const theadF=document.getElementById('thead-fc-resumo-fin'),tbodyF=document.getElementById('tbody-fc-resumo-fin');
+  if(theadF&&tbodyF){
+    theadF.innerHTML='<tr style="background:#f5f5f5">'
+      +'<th style="text-align:left;padding:8px 16px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Grupo</th>'
+      +'<th class="r" style="padding:8px 16px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Total</th></tr>';
+    const totalEntradasFin=acumFatTot+tFM.reduce((s,v)=>s+v,0);
+    const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
+    let totalDespesasFin=0;
+    let rowsF='<tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 16px;font-size:13px;font-weight:700;color:#1B6B35">Faturamento</td><td class="r" style="padding:10px 16px;font-size:13px;font-weight:700;color:#1B6B35">'+f2(totalEntradasFin)+'</td></tr>';
+    ordemGrupos.forEach(k=>{
+      const g=gruposResumoFin[k];
+      if(!g)return;
+      totalDespesasFin+=g.total;
+      rowsF+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 16px;font-size:13px;color:'+g.cor+'">'+g.label+'</td><td class="r" style="padding:10px 16px;font-size:13px">'+f2(g.total)+'</td></tr>';
+    });
+    const saldoFin=totalEntradasFin-totalDespesasFin;
+    rowsF+='<tr style="background:#f0f0f0;font-weight:700"><td style="padding:10px 16px;font-size:13px">Total Despesas</td><td class="r" style="padding:10px 16px;font-size:13px">'+f2(totalDespesasFin)+'</td></tr>'
+      +'<tr style="background:#f0f7f0;font-weight:700;border-top:2px solid #1B6B35"><td style="padding:10px 16px;font-size:13px;color:var(--brand)">Saldo (Faturamento − Despesas)</td><td class="r" style="padding:10px 16px;font-size:13px;color:'+(saldoFin>=0?'#1B6B35':'#C0392B')+'">'+f2(saldoFin)+'</td></tr>';
+    tbodyF.innerHTML=rowsF;
   }
   if(!window._fcScrollWired){
     const sA=document.getElementById('fc-resumo-scroll'),sB=document.getElementById('fc-fluxo-scroll');
@@ -2099,6 +2123,19 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <table id="tbl-fc-resumo" style="width:100%;border-collapse:collapse;min-width:900px;table-layout:fixed">
         <thead id="thead-fc-resumo"></thead>
         <tbody id="tbody-fc-resumo"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tbl-card" style="margin-bottom:16px" id="fc-resumo-fin-card">
+    <div class="tbl-head">
+      <div class="tbl-title">Resumo Financeiro</div>
+      <span style="font-size:11px;color:var(--text3)">Total gasto por grupo de despesa e faturamento — período completo (Acum. Anterior + meses)</span>
+    </div>
+    <div style="overflow-x:auto;font-size:12px">
+      <table id="tbl-fc-resumo-fin" style="width:100%;border-collapse:collapse;max-width:520px">
+        <thead id="thead-fc-resumo-fin"></thead>
+        <tbody id="tbody-fc-resumo-fin"></tbody>
       </table>
     </div>
   </div>
