@@ -691,6 +691,7 @@ function renderFluxo(){
         +'<td class="r" style="padding:4px 8px;font-weight:600;background:#fff3e0;font-size:10px">'+f2(tot)+'</td></tr>';
     });
     if(emprContasFat.length)rows+='<tr style="background:#FFCC80;font-weight:700"><td '+tdSB('#FFCC80')+'>Total Entradas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprFat)+'</td>'+totEmprFat.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0))+'</td></tr>';
+    if(emprContasFat.length)gruposResumoFin['EMPRESTIMOS_ENTRADA']={total:acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0)};
     if(emprContasPag.length)rows+='<tr style="background:#F1948A;font-weight:700"><td '+tdSB('#F1948A')+'>Total Despesas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprPag)+'</td>'+totEmprPag.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0))+'</td></tr>';
     if(emprContasPag.length)gruposResumoFin['EMPRESTIMOS']={total:acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0),label:'Despesas com Empréstimos',cor:'#943126'};
     if(emprContasPag.length){
@@ -750,25 +751,35 @@ function renderFluxo(){
     tbodyR.innerHTML=rowsR;
   }
 
-  // Resumo Financeiro — Total gasto por grupo de despesa + Faturamento, período completo
+  // Resumo Financeiro — visão executiva: Receitas (Entradas + Entrada Empréstimo) x Despesas por grupo x Saldo
   const theadF=document.getElementById('thead-fc-resumo-fin'),tbodyF=document.getElementById('tbody-fc-resumo-fin');
   if(theadF&&tbodyF){
-    theadF.innerHTML='<tr style="background:#f5f5f5">'
-      +'<th style="text-align:left;padding:8px 16px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Grupo</th>'
-      +'<th class="r" style="padding:8px 16px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Total</th></tr>';
+    theadF.innerHTML='';
     const totalEntradasFin=acumFatTot+tFM.reduce((s,v)=>s+v,0);
+    const entradaEmprFin=(gruposResumoFin['EMPRESTIMOS_ENTRADA']&&gruposResumoFin['EMPRESTIMOS_ENTRADA'].total)||0;
+    const entradasOperFin=totalEntradasFin-entradaEmprFin;
     const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
-    let rowsF='<tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 16px;font-size:13px;font-weight:700;color:#1B6B35">Faturamento</td><td class="r" style="padding:10px 16px;font-size:13px;font-weight:700;color:#1B6B35">'+f2(totalEntradasFin)+'</td></tr>';
+    const linhaExec=(label,val,opts)=>{
+      opts=opts||{};
+      return '<tr style="'+(opts.bg?'background:'+opts.bg+';':'')+(opts.borderTop?'border-top:'+opts.borderTop+';':'')+'border-bottom:1px solid var(--border)">'
+        +'<td style="padding:'+(opts.pad||'12px 16px')+';font-size:'+(opts.fs||'14px')+';font-weight:'+(opts.fw||'500')+';color:'+(opts.labelCor||'var(--text)')+'">'+(opts.indent?'<span style="padding-left:16px">':'')+label+(opts.indent?'</span>':'')+'</td>'
+        +'<td class="r" style="padding:'+(opts.pad||'12px 16px')+';font-size:'+(opts.fs||'14px')+';font-weight:'+(opts.fw||'600')+';color:'+(opts.valCor||opts.labelCor||'var(--text)')+'">'+f2(val)+'</td></tr>';
+    };
+    let rowsF='<tr><td colspan="2" style="padding:8px 16px 4px;font-size:10px;font-weight:700;color:#1B6B35;text-transform:uppercase;letter-spacing:.06em;background:#f4faf5">▸ Receitas</td></tr>';
+    rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'#1B6B35',valCor:'#1B6B35'});
+    if(gruposResumoFin['EMPRESTIMOS_ENTRADA'])rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'#B35C00',valCor:'#B35C00'});
+    rowsF+='<tr><td colspan="2" style="padding:8px 16px 4px;font-size:10px;font-weight:700;color:#943126;text-transform:uppercase;letter-spacing:.06em;background:#fdf3f2">▸ Despesas</td></tr>';
     ordemGrupos.forEach(k=>{
       const g=gruposResumoFin[k];
       if(!g)return;
       totalDespesasFin+=g.total;
-      rowsF+='<tr style="border-bottom:1px solid var(--border)"><td style="padding:10px 16px;font-size:13px;color:'+g.cor+'">'+g.label+'</td><td class="r" style="padding:10px 16px;font-size:13px">'+f2(g.total)+'</td></tr>';
+      rowsF+=linhaExec(g.label,g.total,{labelCor:g.cor,valCor:g.cor,fw:'500'});
     });
-    const saldoFin=totalEntradasFin-totalDespesasFin;
-    rowsF+='<tr style="background:#f0f0f0;font-weight:700"><td style="padding:10px 16px;font-size:13px">Total Despesas</td><td class="r" style="padding:10px 16px;font-size:13px">'+f2(totalDespesasFin)+'</td></tr>'
-      +'<tr style="background:#f0f7f0;font-weight:700;border-top:2px solid #1B6B35"><td style="padding:10px 16px;font-size:13px;color:var(--brand)">Saldo (Faturamento − Despesas)</td><td class="r" style="padding:10px 16px;font-size:13px;color:'+(saldoFin>=0?'#1B6B35':'#C0392B')+'">'+f2(saldoFin)+'</td></tr>';
+    const totalReceitasFin=entradasOperFin+entradaEmprFin;
+    const saldoFin=totalReceitasFin-totalDespesasFin;
+    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{bg:'#f7f0f0',fw:'700',labelCor:'#943126',valCor:'#943126'});
+    rowsF+=linhaExec('Saldo (Receitas − Despesas)',saldoFin,{bg:saldoFin>=0?'#eaf6ec':'#fbeaea',fw:'800',fs:'17px',pad:'16px',borderTop:'2px solid '+(saldoFin>=0?'#1B6B35':'#C0392B'),labelCor:'var(--text)',valCor:saldoFin>=0?'#1B6B35':'#C0392B'});
     tbodyF.innerHTML=rowsF;
   }
   if(!window._fcScrollWired){
@@ -2115,6 +2126,19 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 <div class="page active" id="page-fluxo">
   <div class="sec-title">Fluxo de Caixa</div>
   <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
+  <div class="tbl-card" style="margin-bottom:16px" id="fc-resumo-fin-card">
+    <div class="tbl-head">
+      <div class="tbl-title">Resumo Financeiro</div>
+      <span style="font-size:11px;color:var(--text3)">Visão executiva — Receitas x Despesas por grupo, período completo</span>
+    </div>
+    <div style="overflow-x:auto;font-size:12px">
+      <table id="tbl-fc-resumo-fin" style="width:100%;border-collapse:collapse;max-width:520px">
+        <thead id="thead-fc-resumo-fin"></thead>
+        <tbody id="tbody-fc-resumo-fin"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="tbl-card" style="margin-bottom:16px" id="fc-resumo-card">
     <div class="tbl-head">
       <div class="tbl-title">Resumo</div>
@@ -2123,19 +2147,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <table id="tbl-fc-resumo" style="width:100%;border-collapse:collapse;min-width:900px;table-layout:fixed">
         <thead id="thead-fc-resumo"></thead>
         <tbody id="tbody-fc-resumo"></tbody>
-      </table>
-    </div>
-  </div>
-
-  <div class="tbl-card" style="margin-bottom:16px" id="fc-resumo-fin-card">
-    <div class="tbl-head">
-      <div class="tbl-title">Resumo Financeiro</div>
-      <span style="font-size:11px;color:var(--text3)">Total gasto por grupo de despesa e faturamento — período completo (Acum. Anterior + meses)</span>
-    </div>
-    <div style="overflow-x:auto;font-size:12px">
-      <table id="tbl-fc-resumo-fin" style="width:100%;border-collapse:collapse;max-width:520px">
-        <thead id="thead-fc-resumo-fin"></thead>
-        <tbody id="tbody-fc-resumo-fin"></tbody>
       </table>
     </div>
   </div>
