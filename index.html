@@ -563,7 +563,8 @@ function renderFluxo(){
   const EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307','1.05.03'];
   const codigoDe=c=>(c||'').split(' - ')[0].trim();
 
-  let acumFatTot=0;
+  let acumFatTot=0,acumFatVisivel=0;
+  const tFMVisivel=Array(NC).fill(0);
   if(fatN.length){
     rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ ENTRADAS</td></tr>';
     fatN.forEach((c,idx)=>{
@@ -571,7 +572,9 @@ function renderFluxo(){
       const aa=acumFat(c);acumFatTot+=aa;
       const tot=aa+vals.reduce((s,v)=>s+v,0);
       vals.forEach((v,i)=>tFM[i]+=v);
-      if(EMPR_FAT_COD.includes(codigoDe(c)))return; // exibido no grupo Empréstimos, mas já contabilizado acima
+      if(EMPR_FAT_COD.includes(codigoDe(c)))return; // exibido no grupo Empréstimos — não conta no Total Entradas deste grupo (só no total geral tFM acima)
+      acumFatVisivel+=aa;
+      vals.forEach((v,i)=>tFMVisivel[i]+=v);
       const zebra=idx%2===0?'#ffffff':'#f4faf5';
       rows+='<tr style="border-left:3px solid #A9DFBF;border-bottom:1px solid #edf2ee">'
         +'<td '+tdS(zebra)+'>'+c+'</td>'
@@ -579,7 +582,7 @@ function renderFluxo(){
         +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
         +'<td class="r" style="padding:4px 8px;font-weight:600;background:#eef6ef;font-size:10px">'+f2(tot)+'</td></tr>';
     });
-    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Entradas</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumFatTot)+'</td>'+tFM.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumFatTot+tFM.reduce((s,v)=>s+v,0))+'</td></tr>';
+    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Entradas</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumFatVisivel)+'</td>'+tFMVisivel.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumFatVisivel+tFMVisivel.reduce((s,v)=>s+v,0))+'</td></tr>';
   }
   // Saldo em cascata: começa nas Entradas e vai descontando cada grupo de despesa, para mostrar o quanto cada um pesa no caixa
   // Só considera os meses 2026+ (mesmo critério do Resultado do Período) — Acum. Anterior nunca entra em nenhum saldo
@@ -732,14 +735,13 @@ function renderFluxo(){
       +'<th class="r" style="padding:6px 8px;width:90px;font-size:10px;background:#f5f5f5;position:sticky;top:0;color:#666">Acum.<br>Anterior</th>'
       +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
       +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
-    const acumFatTotal=fatN.reduce((s,c)=>s+acumFat(c),0);
     const acumPagTotal=pagN.reduce((s,c)=>s+acumPag(c),0);
     const tdAcumDashR='<td class="r" style="padding:5px 6px;font-size:11px;background:#1a5276;color:rgba(255,255,255,.4)">—</td>';
     const rowsR=
       '<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Entradas</td>'
-      +'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(acumFatTotal)+'</td>'
-      +tFM.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
-      +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(acumFatTotal+tFM.reduce((s,v)=>s+v,0))+'</td></tr>'
+      +'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(acumFatVisivel)+'</td>'
+      +tFMVisivel.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
+      +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(acumFatVisivel+tFMVisivel.reduce((s,v)=>s+v,0))+'</td></tr>'
       +'<tr style="background:#FADBD8;font-weight:700"><td '+tdSB('#FADBD8')+'>Despesas</td>'
       +'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(acumPagTotal)+'</td>'
       +pagPrevMes.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
