@@ -821,8 +821,8 @@ function renderFluxo(){
     const ccsRel=Object.keys(porCC).sort();
     theadRel.innerHTML='<tr style="background:#f5f5f5">'
       +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Centro de Custo / Parte</th>'
-      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Entrou</th>'
-      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Saiu</th></tr>';
+      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Aporte</th>'
+      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Retirada/Pgto</th></tr>';
     if(!ccsRel.length){
       tbodyRel.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
     }else{
@@ -861,8 +861,8 @@ function renderFluxo(){
       });
       theadAcum.innerHTML='<tr style="background:#f5f5f5">'
         +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Parte</th>'
-        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Total Entrou</th>'
-        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Total Saiu</th></tr>';
+        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Total Aporte</th>'
+        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Total Retirada/Pgto</th></tr>';
       let totEntrouG=0,totSaiuG=0;
       let rowsAcum=PARTES_RELACIONADAS.map((p,idx)=>{
         const v=acumPorParte[p.nome];totEntrouG+=v.entrou;totSaiuG+=v.saiu;
