@@ -796,6 +796,42 @@ function renderFluxo(){
     rowsF+=linhaExec('Total Despesas',totalDespesasFin,{bg:'#f7f0f0',fw:'700',labelCor:'#943126',valCor:'#943126'});
     tbodyF.innerHTML=rowsF;
   }
+
+  // Movimentações — Osmar e Relacionados: filtra por texto no complemento, agrupado por Centro de Custo
+  const theadRel=document.getElementById('thead-fc-relacionados'),tbodyRel=document.getElementById('tbody-fc-relacionados');
+  if(theadRel&&tbodyRel){
+    const TERMOS_RELACIONADOS=['vertical participa','osmar paulo dias filho','mauricio rodrigues','venda de um onix','cobrir custos do montagnes','lago negro (osmar)'];
+    const matchRelacionado=comp=>{const cl=(comp||'').toLowerCase();return TERMOS_RELACIONADOS.some(t=>cl.includes(t));};
+    const porCC={};
+    dados.filter(r=>matchRelacionado(r.complemento)).forEach(r=>{
+      const cc=r.cc||'(Sem CC)';
+      if(!porCC[cc])porCC[cc]={entrou:0,saiu:0};
+      if(r.tipo==='FATURAMENTO')porCC[cc].entrou+=r.valor;
+      else if(r.tipo==='DESCONTO')porCC[cc].entrou-=r.valor;
+      else if(r.tipo==='PAGAMENTO')porCC[cc].saiu+=r.valor;
+    });
+    const ccsRel=Object.keys(porCC).sort();
+    theadRel.innerHTML='<tr style="background:#f5f5f5">'
+      +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Centro de Custo</th>'
+      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Entrou</th>'
+      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Saiu</th></tr>';
+    if(!ccsRel.length){
+      tbodyRel.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
+    }else{
+      let totEntrou=0,totSaiu=0;
+      let rowsRel=ccsRel.map((cc,idx)=>{
+        const v=porCC[cc];totEntrou+=v.entrou;totSaiu+=v.saiu;
+        const zebra=idx%2===0?'#ffffff':'#fafafa';
+        return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-size:12px;background:'+zebra+'">'+cc+'</td>'
+          +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35;background:'+zebra+'">'+f2(v.entrou)+'</td>'
+          +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td></tr>';
+      }).join('');
+      rowsRel+='<tr style="background:#f0f0f0;font-weight:700"><td style="padding:8px 12px;font-size:12px">Total</td>'
+        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35">'+f2(totEntrou)+'</td>'
+        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiu)+'</td></tr>';
+      tbodyRel.innerHTML=rowsRel;
+    }
+  }
   if(!window._fcScrollWired){
     const sA=document.getElementById('fc-resumo-scroll'),sB=document.getElementById('fc-fluxo-scroll');
     if(sA&&sB){
@@ -2121,7 +2157,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <button class="nav-tab" data-tab="dash" onclick="goTab(this);renderDash()">Dashboard</button>
     <button class="nav-tab active" data-tab="fluxo" onclick="goTab(this)">Fluxo de Caixa</button>
     <button class="nav-tab" data-tab="dtlh" onclick="goTab(this)">Dashboard Resumo Exec.</button>
-    <button class="nav-tab" data-tab="orcamento" onclick="goTab(this)">Orçamento</button>
+    <button class="nav-tab" data-tab="orcamento" onclick="goTab(this)">Orç. Engenharia</button>
     <button class="nav-tab" data-tab="prev" onclick="goTab(this)">Previsão por Período</button>
     <button class="nav-tab" data-tab="estoque" onclick="goTab(this)">Estoque</button>
     <button class="nav-tab" data-tab="csv" onclick="goTab(this)">CSV Analítico de Apropriações</button>
@@ -2140,7 +2176,8 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 <div class="page active" id="page-fluxo">
   <div class="sec-title">Fluxo de Caixa</div>
   <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)" id="fc-resumo-fin-card">
+  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 420px" id="fc-resumo-fin-card">
     <div class="tbl-head" style="justify-content:flex-start">
       <div>
         <div class="tbl-title">Resumo Financeiro</div>
@@ -2161,6 +2198,22 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
         <tbody id="tbody-fc-resumo-fin"></tbody>
       </table>
     </div>
+  </div>
+
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 420px" id="fc-relacionados-card">
+    <div class="tbl-head">
+      <div>
+        <div class="tbl-title">Movimentações — Osmar e Relacionados</div>
+        <span style="font-size:11px;color:var(--text3)">Vertical Participações, Osmar Paulo Dias Filho, Mauricio Rodrigues e lançamentos ligados a essas partes</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto;font-size:12px">
+      <table id="tbl-fc-relacionados" style="width:100%;border-collapse:collapse;max-width:420px">
+        <thead id="thead-fc-relacionados"></thead>
+        <tbody id="tbody-fc-relacionados"></tbody>
+      </table>
+    </div>
+  </div>
   </div>
 
   <div class="tbl-card" style="margin-bottom:16px" id="fc-resumo-card">
@@ -2732,7 +2785,7 @@ function exportarOrcamento(){}
 </div>
 
 <div class="page" id="page-orcamento">
-  <div class="sec-title">Orçamento</div>
+  <div class="sec-title">Orç. Engenharia</div>
   <div class="sec-sub">Cole os dados do Excel por obra e mês — a tabela se expande automaticamente</div>
 
   <div class="estoque-form">
