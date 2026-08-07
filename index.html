@@ -797,36 +797,53 @@ function renderFluxo(){
     tbodyF.innerHTML=rowsF;
   }
 
-  // Movimentações — Osmar e Relacionados: filtra por texto no complemento, agrupado por Centro de Custo
+  // Movimentações — Osmar e Relacionados: filtra por texto no complemento, agrupado por Centro de Custo e aberto por parte
   const theadRel=document.getElementById('thead-fc-relacionados'),tbodyRel=document.getElementById('tbody-fc-relacionados');
   if(theadRel&&tbodyRel){
-    const TERMOS_RELACIONADOS=['vertical participa','osmar paulo dias filho','mauricio rodrigues','venda de um onix','cobrir custos do montagnes','lago negro (osmar)'];
-    const matchRelacionado=comp=>{const cl=(comp||'').toLowerCase();return TERMOS_RELACIONADOS.some(t=>cl.includes(t));};
+    const PARTES_RELACIONADAS=[
+      {nome:'Osmar',termos:['osmar paulo dias filho','venda de um onix','cobrir custos do montagnes','lago negro (osmar)']},
+      {nome:'Mauricio Rodrigues',termos:['mauricio rodrigues']},
+      {nome:'Vertical Participações',termos:['vertical participa']}
+    ];
+    const parteDe=comp=>{const cl=(comp||'').toLowerCase();return PARTES_RELACIONADAS.find(p=>p.termos.some(t=>cl.includes(t)));};
     const porCC={};
-    dados.filter(r=>matchRelacionado(r.complemento)).forEach(r=>{
+    dados.forEach(r=>{
+      const parte=parteDe(r.complemento);
+      if(!parte)return;
       const cc=r.cc||'(Sem CC)';
-      if(!porCC[cc])porCC[cc]={entrou:0,saiu:0};
-      if(r.tipo==='FATURAMENTO')porCC[cc].entrou+=r.valor;
-      else if(r.tipo==='DESCONTO')porCC[cc].entrou-=r.valor;
-      else if(r.tipo==='PAGAMENTO')porCC[cc].saiu+=r.valor;
+      if(!porCC[cc])porCC[cc]={};
+      if(!porCC[cc][parte.nome])porCC[cc][parte.nome]={entrou:0,saiu:0};
+      const alvo=porCC[cc][parte.nome];
+      if(r.tipo==='FATURAMENTO')alvo.entrou+=r.valor;
+      else if(r.tipo==='DESCONTO')alvo.entrou-=r.valor;
+      else if(r.tipo==='PAGAMENTO')alvo.saiu+=r.valor;
     });
     const ccsRel=Object.keys(porCC).sort();
     theadRel.innerHTML='<tr style="background:#f5f5f5">'
-      +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Centro de Custo</th>'
+      +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Centro de Custo / Parte</th>'
       +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Entrou</th>'
       +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Saiu</th></tr>';
     if(!ccsRel.length){
       tbodyRel.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
     }else{
       let totEntrou=0,totSaiu=0;
-      let rowsRel=ccsRel.map((cc,idx)=>{
-        const v=porCC[cc];totEntrou+=v.entrou;totSaiu+=v.saiu;
-        const zebra=idx%2===0?'#ffffff':'#fafafa';
-        return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px 12px;font-size:12px;background:'+zebra+'">'+cc+'</td>'
-          +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35;background:'+zebra+'">'+f2(v.entrou)+'</td>'
-          +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td></tr>';
+      let rowsRel=ccsRel.map(cc=>{
+        const partesCC=porCC[cc];
+        let ccEntrou=0,ccSaiu=0;
+        const linhasPartes=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map((p,idx)=>{
+          const v=partesCC[p.nome];ccEntrou+=v.entrou;ccSaiu+=v.saiu;
+          const zebra=idx%2===0?'#ffffff':'#fafafa';
+          return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 12px 6px 26px;font-size:11.5px;color:var(--text3);background:'+zebra+'">'+p.nome+'</td>'
+            +'<td class="r" style="padding:6px 12px;font-size:11.5px;color:#1B6B35;background:'+zebra+'">'+f2(v.entrou)+'</td>'
+            +'<td class="r" style="padding:6px 12px;font-size:11.5px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td></tr>';
+        }).join('');
+        totEntrou+=ccEntrou;totSaiu+=ccSaiu;
+        return '<tr style="background:#f4f4f4;font-weight:700"><td style="padding:6px 12px;font-size:12px">'+cc+'</td>'
+          +'<td class="r" style="padding:6px 12px;font-size:12px;color:#1B6B35">'+f2(ccEntrou)+'</td>'
+          +'<td class="r" style="padding:6px 12px;font-size:12px;color:#C0392B">'+f2(ccSaiu)+'</td></tr>'
+          +linhasPartes;
       }).join('');
-      rowsRel+='<tr style="background:#f0f0f0;font-weight:700"><td style="padding:8px 12px;font-size:12px">Total</td>'
+      rowsRel+='<tr style="background:#e8e8e8;font-weight:700;border-top:2px solid #999"><td style="padding:8px 12px;font-size:12px">Total</td>'
         +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35">'+f2(totEntrou)+'</td>'
         +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiu)+'</td></tr>';
       tbodyRel.innerHTML=rowsRel;
