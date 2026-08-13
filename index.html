@@ -316,6 +316,26 @@ async function executarSyncSienge(){
         ano: row.ano
       };
     });
+    // Trava de segurança: nunca apaga os dados existentes do período se a busca no Sienge veio com
+    // problema — seja vazia (falha total) ou com avisos (falha parcial, ex: um lado funcionou e o
+    // outro não) — sem confirmação explícita.
+    if(dados.avisos&&dados.avisos.length){
+      const prosseguir=confirm('A sincronização teve '+dados.avisos.length+' aviso(s) — pode significar que uma parte dos dados não veio (ex: bloqueio temporário do Sienge).\n\n'+dados.avisos.join('\n')+'\n\nMesmo assim, foram encontrados '+novos.length+' lançamento(s) nessa busca. Se continuar, os '+novos.length+' serão inseridos e os lançamentos antigos desse período serão removidos — mas o que faltou por causa do erro NÃO será reposto.\n\nRecomendado: clique Cancelar e tente sincronizar de novo daqui a alguns minutos.');
+      if(!prosseguir){
+        statusEl.style.color='#C0392B';
+        statusEl.textContent='Sincronização cancelada — nenhum lançamento do BI foi alterado. Avisos: '+dados.avisos.join('; ');
+        btn.textContent='Tentar de novo';btn.disabled=false;
+        return;
+      }
+    }else if(!novos.length){
+      const prosseguir=confirm('O Sienge não retornou nenhum lançamento para esse período. Se isso for esperado (período realmente sem movimento), clique OK para confirmar a limpeza. Se não tiver certeza, clique Cancelar — nada será alterado.');
+      if(!prosseguir){
+        statusEl.style.color='#C0392B';
+        statusEl.textContent='Sincronização cancelada — nenhum lançamento do BI foi alterado.';
+        btn.textContent='Tentar de novo';btn.disabled=false;
+        return;
+      }
+    }
     // Remove lançamentos antigos do mesmo período antes de inserir os novos (evita duplicar)
     const deTs=new Date(de+'T00:00:00').getTime();
     const ateTs=new Date(ate+'T23:59:59').getTime();
