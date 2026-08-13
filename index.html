@@ -265,101 +265,6 @@ function processCSVText(txt){
   renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
-
-// ---------- Sync Sienge ----------
-const SIENGE_PROXY_URL='https://sienge-proxymonter-production.up.railway.app';
-
-function abrirSyncSienge(){
-  let el=document.getElementById('sienge-sync-modal');
-  if(!el){
-    el=document.createElement('div');
-    el.id='sienge-sync-modal';
-    document.body.appendChild(el);
-  }
-  el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  const hoje=new Date();
-  const primeiroDoMes=new Date(hoje.getFullYear(),hoje.getMonth(),1);
-  const fmt=d=>d.toISOString().slice(0,10);
-  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:420px;width:90%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Sync Sienge</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
-    +'<p style="font-size:12px;color:var(--text3);margin:0">Busca Contas a Pagar e Contas a Receber do Sienge no período escolhido e substitui os lançamentos desse período no BI (evita duplicar).</p>'
-    +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:12px;font-weight:600">De</label><input type="date" id="sienge-sync-de" value="'+fmt(primeiroDoMes)+'" style="padding:8px;border:1px solid var(--border);border-radius:4px;font-family:\'DM Sans\',sans-serif;font-size:13px"></div>'
-    +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:12px;font-weight:600">Até</label><input type="date" id="sienge-sync-ate" value="'+fmt(hoje)+'" style="padding:8px;border:1px solid var(--border);border-radius:4px;font-family:\'DM Sans\',sans-serif;font-size:13px"></div>'
-    +'<div id="sienge-sync-status" style="font-size:12px;color:var(--text3);min-height:18px"></div>'
-    +'<button id="sienge-sync-btn" onclick="executarSyncSienge()" style="background:#1B6B35;color:#fff;border:none;padding:10px;font-size:14px;cursor:pointer;border-radius:6px;font-family:\'DM Sans\',sans-serif;font-weight:600">Sincronizar</button>'
-    +'</div>';
-}
-
-function fecharSyncSienge(){const el=document.getElementById('sienge-sync-modal');if(el)el.style.display='none';}
-
-async function executarSyncSienge(){
-  const de=document.getElementById('sienge-sync-de').value;
-  const ate=document.getElementById('sienge-sync-ate').value;
-  const statusEl=document.getElementById('sienge-sync-status');
-  const btn=document.getElementById('sienge-sync-btn');
-  if(!de||!ate){statusEl.style.color='#C0392B';statusEl.textContent='Preencha as duas datas.';return;}
-  btn.disabled=true;btn.textContent='Sincronizando... (pode levar até 1 minuto)';
-  statusEl.style.color='var(--text3)';statusEl.textContent='Buscando dados do Sienge...';
-  try{
-    const r=await fetch(SIENGE_PROXY_URL+'/api/sienge/sync-completo?startDate='+de+'&endDate='+ate);
-    const dados=await r.json();
-    if(!r.ok||!dados.ok){throw new Error(dados.erro||('status '+r.status));}
-    const novos=dados.csv.map(function(row){
-      return {
-        data: row.data?new Date(row.data+'T00:00:00'):null,
-        complemento: row.complemento,
-        valor: row.valor,
-        cc: row.cc,
-        conta: row.conta,
-        tipo: row.tipo,
-        mes: row.mes,
-        ano: row.ano
-      };
-    });
-    // Trava de segurança: nunca apaga os dados existentes do período se a busca no Sienge veio com
-    // problema — seja vazia (falha total) ou com avisos (falha parcial, ex: um lado funcionou e o
-    // outro não) — sem confirmação explícita.
-    if(dados.avisos&&dados.avisos.length){
-      const prosseguir=confirm('A sincronização teve '+dados.avisos.length+' aviso(s) — pode significar que uma parte dos dados não veio (ex: bloqueio temporário do Sienge).\n\n'+dados.avisos.join('\n')+'\n\nMesmo assim, foram encontrados '+novos.length+' lançamento(s) nessa busca. Se continuar, os '+novos.length+' serão inseridos e os lançamentos antigos desse período serão removidos — mas o que faltou por causa do erro NÃO será reposto.\n\nRecomendado: clique Cancelar e tente sincronizar de novo daqui a alguns minutos.');
-      if(!prosseguir){
-        statusEl.style.color='#C0392B';
-        statusEl.textContent='Sincronização cancelada — nenhum lançamento do BI foi alterado. Avisos: '+dados.avisos.join('; ');
-        btn.textContent='Tentar de novo';btn.disabled=false;
-        return;
-      }
-    }else if(!novos.length){
-      const prosseguir=confirm('O Sienge não retornou nenhum lançamento para esse período. Se isso for esperado (período realmente sem movimento), clique OK para confirmar a limpeza. Se não tiver certeza, clique Cancelar — nada será alterado.');
-      if(!prosseguir){
-        statusEl.style.color='#C0392B';
-        statusEl.textContent='Sincronização cancelada — nenhum lançamento do BI foi alterado.';
-        btn.textContent='Tentar de novo';btn.disabled=false;
-        return;
-      }
-    }
-    // Remove lançamentos antigos do mesmo período antes de inserir os novos (evita duplicar)
-    const deTs=new Date(de+'T00:00:00').getTime();
-    const ateTs=new Date(ate+'T23:59:59').getTime();
-    const antes=DATA.csv.length;
-    DATA.csv=DATA.csv.filter(function(r){
-      if(!r.data)return true;
-      const t=(r.data instanceof Date?r.data:new Date(r.data)).getTime();
-      return t<deTs||t>ateTs;
-    });
-    const removidos=antes-DATA.csv.length;
-    DATA.csv=[...DATA.csv,...novos];
-    renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();
-    let msg='Pronto! '+novos.length+' lançamentos importados ('+removidos+' antigos removidos do período).';
-    if(dados.avisos&&dados.avisos.length){
-      msg+=' '+dados.avisos.length+' aviso(s), veja o console.';
-      console.warn('Avisos do Sync Sienge:',dados.avisos);
-    }
-    statusEl.style.color='#1B6B35';statusEl.textContent=msg;
-    btn.textContent='Sincronizar de novo';btn.disabled=false;
-  }catch(e){
-    statusEl.style.color='#C0392B';statusEl.textContent='Erro: '+e.message;
-    btn.textContent='Tentar de novo';btn.disabled=false;
-  }
-}
 function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
 function renderCSVTable(){
   const arr=DATA.csv;
@@ -2306,7 +2211,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 <div class="main-content">
   <div class="topbar">
     <span id="jbin-status" style="font-size:11px;color:#888;white-space:nowrap">⟳ Carregando...</span>
-    <button onclick="abrirSyncSienge()" style="background:#1B6B35;border:1px solid #1B6B35;color:#fff;font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;cursor:pointer;white-space:nowrap;border-radius:4px" title="Sincronizar dados do Sienge">⇄ Sync Sienge</button>
     <button onclick="jbinLoad()" style="background:none;border:1px solid var(--border);color:var(--text3);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;cursor:pointer;white-space:nowrap" title="Recarregar dados da nuvem">↺ Sync</button>
     <button onclick="backupJSON()" style="background:none;border:1px solid var(--border);color:var(--text3);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;cursor:pointer;white-space:nowrap" title="Salvar backup local">⬇ Backup</button>
     <button onclick="document.getElementById('restore-input').click()" style="background:none;border:1px solid var(--border);color:var(--text3);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 14px;cursor:pointer;white-space:nowrap" title="Restaurar de arquivo JSON">⬆ Restaurar</button>
