@@ -815,16 +815,22 @@ function renderFluxo(){
   const SD='position:sticky;left:0;z-index:2;background:';
 
   // Acumular por conta e coluna
+  const hojeFluxo=new Date();
+  const chaveAtualFluxo=hojeFluxo.getFullYear()*100+hojeFluxo.getMonth();
   const contas={};
   dados.forEach(r=>{
     const c=r.conta||'(Sem conta)';
     if(!contas[c])contas[c]={FAT:Array(NC).fill(0),DESC:Array(NC).fill(0),PAG:Array(NC).fill(0)};
     const ci=colKeys.indexOf(r.ano*100+r.mes);
     if(ci<0)return;
-    if(r.tipo==='FATURAMENTO')contas[c].FAT[ci]+=r.valor;
+    const ehMesPassado=(r.ano*100+r.mes)<chaveAtualFluxo;
+    if(r.tipo==='FATURAMENTO'){
+      if(ehMesPassado&&(r.complemento||'').toLowerCase().includes('a receber'))return;
+      contas[c].FAT[ci]+=r.valor;
+    }
     else if(r.tipo==='DESCONTO')contas[c].DESC[ci]+=r.valor;
     else if(r.tipo==='PAGAMENTO'){
-      if(grupoDeConta(c)==='CUSTO_OBRA'&&(r.complemento||'').toLowerCase().includes('a pagar'))return;
+      if(ehMesPassado&&(r.complemento||'').toLowerCase().includes('a pagar'))return;
       contas[c].PAG[ci]+=r.valor;
     }
   });
@@ -838,10 +844,13 @@ function renderFluxo(){
     if(r.ano>=2026)return;
     const c=r.conta||'(Sem conta)';
     if(!acumAnt[c])acumAnt[c]={FAT:0,DESC:0,PAG:0};
-    if(r.tipo==='FATURAMENTO')acumAnt[c].FAT+=r.valor;
+    if(r.tipo==='FATURAMENTO'){
+      if((r.complemento||'').toLowerCase().includes('a receber'))return;
+      acumAnt[c].FAT+=r.valor;
+    }
     else if(r.tipo==='DESCONTO')acumAnt[c].DESC+=r.valor;
     else if(r.tipo==='PAGAMENTO'){
-      if(grupoDeConta(c)==='CUSTO_OBRA'&&(r.complemento||'').toLowerCase().includes('a pagar'))return;
+      if((r.complemento||'').toLowerCase().includes('a pagar'))return;
       acumAnt[c].PAG+=r.valor;
     }
   });
@@ -2107,11 +2116,60 @@ function extrairNome(comp){
     ||c.match(/^Pagamento para (.+)$/i);
   return m?m[1].trim():c;
 }
+
+// ---------- Inadimplência (Entradas) / Contas Atrasadas (Saídas) — só vencimento ANTERIOR ao mês atual ----------
+// Não soma com Entradas/Saídas — é um KPI de pendência, separado da movimentação de caixa.
+function linhasInadimplencia(tipo){
+  var hoje=new Date();
+  var chaveAtual=hoje.getFullYear()*100+hoje.getMonth();
+  var termo=tipo==='receber'?'a receber':'a pagar';
+  var tipoLinha=tipo==='receber'?'FATURAMENTO':'PAGAMENTO';
+  return (DATA.csv||[]).filter(function(r){
+    if(r.tipo!==tipoLinha)return false;
+    if(r.ano==null||r.mes==null)return false;
+    if((r.ano*100+r.mes)>=chaveAtual)return false; // mês atual ou futuro não é inadimplência ainda
+    var comp=(r.complemento||'').toLowerCase();
+    return comp.includes(termo);
+  });
+}
+function atualizarKpiInadimplencia(tipo,elId){
+  var el=document.getElementById(elId);
+  if(!el)return;
+  var linhas=linhasInadimplencia(tipo);
+  var soma=linhas.reduce(function(s,r){return s+r.valor;},0);
+  el.textContent=soma===0?'—':'R$ '+soma.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function abrirDetalheInadimplencia(tipo){
+  var linhas=linhasInadimplencia(tipo).sort(function(a,b){
+    var ta=a.data?new Date(a.data).getTime():0, tb=b.data?new Date(b.data).getTime():0;
+    return ta-tb;
+  });
+  var titulo=tipo==='receber'?'Inadimplência — títulos vencidos':'Contas Atrasadas — títulos vencidos';
+  var soma=linhas.reduce(function(s,r){return s+r.valor;},0);
+  var fmtV=function(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+  var fmtD=function(d){if(!d)return '';var dt=d instanceof Date?d:new Date(d);return dt.toLocaleDateString('pt-BR');};
+  var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
+  el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  var linhasHtml=linhas.length?linhas.map(function(r){
+    return '<tr><td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmtD(r.data)+'</td>'
+      +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.complemento||'')+'</td>'
+      +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.cc||'')+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmtV(r.valor)+'</td></tr>';
+  }).join(''):'<tr><td colspan="4" style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nenhum título vencido</td></tr>';
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+titulo+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="font-size:13px;color:var(--text3)">'+linhas.length+' título(s) — total '+fmtV(soma)+'</div>'
+    +'<div style="overflow-y:auto;max-height:50vh;border:1px solid var(--border);border-radius:6px">'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Vencimento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Complemento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Obra</th><th class="r" style="padding:6px 10px;font-size:11px;color:var(--text3)">Valor</th></tr></thead><tbody>'+linhasHtml+'</tbody></table>'
+    +'</div></div>';
+}
+
 function renderDashFat(){
   populateDashFilters();
   var csv=DATA.csv||[];
   var fat=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df');
   renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-arec',fat,true);
+  atualizarKpiInadimplencia('receber','df-kpi-arec');
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesFat=Array.from({length:12},function(){return{rec:0,arec:0};});
   fat.forEach(function(r){
@@ -2139,6 +2197,7 @@ function renderDashDesp(){
   var csv=DATA.csv||[];
   var pag=filtraDash(csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd');
   renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-apag',pag,false);
+  atualizarKpiInadimplencia('pagar','dd-kpi-apag');
   var MESES_PT2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesDesp=Array.from({length:12},function(){return{pag:0,apag:0};});
   pag.forEach(function(r){
@@ -3467,18 +3526,14 @@ function exportarOrcamento(){}
   </div>
 
   <!-- KPIs Faturamento -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
     <div class="kpi-card" style="border-top:3px solid #1B6B35">
-      <div class="kpi-label">Total Recebido</div>
+      <div class="kpi-label">Entradas</div>
       <div class="kpi-val" id="df-kpi-rec" style="color:#1B6B35">—</div>
     </div>
-    <div class="kpi-card" style="border-top:3px solid rgba(27,107,53,0.4)">
-      <div class="kpi-label">Total a Receber</div>
+    <div class="kpi-card" style="border-top:3px solid rgba(27,107,53,0.4);cursor:pointer" onclick="abrirDetalheInadimplencia('receber')" title="Clique para ver os títulos">
+      <div class="kpi-label">Inadimplência</div>
       <div class="kpi-val" id="df-kpi-arec" style="color:rgba(27,107,53,0.6)">—</div>
-    </div>
-    <div class="kpi-card" style="border-top:3px solid var(--brand)">
-      <div class="kpi-label">Total Geral</div>
-      <div class="kpi-val" id="df-kpi-tot" style="color:var(--brand)">—</div>
     </div>
   </div>
 
@@ -3561,18 +3616,14 @@ function exportarOrcamento(){}
   </div>
 
   <!-- KPIs Despesas -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
     <div class="kpi-card" style="border-top:3px solid #C0392B">
-      <div class="kpi-label">Total Pago</div>
+      <div class="kpi-label">Saídas</div>
       <div class="kpi-val" id="dd-kpi-pag" style="color:#C0392B">—</div>
     </div>
-    <div class="kpi-card" style="border-top:3px solid rgba(192,57,43,0.4)">
-      <div class="kpi-label">Total a Pagar</div>
+    <div class="kpi-card" style="border-top:3px solid rgba(192,57,43,0.4);cursor:pointer" onclick="abrirDetalheInadimplencia('pagar')" title="Clique para ver os títulos">
+      <div class="kpi-label">Contas Atrasadas</div>
       <div class="kpi-val" id="dd-kpi-apag" style="color:rgba(192,57,43,0.6)">—</div>
-    </div>
-    <div class="kpi-card" style="border-top:3px solid #7D3C98">
-      <div class="kpi-label">Total Geral</div>
-      <div class="kpi-val" id="dd-kpi-tot" style="color:#7D3C98">—</div>
     </div>
   </div>
 
