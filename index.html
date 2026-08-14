@@ -870,7 +870,11 @@ function renderFluxo(){
     }
     else if(r.tipo==='DESCONTO')contas[c].DESC[ci]+=r.valor;
     else if(r.tipo==='PAGAMENTO'){
-      if(ehMesPassado&&(r.complemento||'').toLowerCase().includes('a pagar'))return;
+      const ehAPagar=(r.complemento||'').toLowerCase().includes('a pagar');
+      if(ehAPagar){
+        if(grupoDeConta(c)==='CUSTO_OBRA')return; // Custo de Obra nunca considera provisão — usa a linha "Previsto" manual pra isso
+        if(ehMesPassado)return; // outros grupos: só exclui em mês já passado
+      }
       contas[c].PAG[ci]+=r.valor;
     }
   });
@@ -2219,13 +2223,17 @@ function abrirProjecaoFluxo(){
     var t=(r.data instanceof Date?r.data:new Date(r.data)).getTime();
     if(t<de.getTime()||t>ate.getTime())return false;
     if(obraSel&&!ccMatch(r.cc||'',obraSel))return false;
-    // Mesma regra do resto do Fluxo de Caixa: mês já passado só conta o que realmente movimentou caixa
-    if(r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)<chaveAtual){
-      var comp=(r.complemento||'').toLowerCase();
-      if(comp.includes('a pagar')||comp.includes('a receber'))return false;
+    var comp=(r.complemento||'').toLowerCase();
+    var ehAPagarOuAReceber=comp.includes('a pagar')||comp.includes('a receber');
+    if(ehAPagarOuAReceber){
+      // Mesma regra do resto do Fluxo de Caixa
+      if(r.tipo==='PAGAMENTO'&&grupoDeConta(r.conta||'')==='CUSTO_OBRA')return false; // Custo de Obra nunca considera provisão
+      if(r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)<chaveAtual)return false; // outros: só exclui em mês passado
     }
     return true;
   });
+  window._projecaoFluxoLinhas=linhas;
+  window._projecaoFluxoInfo={de:de,ate:ate,obraSel:obraSel};
   var entradas=linhas.filter(function(r){return r.tipo==='FATURAMENTO';}).reduce(function(s,r){return s+r.valor;},0)
     -linhas.filter(function(r){return r.tipo==='DESCONTO';}).reduce(function(s,r){return s+r.valor;},0);
   var saidas=linhas.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
@@ -2237,12 +2245,43 @@ function abrirProjecaoFluxo(){
     +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Projeção de Fluxo de Caixa</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
     +'<div style="font-size:13px;color:var(--text3)">'+fmtD(de)+' até '+fmtD(ate)+(obraSel?' — '+obraSel:' — Todas as obras')+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#eaf6ec;border-radius:6px"><span style="font-size:13px;font-weight:600;color:#1B6B35">Entradas</span><span style="font-size:15px;font-weight:700;color:#1B6B35">'+fmt(entradas)+'</span></div>'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fbeaea;border-radius:6px"><span style="font-size:13px;font-weight:600;color:#C0392B">Saídas</span><span style="font-size:15px;font-weight:700;color:#C0392B">'+fmt(saidas)+'</span></div>'
+    +'<div onclick="abrirDetalheProjecao(\'entradas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#eaf6ec;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#1B6B35">Entradas</span><span style="font-size:15px;font-weight:700;color:#1B6B35">'+fmt(entradas)+'</span></div>'
+    +'<div onclick="abrirDetalheProjecao(\'saidas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fbeaea;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#C0392B">Saídas</span><span style="font-size:15px;font-weight:700;color:#C0392B">'+fmt(saidas)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:'+(saldo>=0?'#eaf6ec':'#fbeaea')+';border-radius:6px;border-top:2px solid '+(saldo>=0?'#1B6B35':'#C0392B')+'"><span style="font-size:14px;font-weight:700">Saldo</span><span style="font-size:18px;font-weight:800;color:'+(saldo>=0?'#1B6B35':'#C0392B')+'">'+fmt(saldo)+'</span></div>'
     +'</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no período. Meses já passados mostram só o que foi realizado; mês atual e futuros incluem provisão (a pagar/a receber).</div>'
     +'</div>';
+}
+
+function abrirDetalheProjecao(tipo){
+  var linhas=(window._projecaoFluxoLinhas||[]).filter(function(r){
+    return tipo==='entradas'?r.tipo==='FATURAMENTO':r.tipo==='PAGAMENTO';
+  }).sort(function(a,b){
+    var ta=a.data?new Date(a.data).getTime():0, tb=b.data?new Date(b.data).getTime():0;
+    return ta-tb;
+  });
+  var info=window._projecaoFluxoInfo||{};
+  var titulo=tipo==='entradas'?'Entradas do período':'Saídas do período';
+  var soma=linhas.reduce(function(s,r){return s+r.valor;},0);
+  var fmtD=function(d){if(!d)return '';var dt=d instanceof Date?d:new Date(d);return dt.toLocaleDateString('pt-BR');};
+  var el=document.getElementById('sienge-sync-modal');
+  if(!el)return;
+  var linhasHtml=linhas.length?linhas.map(function(r){
+    return '<tr><td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmtD(r.data)+'</td>'
+      +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.complemento||'')+'</td>'
+      +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.cc||'')+'</td>'
+      +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.conta||'')+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmt(r.valor)+'</td></tr>';
+  }).join(''):'<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nenhum lançamento</td></tr>';
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:700px;width:94%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+titulo+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center">'
+    +'<button onclick="abrirProjecaoFluxo()" style="background:none;border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text3)">← Voltar</button>'
+    +'<span style="font-size:13px;color:var(--text3)">'+linhas.length+' lançamento(s) — total '+fmt(soma)+'</span>'
+    +'</div>'
+    +'<div style="overflow-y:auto;max-height:55vh;border:1px solid var(--border);border-radius:6px">'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Data</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Complemento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Obra</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Conta</th><th class="r" style="padding:6px 10px;font-size:11px;color:var(--text3)">Valor</th></tr></thead><tbody>'+linhasHtml+'</tbody></table>'
+    +'</div></div>';
 }
 
 function renderDashFat(){
