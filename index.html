@@ -376,6 +376,56 @@ function abrirSyncContasAReceber(){
     aoConcluir:function(){renderContasAReceber();renderFluxo();renderDashboard();renderCaixaInicialCampos();}
   });
 }
+function abrirSyncContasAPagar(){
+  abrirSyncGenerico({
+    titulo:'Sync Contas a Pagar',
+    descricao:'Busca as parcelas ainda pendentes (provisão de pagamento, pelo vencimento) do Sienge no período e substitui os lançamentos dessa aba nesse período. Alimenta a provisão de Despesas do Dashboard e do Fluxo de Caixa.',
+    endpoint:'/api/sienge/sync-contas-a-pagar',
+    fonte:'contas-a-pagar',
+    aoConcluir:function(){renderContasAPagar();renderFluxo();renderDashboard();renderCaixaInicialCampos();}
+  });
+}
+
+// ---------- Aba Contas a Pagar (provisão) — vem do Sync Sienge ----------
+function renderContasAPagar(){
+  const linhas=(DATA.csv||[]).filter(r=>r.fonte==='contas-a-pagar').sort((a,b)=>{
+    const ta=a.data?new Date(a.data).getTime():0, tb=b.data?new Date(b.data).getTime():0;
+    return tb-ta;
+  });
+  const corpo=document.getElementById('body-contaspagar');
+  const contador=document.getElementById('count-contaspagar');
+  if(!corpo)return;
+  if(contador)contador.textContent=linhas.length+' registros';
+  if(!linhas.length){
+    corpo.innerHTML='<tr><td colspan="5"><div class="empty-state"><p>Nenhum dado ainda — clique em "Sync Contas a Pagar" para trazer do Sienge</p></div></td></tr>';
+    return;
+  }
+  const fmtData=d=>{if(!d)return '';const dt=d instanceof Date?d:new Date(d);return dt.toLocaleDateString('pt-BR');};
+  corpo.innerHTML=linhas.map(r=>'<tr>'
+    +'<td>'+fmtData(r.data)+'</td>'
+    +'<td>'+(r.complemento||'')+'</td>'
+    +'<td>'+(r.cc||'')+'</td>'
+    +'<td>'+(r.conta||'')+'</td>'
+    +'<td class="r">'+fmt(r.valor)+'</td>'
+    +'</tr>').join('');
+}
+
+// ---------- Migração dos lançamentos antigos (do CSV Analítico) pras 4 abas novas ----------
+// Roda uma vez por lançamento (marca com "fonte" pra não repetir). Classifica pelo texto do
+// complemento: "A receber" -> Contas a Receber, "Recebimento" -> Contas Recebidas,
+// "A pagar" -> Contas a Pagar, "Pagamento" -> Contas Pagas.
+function migrarFontesAntigas(){
+  let mudou=false;
+  (DATA.csv||[]).forEach(r=>{
+    if(r.fonte)return;
+    const c=(r.complemento||'').trim().toLowerCase();
+    if(c.startsWith('a receber')){r.fonte='contas-a-receber';mudou=true;}
+    else if(c.startsWith('recebimento')){r.fonte='contas-recebidas';mudou=true;}
+    else if(c.startsWith('a pagar')){r.fonte='contas-a-pagar';mudou=true;}
+    else if(c.startsWith('pagamento')){r.fonte='contas-pagas';mudou=true;}
+  });
+  return mudou;
+}
 
 // ---------- Aba Contas Pagas (Saídas) — vem do Sync Sienge ----------
 function renderContasPagas(){
@@ -1193,9 +1243,11 @@ async function jbinLoad(){
     fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
       {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}})
       .then(r=>r.json()).then(j=>{_ghubSha=j.sha;}).catch(()=>{});
+    const precisaSalvarMigracao=migrarFontesAntigas();
     renderCSVTable();renderEstoqueTable();renderOrcamentoTable();
     updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderDash();
-    renderContasPagas();renderContasAReceber();renderContasRecebidas();
+    renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();
+    if(precisaSalvarMigracao)autoSave();
     setJbinStatus('ok');
   }catch(e){console.error(e);setJbinStatus('error');}
 }
@@ -1210,7 +1262,7 @@ function setJbinStatus(s){
 function autoSave(){ghubSave();}
 
 function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
-function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderContasPagas();renderContasAReceber();renderContasRecebidas();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
+function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};migrarFontesAntigas();renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 
 </script>
@@ -2436,6 +2488,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <button class="nav-tab" data-tab="orcamento" onclick="goTab(this)">Orç. Engenharia</button>
     <button class="nav-tab" data-tab="prev" onclick="goTab(this)">Previsão por Período</button>
     <button class="nav-tab" data-tab="estoque" onclick="goTab(this)">Estoque</button>
+    <button class="nav-tab" data-tab="contaspagar" onclick="goTab(this);renderContasAPagar()">Contas a Pagar</button>
     <button class="nav-tab" data-tab="contaspagas" onclick="goTab(this);renderContasPagas()">Contas Pagas</button>
     <button class="nav-tab" data-tab="contasrecebidas" onclick="goTab(this);renderContasRecebidas()">Contas Recebidas</button>
     <button class="nav-tab" data-tab="contasareceber" onclick="goTab(this);renderContasAReceber()">Contas a Receber</button>
@@ -2542,6 +2595,31 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
     <div id="fc-caixa-campos" style="display:flex;flex-wrap:wrap;gap:20px;padding:16px 20px">
       <div style="color:var(--text3);font-size:12px">Carregue dados no CSV Analítico para ver os centros de custo.</div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-contaspagar">
+  <div class="sec-title">Contas a Pagar</div>
+  <div class="sec-sub">Vem direto do Sienge — só o que ainda está pendente (provisão de pagamento, pelo vencimento). Alimenta as provisões de Despesas do Dashboard e do Fluxo de Caixa.</div>
+  <div class="tbl-card" style="margin-bottom:16px">
+    <div class="tbl-head">
+      <div class="tbl-title">Sincronizar com o Sienge</div>
+    </div>
+    <div style="padding:16px 20px">
+      <button onclick="abrirSyncContasAPagar()" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 18px;cursor:pointer;border-radius:6px;font-weight:600">⇄ Sync Contas a Pagar</button>
+    </div>
+  </div>
+  <div class="tbl-card">
+    <div class="tbl-head">
+      <div class="tbl-title">Lançamentos</div>
+      <span class="tbl-badge" id="count-contaspagar">0 registros</span>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Data</th><th>Complemento</th><th>Obra</th><th>Conta</th><th class="r">Valor (R$)</th></tr></thead>
+        <tbody id="body-contaspagar"><tr><td colspan="5"><div class="empty-state"><p>Nenhum dado ainda — clique em "Sync Contas a Pagar" para trazer do Sienge</p></div></td></tr></tbody>
+      </table>
     </div>
   </div>
 </div>
