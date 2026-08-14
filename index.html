@@ -300,6 +300,16 @@ async function executarSyncGlobal(){
   const btn=document.getElementById('sienge-sync-btn');
   if(!de||!ate){statusEl.style.color='#C0392B';statusEl.textContent='Preencha as duas datas.';return;}
   btn.disabled=true;btn.textContent='Sincronizando... (pode levar alguns minutos)';
+  try{
+    await executarSyncGlobalInterno(de,ate,statusEl,btn);
+  }catch(erroInesperado){
+    console.error('Erro inesperado no Sync Sienge:',erroInesperado);
+    statusEl.style.color='#C0392B';
+    statusEl.textContent='Deu um erro inesperado: '+erroInesperado.message+'\n\nSe os dados já apareceram nas abas, eles foram salvos normalmente — é só fechar essa janela.';
+    btn.textContent='Tentar de novo';btn.disabled=false;
+  }
+}
+async function executarSyncGlobalInterno(de,ate,statusEl,btn){
   const resultados=[];
   for(const item of SYNC_FONTES){
     statusEl.style.color='var(--text3)';statusEl.textContent='Buscando '+item.titulo+'...';
@@ -365,12 +375,19 @@ async function executarSyncGlobal(){
     totalImportado+=r.novos.length;
   });
 
-  renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();
-  renderFluxo();renderDashboard();renderCaixaInicialCampos();
-  autoSave();
+  let erroAoAtualizarTelas=null;
+  try{
+    renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();
+    renderFluxo();renderDashboard();renderCaixaInicialCampos();
+    autoSave();
+  }catch(errRender){
+    erroAoAtualizarTelas=errRender;
+    console.error('Erro ao atualizar as telas depois do sync (os dados já foram salvos normalmente):',errRender);
+  }
 
-  statusEl.style.color='#1B6B35';
-  statusEl.textContent='Pronto! '+totalImportado+' lançamentos importados no total ('+totalRemovido+' antigos removidos).\n\n'+resumo;
+  statusEl.style.color=erroAoAtualizarTelas?'#B35C00':'#1B6B35';
+  statusEl.textContent='Pronto! '+totalImportado+' lançamentos importados no total ('+totalRemovido+' antigos removidos).\n\n'+resumo
+    +(erroAoAtualizarTelas?'\n\nOs dados foram salvos, mas houve um erro ao atualizar as telas — dá um F5 pra ver tudo certinho.':'');
   btn.textContent='Sincronizar de novo';btn.disabled=false;
 }
 
@@ -2168,8 +2185,8 @@ function renderDashFat(){
   populateDashFilters();
   var csv=DATA.csv||[];
   var fat=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df');
-  renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-arec',fat,true);
-  atualizarKpiInadimplencia('receber','df-kpi-arec');
+  renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-prov',fat,true);
+  atualizarKpiInadimplencia('receber','df-kpi-inad');
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesFat=Array.from({length:12},function(){return{rec:0,arec:0};});
   fat.forEach(function(r){
@@ -2196,8 +2213,8 @@ function renderDashDesp(){
   populateDashFilters();
   var csv=DATA.csv||[];
   var pag=filtraDash(csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd');
-  renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-apag',pag,false);
-  atualizarKpiInadimplencia('pagar','dd-kpi-apag');
+  renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-prov',pag,false);
+  atualizarKpiInadimplencia('pagar','dd-kpi-inad');
   var MESES_PT2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesDesp=Array.from({length:12},function(){return{pag:0,apag:0};});
   pag.forEach(function(r){
@@ -3526,14 +3543,18 @@ function exportarOrcamento(){}
   </div>
 
   <!-- KPIs Faturamento -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px">
     <div class="kpi-card" style="border-top:3px solid #1B6B35">
       <div class="kpi-label">Entradas</div>
       <div class="kpi-val" id="df-kpi-rec" style="color:#1B6B35">—</div>
     </div>
-    <div class="kpi-card" style="border-top:3px solid rgba(27,107,53,0.4);cursor:pointer" onclick="abrirDetalheInadimplencia('receber')" title="Clique para ver os títulos">
+    <div class="kpi-card" style="border-top:3px solid rgba(27,107,53,0.4)">
+      <div class="kpi-label">A Receber</div>
+      <div class="kpi-val" id="df-kpi-prov" style="color:rgba(27,107,53,0.6)">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #B35C00;cursor:pointer" onclick="abrirDetalheInadimplencia('receber')" title="Clique para ver os títulos">
       <div class="kpi-label">Inadimplência</div>
-      <div class="kpi-val" id="df-kpi-arec" style="color:rgba(27,107,53,0.6)">—</div>
+      <div class="kpi-val" id="df-kpi-inad" style="color:#B35C00">—</div>
     </div>
   </div>
 
@@ -3616,14 +3637,18 @@ function exportarOrcamento(){}
   </div>
 
   <!-- KPIs Despesas -->
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px">
     <div class="kpi-card" style="border-top:3px solid #C0392B">
       <div class="kpi-label">Saídas</div>
       <div class="kpi-val" id="dd-kpi-pag" style="color:#C0392B">—</div>
     </div>
-    <div class="kpi-card" style="border-top:3px solid rgba(192,57,43,0.4);cursor:pointer" onclick="abrirDetalheInadimplencia('pagar')" title="Clique para ver os títulos">
+    <div class="kpi-card" style="border-top:3px solid rgba(192,57,43,0.4)">
+      <div class="kpi-label">A Pagar</div>
+      <div class="kpi-val" id="dd-kpi-prov" style="color:rgba(192,57,43,0.6)">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #B35C00;cursor:pointer" onclick="abrirDetalheInadimplencia('pagar')" title="Clique para ver os títulos">
       <div class="kpi-label">Contas Atrasadas</div>
-      <div class="kpi-val" id="dd-kpi-apag" style="color:rgba(192,57,43,0.6)">—</div>
+      <div class="kpi-val" id="dd-kpi-inad" style="color:#B35C00">—</div>
     </div>
   </div>
 
