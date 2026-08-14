@@ -312,7 +312,7 @@ async function executarSyncGlobal(){
           data: row.data?new Date(row.data+'T00:00:00'):null,
           complemento: row.complemento,
           valor: row.valor,
-          cc: row.cc,
+          cc: (row.cc||'').trim(),
           conta: row.conta,
           tipo: row.tipo,
           mes: row.mes,
@@ -379,7 +379,10 @@ function popularFiltrosAba(fonte,prefixo){
   const linhas=(DATA.csv||[]).filter(r=>r.fonte===fonte);
   fillSelect(prefixo+'-ano',[...new Set(linhas.map(r=>r.ano).filter(x=>x!=null))].sort(),v=>v,v=>v);
   fillSelect(prefixo+'-mes',[...new Set(linhas.map(r=>r.mes).filter(x=>x!=null))].sort((a,b)=>a-b),v=>v,v=>MESES_PT[v]);
-  fillSelect(prefixo+'-obra',[...new Set(linhas.map(r=>r.cc).filter(Boolean))].sort(),v=>v,v=>v);
+  // Deduplica por nome normalizado (evita "MONTER" e "Monter " virarem duas opções diferentes)
+  const obrasVistas=new Map();
+  linhas.map(r=>r.cc).filter(Boolean).forEach(o=>{const k=normCC(o);if(!obrasVistas.has(k))obrasVistas.set(k,o.trim());});
+  fillSelect(prefixo+'-obra',[...obrasVistas.values()].sort(),v=>v,v=>v);
   fillSelect(prefixo+'-conta',[...new Set(linhas.map(r=>r.conta).filter(Boolean))].sort(),v=>v,v=>v);
 }
 function filtrarLinhasAba(fonte,prefixo){
@@ -443,6 +446,7 @@ function renderContasAPagar(){
 function migrarFontesAntigas(){
   let mudou=false;
   (DATA.csv||[]).forEach(r=>{
+    if(r.cc&&r.cc!==r.cc.trim()){r.cc=r.cc.trim();mudou=true;}
     if(r.fonte)return;
     const c=(r.complemento||'').trim().toLowerCase();
     if(c.startsWith('a receber')){r.fonte='contas-a-receber';mudou=true;}
@@ -505,7 +509,9 @@ function renderContasAReceber(){
 function renderContasRecebidas(){
   const sel=document.getElementById('cr-obra');
   if(sel && !sel.dataset.filled){
-    const obras=[...new Set((DATA.csv||[]).map(r=>r.cc).filter(Boolean))].sort();
+    const obrasVistas=new Map();
+    (DATA.csv||[]).map(r=>r.cc).filter(Boolean).forEach(o=>{const k=normCC(o);if(!obrasVistas.has(k))obrasVistas.set(k,o.trim());});
+    const obras=[...obrasVistas.values()].sort();
     sel.innerHTML='<option value="">Selecione a obra</option>'+obras.map(o=>'<option value="'+o+'">'+o+'</option>').join('');
     sel.dataset.filled='1';
   }
@@ -796,7 +802,7 @@ function renderFluxo(){
   const obraSel=document.getElementById('fc-obra')?.value||'';
   const thead=document.getElementById('thead-fluxo'),tbody=document.getElementById('tbody-fluxo'),tfoot=document.getElementById('tfoot-fluxo');
   if(!thead||!tbody||!tfoot)return;
-  fillSelect('fc-obra',[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort(),v=>v,v=>v);
+  {const obrasVistasFc=new Map();DATA.csv.map(r=>r.cc).filter(Boolean).forEach(o=>{const k=normCC(o);if(!obrasVistasFc.has(k))obrasVistasFc.set(k,o.trim());});fillSelect('fc-obra',[...obrasVistasFc.values()].sort(),v=>v,v=>v);}
   const dados=DATA.csv.filter(r=>!obraSel||ccMatch(r.cc||'',obraSel));
 
   // Colunas dinâmicas: todas as combinações ano-mes presentes nos dados, ordenadas
