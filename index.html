@@ -352,7 +352,7 @@ async function executarSyncGlobalInterno(de,ate,statusEl,btn,barra){
           fonte: item.fonte
         };
       });
-      resultados.push({titulo:item.titulo,fonte:item.fonte,novos,avisos:dados.avisos||[]});
+      resultados.push({titulo:item.titulo,fonte:item.fonte,novos,avisos:dados.avisos||[],chamadasSienge:dados.chamadasSienge||0});
     }catch(e){
       resultados.push({titulo:item.titulo,fonte:item.fonte,erro:e.message});
     }
@@ -362,13 +362,16 @@ async function executarSyncGlobalInterno(de,ate,statusEl,btn,barra){
 
   let resumo='Resultado da busca:\n';
   let temProblema=false;
+  let totalChamadasSienge=0;
   resultados.forEach(r=>{
+    totalChamadasSienge+=r.chamadasSienge||0;
     if(r.erro){resumo+='• '+r.titulo+': ERRO — '+r.erro+'\n';temProblema=true;}
     else{
-      resumo+='• '+r.titulo+': '+r.novos.length+' lançamento(s)'+(r.avisos.length?' — '+r.avisos.length+' aviso(s)':'')+'\n';
+      resumo+='• '+r.titulo+': '+r.novos.length+' lançamento(s)'+(r.avisos.length?' — '+r.avisos.length+' aviso(s)':'')+' ('+(r.chamadasSienge||0)+' chamada(s) ao Sienge)\n';
       if(r.avisos.length||!r.novos.length)temProblema=true;
     }
   });
+  resumo+='\nTotal: '+totalChamadasSienge+' chamada(s) ao Sienge nesta sincronização (cota diária: 20).\n';
 
   let prosseguir=true;
   if(temProblema){
