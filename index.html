@@ -266,17 +266,18 @@ function processCSVText(txt){
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
 
-// ---------- Sync Sienge (único botão — atualiza Contas a Pagar + Contas Pagas + Contas a Receber) ----------
+// ---------- Sync Sienge (único botão — ordem: Contas Pagas, Contas a Receber, Contas a Pagar) ----------
 const SIENGE_PROXY_URL='https://sienge-proxymonter-production.up.railway.app';
+// Contas a Pagar vem por último de propósito: ela é snapshot total do livro inteiro em
+// aberto e pode sozinha consumir boa parte da cota diária do Sienge (20/dia). Rodando por
+// último, mesmo que ela estoure a cota, Contas Pagas e Contas a Receber já foram atualizadas
+// e salvas antes disso acontecer.
 const SYNC_FONTES=[
-  // snapshotTotal:true = essa fonte representa "tudo que está em aberto agora" (provisão),
-  // não um histórico fatiado por data como as outras. Por isso ela sempre busca um período
-  // fixo bem largo (não usa o De/Até do modal) e sempre substitui a aba inteira, nunca só
-  // uma fatia — evita duplicação de títulos com vencimento muito no futuro (Contas a Pagar
-  // já teve parcelamentos de obra vencendo anos à frente).
-  {titulo:'Contas a Pagar',endpoint:'/api/sienge/sync-contas-a-pagar',fonte:'contas-a-pagar',snapshotTotal:true},
   {titulo:'Contas Pagas',endpoint:'/api/sienge/sync-contas-pagas',fonte:'contas-pagas'},
-  {titulo:'Contas a Receber',endpoint:'/api/sienge/sync-contas-a-receber',fonte:'contas-a-receber'}
+  {titulo:'Contas a Receber',endpoint:'/api/sienge/sync-contas-a-receber',fonte:'contas-a-receber'},
+  // snapshotTotal:true = ignora o período do modal, sempre busca e substitui o livro inteiro
+  // (evita a duplicação de títulos com vencimento muito no futuro).
+  {titulo:'Contas a Pagar',endpoint:'/api/sienge/sync-contas-a-pagar',fonte:'contas-a-pagar',snapshotTotal:true}
 ];
 
 function abrirSyncGlobal(){
@@ -288,7 +289,7 @@ function abrirSyncGlobal(){
   const fmtIso=d=>d.toISOString().slice(0,10);
   el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:440px;width:90%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
     +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Sync Sienge</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
-    +'<p style="font-size:12px;color:var(--text3);margin:0">Busca Contas Pagas e Contas a Receber do Sienge no período escolhido, e substitui os lançamentos dessas 2 abas nesse período. Contas a Pagar é diferente: sempre busca e substitui o livro inteiro de títulos em aberto, independente do período aqui (Contas Recebidas continua manual). Recomendado: sincronize períodos curtos (uma semana ou um mês) por vez pras abas de período.</p>'
+    +'<p style="font-size:12px;color:var(--text3);margin:0">Busca Contas Pagas e Contas a Receber do Sienge no período escolhido, depois Contas a Pagar (livro inteiro em aberto, sempre — não usa o período abaixo). Contas Pagas/a Receber rodam primeiro de propósito: se a cota diária do Sienge (20) estourar em Contas a Pagar, as outras duas já foram salvas. Contas Recebidas continua manual.</p>'
     +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:12px;font-weight:600">De</label><input type="date" id="sienge-sync-de" value="'+fmtIso(primeiroDoMes)+'" style="padding:8px;border:1px solid var(--border);border-radius:4px;font-family:\'DM Sans\',sans-serif;font-size:13px"></div>'
     +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:12px;font-weight:600">Até</label><input type="date" id="sienge-sync-ate" value="'+fmtIso(hoje)+'" style="padding:8px;border:1px solid var(--border);border-radius:4px;font-family:\'DM Sans\',sans-serif;font-size:13px"></div>'
     +'<div id="sienge-sync-status" style="font-size:12px;color:var(--text3);min-height:36px;white-space:pre-line"></div>'
@@ -321,7 +322,7 @@ async function executarSyncGlobal(){
     tempoEl.textContent='⏱ '+(m>0?m+'min ':'')+s+'s desde o início — não feche essa janela';
   },1000);
   try{
-    await executarSyncGlobalInterno(de,ate,statusEl,btn,barra);
+    await executarSyncGlobalInterno(SYNC_FONTES,de,ate,statusEl,btn,barra);
   }catch(erroInesperado){
     console.error('Erro inesperado no Sync Sienge:',erroInesperado);
     statusEl.style.color='#C0392B';
@@ -331,13 +332,23 @@ async function executarSyncGlobal(){
     clearInterval(timerId);
     if(barra)barra.style.width='100%';
   }
+  btn.disabled=false;btn.textContent='Sincronizar tudo';
 }
-async function executarSyncGlobalInterno(de,ate,statusEl,btn,barra){
+async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
+  const COTA_DIARIA_SIENGE=20;
   const resultados=[];
-  const totalPassos=SYNC_FONTES.length;
+  const totalPassos=fontes.length;
   let passoAtual=0;
-  for(const item of SYNC_FONTES){
+  let chamadasAcumuladas=0;
+  let cotaEstourou=false;
+  for(const item of fontes){
     passoAtual++;
+    if(cotaEstourou){
+      // Uma fonte anterior já bateu erro real do Sienge (provável estouro de cota) — não
+      // adianta tentar as próximas, só queima chamada em algo fadado a falhar de novo.
+      resultados.push({titulo:item.titulo,fonte:item.fonte,erro:'Não tentado — cota diária do Sienge provavelmente esgotada por uma fonte anterior nesta mesma sincronização.'});
+      continue;
+    }
     statusEl.style.color='var(--text3)';statusEl.textContent='Buscando '+item.titulo+'... ('+passoAtual+' de '+totalPassos+')';
     if(barra)barra.style.width=Math.round(((passoAtual-1)/totalPassos)*90+5)+'%';
     try{
@@ -352,7 +363,16 @@ async function executarSyncGlobalInterno(de,ate,statusEl,btn,barra){
       }
       const r=await fetch(SIENGE_PROXY_URL+item.endpoint+'?startDate='+startDate+'&endDate='+endDate);
       const dados=await r.json();
-      if(!r.ok||!dados.ok){resultados.push({titulo:item.titulo,fonte:item.fonte,erro:dados.erro||('status '+r.status)});continue;}
+      chamadasAcumuladas+=dados.chamadasSienge||0;
+      if(!r.ok||!dados.ok){
+        resultados.push({titulo:item.titulo,fonte:item.fonte,erro:dados.erro||('status '+r.status)});
+        if(chamadasAcumuladas>=COTA_DIARIA_SIENGE)cotaEstourou=true;
+        continue;
+      }
+      // avisos só existem quando o Sienge devolveu erro real numa página (ex: 429) — sinal
+      // confiável de que a cota já era, sem precisar chutar limite exato.
+      if((dados.avisos||[]).length>0)cotaEstourou=true;
+      if(chamadasAcumuladas>=COTA_DIARIA_SIENGE)cotaEstourou=true;
       const novos=dados.csv.map(function(row){
         return {
           data: row.data?new Date(row.data+'T00:00:00'):null,
@@ -399,7 +419,7 @@ async function executarSyncGlobalInterno(de,ate,statusEl,btn,barra){
 
   const deTs=new Date(de+'T00:00:00').getTime();
   const ateTs=new Date(ate+'T23:59:59').getTime();
-  const fontesSnapshotTotal=new Set(SYNC_FONTES.filter(f=>f.snapshotTotal).map(f=>f.fonte));
+  const fontesSnapshotTotal=new Set(fontes.filter(f=>f.snapshotTotal).map(f=>f.fonte));
   let totalImportado=0,totalRemovido=0;
   resultados.forEach(r=>{
     if(r.erro)return; // não mexe nessa aba
@@ -858,61 +878,6 @@ function renderCharts(csv){
   destroyChart('ch-cc-fat');if(fat.length){const ccs=[...new Set(fat.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc-fat']=new Chart(document.getElementById('ch-cc-fat'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Recebido',data:ccs.map(c=>fat.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
   destroyChart('ch-resultado-caixa');if(csv.length){const rd=lbl.map(l=>{const f=fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),d=dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),p=pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);return(f-d)-p;});CHARTS['ch-resultado-caixa']=new Chart(document.getElementById('ch-resultado-caixa'),{type:'bar',data:{labels:ln,datasets:[{label:'Resultado',data:rd,backgroundColor:rd.map(v=>v>=0?'#1A7A3C':'#C0392B'),borderRadius:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}});}
 }
-function fmtCompactBRL(v){
-  const s=v<0?'-':'';const a=Math.abs(v);
-  if(a>=1000000)return s+'R$ '+(a/1000000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
-  if(a>=1000)return s+'R$ '+(a/1000).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0})+' mil';
-  return s+'R$ '+a.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
-}
-function renderFluxoResumoExec(colKeys,colAno,colMes,saldo,rv2,ci){
-  const kpiRow=document.getElementById('fc-kpi-row'),chartHost=document.getElementById('fc-saldo-chart');
-  if(!kpiRow||!chartHost)return;
-  if(!colKeys.length){kpiRow.innerHTML='';chartHost.innerHTML='';return;}
-  const saldoFinal=saldo[saldo.length-1];
-  const geracaoCaixa=rv2.reduce((s,v)=>s+v,0);
-  let idxMin=0;for(let i=1;i<saldo.length;i++)if(saldo[i]<saldo[idxMin])idxMin=i;
-  const mesMinLabel=MESES_ABR[colMes[idxMin]]+'/'+colAno[idxMin];
-  const saldoMin=saldo[idxMin];
-  const mesesNegativos=saldo.filter(v=>v<0).length;
-  const kpi=(label,val,sub,alert)=>'<div style="background:'+(alert?'var(--danger-light)':'var(--surface)')+';border:1px solid '+(alert?'var(--danger)':'var(--border)')+';border-radius:8px;padding:12px 14px">'
-    +'<div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+label+'</div>'
-    +'<div style="font-size:20px;font-weight:700;color:'+(alert?'var(--danger)':'var(--text)')+'">'+val+'</div>'
-    +(sub?'<div style="font-size:11px;color:var(--text3);margin-top:4px">'+sub+'</div>':'')
-    +'</div>';
-  kpiRow.innerHTML=
-    kpi('Saldo Inicial do Período',fmtCompactBRL(ci),'')
-    +kpi('Saldo Final Projetado',fmtCompactBRL(saldoFinal),saldoFinal<0?'caixa negativo':'',saldoFinal<0)
-    +kpi('Geração de Caixa no Período',fmtCompactBRL(geracaoCaixa),geracaoCaixa>=0?'positiva':'negativa')
-    +kpi('Mês de Maior Pressão',mesMinLabel,'saldo projetado: '+fmtCompactBRL(saldoMin),saldoMin<0)
-    +kpi('Meses com Saldo Negativo',String(mesesNegativos),mesesNegativos?'necessário plano de capital':'nenhum no período',mesesNegativos>0);
-
-  const w=Math.max(560,colKeys.length*72),h=190,padL=10,padR=10,padT=22,padB=26;
-  const plotW=w-padL-padR,plotH=h-padT-padB;
-  const maxAbs=Math.max(1,...saldo.map(v=>Math.abs(v)));
-  const zeroY=padT+plotH*(maxAbs)/(maxAbs*2)*(saldo.some(v=>v<0)?1:0);
-  // eixo: se não há valores negativos, baseline no fundo; senão, baseline no meio (zero)
-  const hasNeg=saldo.some(v=>v<0);
-  const base=hasNeg?padT+plotH/2:padT+plotH;
-  const scale=hasNeg?(plotH/2)/maxAbs:plotH/maxAbs;
-  const bw=Math.min(34,plotW/colKeys.length*0.55);
-  let bars='',labels='';
-  colKeys.forEach((k,i)=>{
-    const x=padL+(i+0.5)*(plotW/colKeys.length);
-    const v=saldo[i];
-    const bh=Math.abs(v)*scale;
-    const y=v>=0?base-bh:base;
-    const color=v>=0?'#1B6B35':'#C0392B';
-    bars+='<rect x="'+(x-bw/2)+'" y="'+y+'" width="'+bw+'" height="'+Math.max(2,bh)+'" rx="3" fill="'+color+'"></rect>';
-    bars+='<text x="'+x+'" y="'+(v>=0?y-5:y+bh+13)+'" font-size="10" text-anchor="middle" fill="'+color+'" font-weight="600">'+fmtCompactBRL(v)+'</text>';
-    labels+='<text x="'+x+'" y="'+(h-8)+'" font-size="10" text-anchor="middle" fill="var(--text3)">'+MESES_ABR[colMes[i]]+'/'+String(colAno[i]).slice(-2)+'</text>';
-  });
-  const zeroLine=hasNeg?'<line x1="'+padL+'" y1="'+base+'" x2="'+(w-padR)+'" y2="'+base+'" stroke="var(--border)" stroke-width="1"></line>':'';
-  chartHost.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" style="min-width:'+w+'px;display:block">'+zeroLine+bars+labels+'</svg>'
-    +'<div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--text3)">'
-    +'<span><span style="display:inline-block;width:9px;height:9px;background:#1B6B35;border-radius:2px;margin-right:5px"></span>Saldo positivo</span>'
-    +'<span><span style="display:inline-block;width:9px;height:9px;background:#C0392B;border-radius:2px;margin-right:5px"></span>Saldo negativo — risco de caixa</span>'
-    +'</div>';
-}
 function renderFluxo(){
   const obraSel=document.getElementById('fc-obra')?.value||'';
   const thead=document.getElementById('thead-fluxo'),tbody=document.getElementById('tbody-fluxo'),tfoot=document.getElementById('tfoot-fluxo');
@@ -954,7 +919,7 @@ function renderFluxo(){
     }
   });
   const nomes=Object.keys(contas);
-  if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';set('fc-badge','—');const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');if(theadR)theadR.innerHTML='';if(tbodyR)tbodyR.innerHTML='';const kpiRowEmpty=document.getElementById('fc-kpi-row'),chartHostEmpty=document.getElementById('fc-saldo-chart');if(kpiRowEmpty)kpiRowEmpty.innerHTML='';if(chartHostEmpty)chartHostEmpty.innerHTML='';return;}
+  if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';set('fc-badge','—');const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');if(theadR)theadR.innerHTML='';if(tbodyR)tbodyR.innerHTML='';return;}
 
   // Acumulado Anterior (tudo antes de 01/2026) por conta — apenas informativo, não entra no Saldo de Caixa nem no Caixa Inicial
   const acumAnt={};
@@ -1165,7 +1130,6 @@ function renderFluxo(){
     '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial do Mês</td>'+tdAcumDashAzulClaro+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
     '<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa do Mês</td>'+tdAcumDashAzulEscuro+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
   set('fc-badge',nomes.length+(nomes.length===1?' conta':' contas'));
-  renderFluxoResumoExec(colKeys,colAno,colMes,saldo,rv2,ci);
 
   // Resumo — Faturamento / Despesas (Pagamentos + Previsto) / Saldo de Caixa
   const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');
@@ -1214,51 +1178,33 @@ function renderFluxo(){
     const entradasOperFin=totalEntradasFin-entradaEmprFin;
     const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
-    // valores de despesa pré-computados (precisamos do total antes de desenhar as barras, pra escala ficar correta)
-    const despesasFin=ordemGrupos.map(k=>{
-      const g=gruposResumoFin[k];
-      if(!g)return null;
-      const valG=somaAte(g.acum,g.mensal);
-      totalDespesasFin+=valG;
-      return {label:g.label,val:valG,cor:g.cor};
-    }).filter(Boolean);
-    const totalReceitasFin=entradasOperFin+entradaEmprFin;
-    const saldoFin=totalReceitasFin-totalDespesasFin;
-    const maxValFin=Math.max(totalEntradasFin,totalDespesasFin,1);
-
     const linhaExec=(label,val,opts)=>{
       opts=opts||{};
-      const barCor=opts.valCor||'var(--text)';
-      const pct=Math.min(100,Math.abs(val)/maxValFin*100).toFixed(1);
-      return '<tr style="'+(opts.bg?'background:'+opts.bg+';':'')+'border-bottom:1px solid var(--border)">'
-        +'<td style="padding:'+(opts.pad||'6px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'500')+';color:'+(opts.labelCor||'var(--text)')+';white-space:nowrap">'+label+'</td>'
-        +'<td style="padding:'+(opts.pad||'6px 10px')+';min-width:90px">'+(opts.noBar?'':'<div style="background:var(--surface2);border-radius:3px;height:11px;overflow:hidden"><div style="height:100%;border-radius:3px;width:'+pct+'%;background:'+barCor+'"></div></div>')+'</td>'
-        +'<td class="r" style="padding:'+(opts.pad||'6px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'600')+';color:'+(opts.valCor||opts.labelCor||'var(--text)')+';white-space:nowrap">'+f2(val)+'</td></tr>';
+      return '<tr style="'+(opts.bg?'background:'+opts.bg+';':'')+(opts.borderTop?'border-top:'+opts.borderTop+';':'')+'border-bottom:1px solid var(--border)">'
+        +'<td style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'500')+';color:'+(opts.labelCor||'var(--text)')+'">'+(opts.indent?'<span style="padding-left:16px">':'')+label+(opts.indent?'</span>':'')+'</td>'
+        +'<td class="r" style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'600')+';color:'+(opts.valCor||opts.labelCor||'var(--text)')+'">'+f2(val)+'</td></tr>';
     };
-    let rowsF='<tr><td colspan="3" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#1B6B35;text-transform:uppercase;letter-spacing:.06em;background:#f4faf5">▸ Receitas</td></tr>';
+    let rowsF='<tr><td colspan="2" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#1B6B35;text-transform:uppercase;letter-spacing:.06em;background:#f4faf5">▸ Receitas</td></tr>';
     rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'#1B6B35',valCor:'#1B6B35'});
     if(emprEntradaG)rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'#B35C00',valCor:'#B35C00'});
-    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{bg:'#eaf6ec',fw:'700',labelCor:'#1B6B35',valCor:'#1B6B35',noBar:true});
-    rowsF+='<tr><td colspan="3" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#943126;text-transform:uppercase;letter-spacing:.06em;background:#fdf3f2">▸ Despesas</td></tr>';
-    despesasFin.forEach(d=>{rowsF+=linhaExec(d.label,d.val,{labelCor:d.cor,valCor:d.cor,fw:'500'});});
-    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{bg:'#f7f0f0',fw:'700',labelCor:'#943126',valCor:'#943126',noBar:true});
-
-    const corResultado=saldoFin>=0?{txt:'var(--brand-dark)',bg:'var(--brand-light)',bd:'var(--brand)'}:{txt:'var(--danger-dark)',bg:'var(--danger-light)',bd:'var(--danger)'};
-    const pctDelta=totalReceitasFin?Math.abs(saldoFin)/totalReceitasFin*100:0;
-    rowsF+='<tr><td colspan="3" style="padding:10px 12px 4px">'
-      +'<div style="border-radius:6px;background:'+corResultado.bg+';border:1px solid '+corResultado.bd+';padding:10px 12px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
-      +'<span style="font-weight:700;font-size:12.5px;color:'+corResultado.txt+';white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+corResultado.bd+';margin-right:7px"></span>Resultado do Período</span>'
-      +'<span style="font-weight:800;font-size:15px;color:'+corResultado.txt+'">'+f2(saldoFin)+'</span>'
-      +'</div>'
-      +'<div style="font-size:10.5px;color:'+corResultado.txt+';margin-top:4px">'+(saldoFin>=0?'Receitas superam despesas em ':'Despesas superam receitas em ')+pctDelta.toFixed(0)+'% — acumulado do período selecionado</div>'
-      +'</div></td></tr>';
+    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{bg:'#eaf6ec',fw:'700',labelCor:'#1B6B35',valCor:'#1B6B35'});
+    rowsF+='<tr><td colspan="2" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#943126;text-transform:uppercase;letter-spacing:.06em;background:#fdf3f2">▸ Despesas</td></tr>';
+    ordemGrupos.forEach(k=>{
+      const g=gruposResumoFin[k];
+      if(!g)return;
+      const valG=somaAte(g.acum,g.mensal);
+      totalDespesasFin+=valG;
+      rowsF+=linhaExec(g.label,valG,{labelCor:g.cor,valCor:g.cor,fw:'500'});
+    });
+    const totalReceitasFin=entradasOperFin+entradaEmprFin;
+    const saldoFin=totalReceitasFin-totalDespesasFin;
+    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{bg:'#f7f0f0',fw:'700',labelCor:'#943126',valCor:'#943126'});
     tbodyF.innerHTML=rowsF;
   }
 
   // Movimentações — Osmar e Relacionados: filtra por texto no complemento, agrupado por Centro de Custo e aberto por parte
-  const vizRel=document.getElementById('fc-relacionados-viz');
-  if(vizRel){
+  const theadRel=document.getElementById('thead-fc-relacionados'),tbodyRel=document.getElementById('tbody-fc-relacionados');
+  if(theadRel&&tbodyRel){
     const PARTES_RELACIONADAS=[
       {nome:'Osmar',termos:['osmar paulo dias filho','venda de um onix','cobrir custos do montagnes','lago negro (osmar)']},
       {nome:'Mauricio Rodrigues',termos:['mauricio rodrigues']},
@@ -1277,54 +1223,35 @@ function renderFluxo(){
       else if(r.tipo==='DESCONTO')alvo.entrou-=r.valor;
       else if(r.tipo==='PAGAMENTO')alvo.saiu+=r.valor;
     });
-    const corLiq=v=>v>=0?'#1B6B35':'#C0392B';
-    // Ordena CCs pela magnitude do líquido (maior impacto primeiro), não alfabético
-    const ccsRel=Object.keys(porCC).map(cc=>{
-      const partesCC=porCC[cc];
-      let ccEntrou=0,ccSaiu=0;
-      PARTES_RELACIONADAS.forEach(p=>{if(partesCC[p.nome]){ccEntrou+=partesCC[p.nome].entrou;ccSaiu+=partesCC[p.nome].saiu;}});
-      return{cc,partesCC,ccEntrou,ccSaiu,ccLiq:ccEntrou-ccSaiu};
-    }).sort((a,b)=>Math.abs(b.ccLiq)-Math.abs(a.ccLiq));
+    const ccsRel=Object.keys(porCC).sort();
+    theadRel.innerHTML='<tr style="background:#f5f5f5">'
+      +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Centro de Custo / Parte</th>'
+      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Aporte</th>'
+      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Retirada/Pgto</th></tr>';
     if(!ccsRel.length){
-      vizRel.innerHTML='<div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div>';
+      tbodyRel.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
     }else{
-      const barRow=(lbl,val,pct,cor)=>'<div style="display:grid;grid-template-columns:54px 1fr 92px;align-items:center;gap:6px;padding:1px 0">'
-        +'<div style="font-size:10px;color:var(--text3)">'+lbl+'</div>'
-        +'<div style="background:#eee9e2;border-radius:3px;height:9px;overflow:hidden"><div style="height:100%;border-radius:3px;width:'+pct+'%;background:'+cor+'"></div></div>'
-        +'<div style="text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:'+(val?cor:'var(--text3)')+'">'+(val?f2(val):'—')+'</div></div>';
-      const cardHtml=({cc,partesCC,ccLiq})=>{
-        const maxCC=Math.max(1,...PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map(p=>Math.max(partesCC[p.nome].entrou,partesCC[p.nome].saiu)));
-        const partesHtml=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map(p=>{
-          const v=partesCC[p.nome],liq=v.entrou-v.saiu;
-          return '<div style="background:#faf9f7;border-radius:6px;padding:8px 12px;margin-bottom:6px">'
-            +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">'
-            +'<div style="font-size:12px;font-weight:600;color:var(--text2)">'+p.nome+'</div>'
-            +'<div style="font-size:11px;font-weight:700;color:'+corLiq(liq)+'">'+(liq>=0?'+':'')+f2(liq)+'</div></div>'
-            +barRow('Aporte',v.entrou,(v.entrou/maxCC*100).toFixed(1),'#1B6B35')
-            +barRow('Retirada',v.saiu,(v.saiu/maxCC*100).toFixed(1),'#C0392B')
-            +'</div>';
+      let totEntrou=0,totSaiu=0;
+      let rowsRel=ccsRel.map(cc=>{
+        const partesCC=porCC[cc];
+        let ccEntrou=0,ccSaiu=0;
+        const linhasPartes=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map((p,idx)=>{
+          const v=partesCC[p.nome];ccEntrou+=v.entrou;ccSaiu+=v.saiu;
+          const zebra=idx%2===0?'#ffffff':'#fafafa';
+          return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 12px 6px 26px;font-size:11.5px;color:var(--text3);background:'+zebra+'">'+p.nome+'</td>'
+            +'<td class="r" style="padding:6px 12px;font-size:11.5px;color:#1B6B35;background:'+zebra+'">'+f2(v.entrou)+'</td>'
+            +'<td class="r" style="padding:6px 12px;font-size:11.5px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td></tr>';
         }).join('');
-        return '<div style="padding:14px 0 6px;border-bottom:1px solid var(--border)">'
-          +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">'
-          +'<div style="font-weight:700;font-size:13px">'+cc+'</div>'
-          +'<div style="font-size:12px;font-weight:700;padding:2px 9px;border-radius:10px;background:'+(ccLiq>=0?'var(--brand-light)':'var(--danger-light)')+';color:'+(ccLiq>=0?'var(--brand-dark)':'var(--danger-dark)')+'">Líquido '+(ccLiq>=0?'+':'')+f2(ccLiq)+'</div></div>'
-          +partesHtml+'</div>';
-      };
-      // Layout em 2 colunas: SPE Montagnes + Ressencia à esquerda, Monter + Solucione Imoveis à direita (pedido explícito).
-      // Qualquer Centro de Custo novo que apareça depois entra na coluna com menos cartões no momento, mantendo a ordem por impacto (líquido).
-      const ORDEM_COL_A=['SPE MONTAGNES','RESSENCIA'],ORDEM_COL_B=['MONTER','SOLUCIONE IMOVEIS'];
-      const normCcNome=s=>(s||'').trim().toUpperCase();
-      const colA=[],colB=[],resto=[];
-      ccsRel.forEach(item=>{
-        const n=normCcNome(item.cc);
-        if(ORDEM_COL_A.includes(n))colA.push(item);
-        else if(ORDEM_COL_B.includes(n))colB.push(item);
-        else resto.push(item);
-      });
-      colA.sort((x,y)=>ORDEM_COL_A.indexOf(normCcNome(x.cc))-ORDEM_COL_A.indexOf(normCcNome(y.cc)));
-      colB.sort((x,y)=>ORDEM_COL_B.indexOf(normCcNome(x.cc))-ORDEM_COL_B.indexOf(normCcNome(y.cc)));
-      resto.forEach(item=>{(colA.length<=colB.length?colA:colB).push(item);});
-      vizRel.innerHTML='<div>'+colA.map(cardHtml).join('')+'</div>'+'<div>'+colB.map(cardHtml).join('')+'</div>';
+        totEntrou+=ccEntrou;totSaiu+=ccSaiu;
+        return '<tr style="background:#f4f4f4;font-weight:700"><td style="padding:6px 12px;font-size:12px">'+cc+'</td>'
+          +'<td class="r" style="padding:6px 12px;font-size:12px;color:#1B6B35">'+f2(ccEntrou)+'</td>'
+          +'<td class="r" style="padding:6px 12px;font-size:12px;color:#C0392B">'+f2(ccSaiu)+'</td></tr>'
+          +linhasPartes;
+      }).join('');
+      rowsRel+='<tr style="background:#e8e8e8;font-weight:700;border-top:2px solid #999"><td style="padding:8px 12px;font-size:12px">Total</td>'
+        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35">'+f2(totEntrou)+'</td>'
+        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiu)+'</td></tr>';
+      tbodyRel.innerHTML=rowsRel;
     }
 
     // Acumulado por Parte — soma todas as CCs, uma linha por pessoa/empresa
@@ -1340,23 +1267,18 @@ function renderFluxo(){
       theadAcum.innerHTML='<tr style="background:#f5f5f5">'
         +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Parte</th>'
         +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Total Aporte</th>'
-        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Total Retirada/Pgto</th>'
-        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Líquido</th></tr>';
+        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Total Retirada/Pgto</th></tr>';
       let totEntrouG=0,totSaiuG=0;
       let rowsAcum=PARTES_RELACIONADAS.map((p,idx)=>{
         const v=acumPorParte[p.nome];totEntrouG+=v.entrou;totSaiuG+=v.saiu;
-        const liq=v.entrou-v.saiu;
         const zebra=idx%2===0?'#ffffff':'#fafafa';
         return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;font-size:12px;background:'+zebra+'">'+p.nome+'</td>'
           +'<td class="r" style="padding:7px 12px;font-size:12px;color:#1B6B35;background:'+zebra+'">'+f2(v.entrou)+'</td>'
-          +'<td class="r" style="padding:7px 12px;font-size:12px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td>'
-          +'<td class="r" style="padding:7px 12px;font-size:12px;font-weight:600;color:'+corLiq(liq)+';background:'+zebra+'">'+f2(liq)+'</td></tr>';
+          +'<td class="r" style="padding:7px 12px;font-size:12px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td></tr>';
       }).join('');
-      const totLiqG=totEntrouG-totSaiuG;
       rowsAcum+='<tr style="background:#e8e8e8;font-weight:700;border-top:2px solid #999"><td style="padding:8px 12px;font-size:12px">Total</td>'
         +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35">'+f2(totEntrouG)+'</td>'
-        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiuG)+'</td>'
-        +'<td class="r" style="padding:8px 12px;font-size:12px;color:'+corLiq(totLiqG)+'">'+f2(totLiqG)+'</td></tr>';
+        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiuG)+'</td></tr>';
       tbodyAcum.innerHTML=rowsAcum;
     }
   }
@@ -2838,13 +2760,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   <div class="sec-title">Fluxo de Caixa</div>
   <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
 
-  <div class="tbl-card" style="margin-bottom:16px;padding:20px" id="fc-kpi-card">
-    <div class="tbl-title" style="margin-bottom:2px">Visão Executiva do Caixa</div>
-    <span style="font-size:11px;color:var(--text3)">Saldo de caixa projetado mês a mês (cascata a partir do Caixa Inicial) — obra selecionada acima</span>
-    <div id="fc-kpi-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0 20px"></div>
-    <div id="fc-saldo-chart" style="overflow-x:auto"></div>
-  </div>
-
   <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
     <div style="margin-right:8px">
       <div class="tbl-title" style="margin-bottom:2px">Projeção</div>
@@ -2878,34 +2793,33 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       </div>
     </div>
     <div style="overflow-x:auto;font-size:12px">
-      <table id="tbl-fc-resumo-fin" style="width:100%;border-collapse:collapse">
+      <table id="tbl-fc-resumo-fin" style="width:100%;border-collapse:collapse;max-width:360px">
         <thead id="thead-fc-resumo-fin"></thead>
         <tbody id="tbody-fc-resumo-fin"></tbody>
       </table>
     </div>
   </div>
 
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 100%" id="fc-relacionados-card">
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 420px" id="fc-relacionados-card">
     <div class="tbl-head">
       <div>
         <div class="tbl-title">Movimentações — Osmar e Relacionados</div>
         <span style="font-size:11px;color:var(--text3)">Vertical Participações, Osmar Paulo Dias Filho, Mauricio Rodrigues e lançamentos ligados a essas partes</span>
       </div>
     </div>
-    <div style="font-size:12px">
-      <div style="display:flex;gap:16px;margin-bottom:14px;font-size:11px;color:var(--text2)">
-        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:#1B6B35"></span>Aporte</span>
-        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:#C0392B"></span>Retirada/Pgto</span>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+      <div style="overflow-x:auto;font-size:12px">
+        <table id="tbl-fc-relacionados" style="width:100%;border-collapse:collapse;max-width:420px">
+          <thead id="thead-fc-relacionados"></thead>
+          <tbody id="tbody-fc-relacionados"></tbody>
+        </table>
       </div>
-      <div id="fc-relacionados-viz" style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px"></div>
-      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
+      <div style="overflow-x:auto;font-size:12px;border-left:1px solid var(--border);padding-left:20px">
         <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Acumulado por Parte</div>
-        <div style="overflow-x:auto">
-          <table id="tbl-fc-relacionados-acum" style="border-collapse:collapse;width:100%;max-width:520px">
-            <thead id="thead-fc-relacionados-acum"></thead>
-            <tbody id="tbody-fc-relacionados-acum"></tbody>
-          </table>
-        </div>
+        <table id="tbl-fc-relacionados-acum" style="border-collapse:collapse;min-width:280px">
+          <thead id="thead-fc-relacionados-acum"></thead>
+          <tbody id="tbody-fc-relacionados-acum"></tbody>
+        </table>
       </div>
     </div>
   </div>
