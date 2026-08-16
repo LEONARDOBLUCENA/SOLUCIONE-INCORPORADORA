@@ -266,18 +266,12 @@ function processCSVText(txt){
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
 
-// ---------- Sync Sienge (único botão — ordem: Contas Pagas, Contas a Receber, Contas a Pagar) ----------
+// ---------- Sync Sienge (único botão — Contas Pagas, Contas a Receber e Contas a Pagar, todas pelo período escolhido) ----------
 const SIENGE_PROXY_URL='https://sienge-proxymonter-production.up.railway.app';
-// Contas a Pagar vem por último de propósito: ela é snapshot total do livro inteiro em
-// aberto e pode sozinha consumir boa parte da cota diária do Sienge (20/dia). Rodando por
-// último, mesmo que ela estoure a cota, Contas Pagas e Contas a Receber já foram atualizadas
-// e salvas antes disso acontecer.
 const SYNC_FONTES=[
   {titulo:'Contas Pagas',endpoint:'/api/sienge/sync-contas-pagas',fonte:'contas-pagas'},
   {titulo:'Contas a Receber',endpoint:'/api/sienge/sync-contas-a-receber',fonte:'contas-a-receber'},
-  // snapshotTotal:true = ignora o período do modal, sempre busca e substitui o livro inteiro
-  // (evita a duplicação de títulos com vencimento muito no futuro).
-  {titulo:'Contas a Pagar',endpoint:'/api/sienge/sync-contas-a-pagar',fonte:'contas-a-pagar',snapshotTotal:true}
+  {titulo:'Contas a Pagar',endpoint:'/api/sienge/sync-contas-a-pagar',fonte:'contas-a-pagar'}
 ];
 
 function abrirSyncGlobal(){
@@ -289,7 +283,7 @@ function abrirSyncGlobal(){
   const fmtIso=d=>d.toISOString().slice(0,10);
   el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:440px;width:90%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
     +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Sync Sienge</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
-    +'<p style="font-size:12px;color:var(--text3);margin:0">Busca Contas Pagas e Contas a Receber do Sienge no período escolhido, depois Contas a Pagar (livro inteiro em aberto, sempre — não usa o período abaixo). Contas Pagas/a Receber rodam primeiro de propósito: se a cota diária do Sienge (20) estourar em Contas a Pagar, as outras duas já foram salvas. Contas Recebidas continua manual.</p>'
+    +'<p style="font-size:12px;color:var(--text3);margin:0">Busca Contas Pagas, Contas a Receber e Contas a Pagar do Sienge no período escolhido, e substitui os lançamentos dessas 3 abas nesse período (Contas Recebidas continua manual). <strong>Importante pra Contas a Pagar:</strong> título com vencimento fora do período sincronizado não é atualizado nem removido — se o "Até" não cobrir todos os vencimentos em aberto (alguns vão longe no futuro), pode sobrar título desatualizado ou duplicar depois. Recomendado: mantenha o "Até" bem à frente (ex: 2035) sempre que sincronizar Contas a Pagar.</p>'
     +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:12px;font-weight:600">De</label><input type="date" id="sienge-sync-de" value="'+fmtIso(primeiroDoMes)+'" style="padding:8px;border:1px solid var(--border);border-radius:4px;font-family:\'DM Sans\',sans-serif;font-size:13px"></div>'
     +'<div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:12px;font-weight:600">Até</label><input type="date" id="sienge-sync-ate" value="'+fmtIso(hoje)+'" style="padding:8px;border:1px solid var(--border);border-radius:4px;font-family:\'DM Sans\',sans-serif;font-size:13px"></div>'
     +'<div id="sienge-sync-status" style="font-size:12px;color:var(--text3);min-height:36px;white-space:pre-line"></div>'
@@ -352,16 +346,7 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
     statusEl.style.color='var(--text3)';statusEl.textContent='Buscando '+item.titulo+'... ('+passoAtual+' de '+totalPassos+')';
     if(barra)barra.style.width=Math.round(((passoAtual-1)/totalPassos)*90+5)+'%';
     try{
-      // snapshotTotal ignora o período do modal — sempre busca o livro inteiro em aberto,
-      // com um período fixo bem largo (passado distante até +10 anos), pra garantir que o
-      // Sienge devolva todos os títulos abertos, inclusive os de vencimento bem no futuro.
-      let startDate=de, endDate=ate;
-      if(item.snapshotTotal){
-        const hoje=new Date();
-        startDate='2015-01-01';
-        endDate=new Date(hoje.getFullYear()+10,hoje.getMonth(),hoje.getDate()).toISOString().slice(0,10);
-      }
-      const r=await fetch(SIENGE_PROXY_URL+item.endpoint+'?startDate='+startDate+'&endDate='+endDate);
+      const r=await fetch(SIENGE_PROXY_URL+item.endpoint+'?startDate='+de+'&endDate='+ate);
       const dados=await r.json();
       chamadasAcumuladas+=dados.chamadasSienge||0;
       if(!r.ok||!dados.ok){
@@ -419,16 +404,13 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
 
   const deTs=new Date(de+'T00:00:00').getTime();
   const ateTs=new Date(ate+'T23:59:59').getTime();
-  const fontesSnapshotTotal=new Set(fontes.filter(f=>f.snapshotTotal).map(f=>f.fonte));
   let totalImportado=0,totalRemovido=0;
   resultados.forEach(r=>{
     if(r.erro)return; // não mexe nessa aba
     if(!r.novos.length)return; // veio vazio — não apaga sem repor
     const antes=DATA.csv.length;
-    const ehSnapshotTotal=fontesSnapshotTotal.has(r.fonte);
     DATA.csv=DATA.csv.filter(function(row){
       if(row.fonte!==r.fonte)return true;
-      if(ehSnapshotTotal)return false; // snapshot total: remove tudo dessa fonte, sem olhar data
       if(!row.data)return true;
       const t=(row.data instanceof Date?row.data:new Date(row.data)).getTime();
       return t<deTs||t>ateTs;
