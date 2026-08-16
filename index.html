@@ -512,6 +512,7 @@ function renderResumoLancamentos(containerId,linhas,opts){
   const top5=[...porContraparte.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5);
   const maxTop=top5.length?top5[0][1]:1;
   const rotuloContraparte=opts&&opts.rotuloContraparte?opts.rotuloContraparte:'Contraparte';
+  const corBarra=rotuloContraparte==='Fornecedor'?'#C0392B':'#1B6B35';
   el.innerHTML='<div class="charts-row c2" style="margin-bottom:14px">'
     +'<div class="chart-card">'
       +'<div class="chart-title">Total do período filtrado</div>'
@@ -524,7 +525,7 @@ function renderResumoLancamentos(containerId,linhas,opts){
       +(top5.length?top5.map(([nome,val])=>
         '<div style="display:flex;align-items:center;gap:8px;margin-top:8px">'
           +'<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+nome+'</span>'
-          +'<div class="pct-bar-bg" style="max-width:90px"><div class="pct-bar-fill" style="width:'+Math.round(val/maxTop*100)+'%"></div></div>'
+          +'<div class="pct-bar-bg" style="max-width:90px"><div class="pct-bar-fill" style="width:'+Math.round(val/maxTop*100)+'%;background:'+corBarra+'"></div></div>'
           +'<span style="font-size:12px;font-weight:600;min-width:90px;text-align:right">'+fmt(val)+'</span>'
         +'</div>'
       ).join(''):'<div style="font-size:12px;color:var(--text3);margin-top:8px">Sem dados suficientes.</div>')
@@ -2912,7 +2913,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <div class="nav-section-label">Obra</div>
     <button class="nav-tab" data-tab="orcamento" onclick="goTab(this);renderOrcamentoTable()">Orç. Engenharia</button>
     <button class="nav-tab" data-tab="estoque" onclick="goTab(this);renderEstoqueTable()">Estoque</button>
-    <button class="nav-tab" data-tab="prev" onclick="goTab(this)">Previsão por Período</button>
   </div>
 </aside>
 <div class="main-content">
@@ -2930,9 +2930,25 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   <div class="sec-title">Fluxo de Caixa</div>
   <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
 
-  <div class="filters-bar" style="margin-bottom:16px">
-    <span class="filter-label">Obra</span>
-    <select class="filter-select" id="fc-obra" onchange="renderCaixaInicialCampos();renderFluxo()" style="min-width:180px"><option value="">Todas as obras</option></select>
+  <div class="filters-bar" style="margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span class="filter-label">Obra</span>
+      <select class="filter-select" id="fc-obra" onchange="renderCaixaInicialCampos();renderFluxo()" style="min-width:180px"><option value="">Todas as obras</option></select>
+    </div>
+    <div style="width:1px;align-self:stretch;background:var(--border)"></div>
+    <div style="margin-right:4px">
+      <div class="tbl-title" style="margin-bottom:2px;font-size:13px">Previsão por Período Específico</div>
+      <span style="font-size:11px;color:var(--text3)">Veja o total de Entradas, Saídas e Saldo num período específico</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:11px;font-weight:600;color:var(--text3)">Data Inicial</label>
+      <input type="date" id="fc-proj-de" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:11px;font-weight:600;color:var(--text3)">Data Final</label>
+      <input type="date" id="fc-proj-ate" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px">
+    </div>
+    <button onclick="abrirProjecaoFluxo()" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 18px;cursor:pointer;border-radius:6px;font-weight:600">Buscar</button>
   </div>
 
   <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px" id="fc-visao-exec-card">
@@ -2946,22 +2962,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <span><span style="display:inline-block;width:9px;height:9px;background:#1B6B35;margin-right:5px;vertical-align:middle"></span>Saldo positivo</span>
       <span><span style="display:inline-block;width:9px;height:9px;background:#C0392B;margin-right:5px;vertical-align:middle"></span>Saldo negativo — risco de caixa</span>
     </div>
-  </div>
-
-  <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-    <div style="margin-right:8px">
-      <div class="tbl-title" style="margin-bottom:2px">Projeção</div>
-      <span style="font-size:11px;color:var(--text3)">Veja o total de Entradas, Saídas e Saldo num período específico</span>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <label style="font-size:11px;font-weight:600;color:var(--text3)">Data Inicial</label>
-      <input type="date" id="fc-proj-de" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px">
-    </div>
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <label style="font-size:11px;font-weight:600;color:var(--text3)">Data Final</label>
-      <input type="date" id="fc-proj-ate" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px">
-    </div>
-    <button onclick="abrirProjecaoFluxo()" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 18px;cursor:pointer;border-radius:6px;font-weight:600">Buscar</button>
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:stretch">
@@ -3113,20 +3113,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 <div class="page" id="page-contasrecebidas">
   <div class="sec-title">Contas Recebidas (Entradas)</div>
   <div class="sec-sub">Preenchimento manual, por enquanto. Alimenta as Entradas do Dashboard e do Fluxo de Caixa, por conta/apropriação.</div>
-  <div class="tbl-card" style="margin-bottom:16px">
-    <div class="tbl-head">
-      <div class="tbl-title">Novo Lançamento</div>
-    </div>
-    <div style="padding:16px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-      <div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:600;color:var(--text3)">Data</label><input type="date" id="cr-data" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px"></div>
-      <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:180px"><label style="font-size:11px;font-weight:600;color:var(--text3)">Cliente / Complemento</label><input type="text" id="cr-cliente" placeholder="Nome do cliente" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"></div>
-      <div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:600;color:var(--text3)">Obra</label><select id="cr-obra" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px"><option value="">Selecione a obra</option></select></div>
-      <div style="display:flex;flex-direction:column;gap:4px;min-width:200px"><label style="font-size:11px;font-weight:600;color:var(--text3)">Conta</label><input type="text" id="cr-conta" placeholder="Ex: 10101 - Receita de Incorporação" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px;width:100%"></div>
-      <div style="display:flex;flex-direction:column;gap:4px"><label style="font-size:11px;font-weight:600;color:var(--text3)">Valor</label><input type="number" step="0.01" id="cr-valor" placeholder="0,00" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px;width:130px"></div>
-      <button onclick="adicionarContaRecebida()" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 16px;cursor:pointer;border-radius:6px;font-weight:600">+ Adicionar</button>
-      <div id="cr-status" style="font-size:12px;width:100%"></div>
-    </div>
-  </div>
   <div id="resumo-contasrecebidas"></div>
   <div class="tbl-card">
     <div class="tbl-head">
@@ -3778,66 +3764,6 @@ function exportarOrcamento(){}
   </div>
 </div>
 
-<div class="page" id="page-prev">
-  <div class="sec-title">Previsao por Periodo</div>
-  <div class="sec-sub">Cole os dados do Excel para visualizar recebimentos e pagamentos previstos</div>
-  <div class="filters-bar" style="flex-wrap:wrap;gap:12px">
-    <span class="filter-label">De</span>
-    <input type="date" id="prev-de" onchange="renderPrevisao()" style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none">
-    <span class="filter-label">Ate</span>
-    <input type="date" id="prev-ate" onchange="renderPrevisao()" style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none">
-    <button class="btn-ghost" onclick="document.getElementById('prev-de').value='';document.getElementById('prev-ate').value='';renderPrevisao()">x Limpar</button>
-  </div>
-  <div class="tbl-card" style="margin-top:16px">
-    <div class="tbl-head">
-      <div class="tbl-title">Importar Dados</div>
-      <span class="tbl-badge" id="prev-count">0 lancamentos</span>
-    </div>
-    <div style="padding:16px 20px">
-      <textarea id="paste-prev" rows="4" placeholder="Cole aqui os dados do Excel (Data, Valor, Nome Centro de Custo, Conta)..." style="width:100%;box-sizing:border-box;border:1px solid var(--border);background:var(--bg);padding:10px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--text);resize:vertical;outline:none"></textarea>
-      <div style="margin-top:8px;display:flex;gap:8px">
-        <button class="btn-primary" onclick="processPrevisao(document.getElementById('paste-prev').value);document.getElementById('paste-prev').value=''">Processar</button>
-        <button class="btn-secondary" onclick="DATA.previsao=[];renderPrevisao()">x Limpar</button>
-        <button onclick="gerarWhatsApp()" style="background:#25D366;color:#fff;border:none;padding:7px 14px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:4px">📲 Gerar WhatsApp</button>
-        <button onclick="gerarWhatsAppFornecedor()" style="background:#128C7E;color:#fff;border:none;padding:7px 14px;font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;border-radius:4px">📦 WhatsApp por Fornecedor</button>
-      </div>
-    </div>
-  </div>
-  <div class="tbl-card" style="margin-top:16px">
-    <div class="tbl-head"><div class="tbl-title">Resumo por Dia</div></div>
-    <div style="overflow-x:auto;overflow-y:auto;max-height:300px">
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:#f5f5f5">
-          <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Data</th>
-          <th class="r" style="padding:8px 10px;font-size:11px;color:#1B6B35;position:sticky;top:0;background:#f5f5f5">A Receber</th>
-          <th class="r" style="padding:8px 10px;font-size:11px;color:#C0392B;position:sticky;top:0;background:#f5f5f5">A Pagar</th>
-          <th class="r" style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Saldo do Dia</th>
-        </tr></thead>
-        <tbody id="prev-body-dia"><tr><td colspan="4"><div class="empty-state"><p>Nenhum dado</p></div></td></tr></tbody>
-      </table>
-    </div>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px">
-    <div class="kpi-card" style="border-top:3px solid #1B6B35"><div class="kpi-label">Total a Receber</div><div class="kpi-val pos" id="prev-tot-rec">--</div></div>
-    <div class="kpi-card" style="border-top:3px solid #C0392B"><div class="kpi-label">Total a Pagar</div><div class="kpi-val neg" id="prev-tot-pag">--</div></div>
-    <div class="kpi-card" style="border-top:3px solid var(--brand)"><div class="kpi-label">Saldo do Periodo</div><div class="kpi-val" id="prev-tot-saldo">--</div></div>
-  </div>
-  <div class="tbl-card" style="margin-top:16px">
-    <div class="tbl-head"><div class="tbl-title">Lancamentos</div></div>
-    <div style="overflow-x:auto;overflow-y:auto;max-height:400px">
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:#f5f5f5">
-          <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Data</th>
-          <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Centro de Custo</th>
-          <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Complemento</th>
-          <th style="text-align:left;padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Conta</th>
-          <th class="r" style="padding:8px 10px;font-size:11px;position:sticky;top:0;background:#f5f5f5">Valor</th>
-        </tr></thead>
-        <tbody id="prev-body"><tr><td colspan="5"><div class="empty-state"><p>Nenhum lancamento importado</p></div></td></tr></tbody>
-      </table>
-    </div>
-  </div>
-</div>
 <div class="page" id="page-dash">
 
   <!-- ══ VISÃO FATURAMENTO ══ -->
