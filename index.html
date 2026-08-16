@@ -167,16 +167,13 @@ function showMsgModal(msg){
   el.style.display='flex';
 }
 function renderPrevisao(){
-  var de=document.getElementById('prev-de'),ate=document.getElementById('prev-ate'),ccEl=document.getElementById('prev-cc');
+  var de=document.getElementById('prev-de'),ate=document.getElementById('prev-ate');
   var dDe=de&&de.value?new Date(de.value):null;
   var dAte=ate&&ate.value?new Date(ate.value+'T23:59:59'):null;
-  var cc=ccEl?ccEl.value||'':'';
-  var dados=(DATA.previsao||[]).filter(function(r){return(!dDe||r.data>=dDe)&&(!dAte||r.data<=dAte)&&(!cc||r.cc.toLowerCase().includes(cc.toLowerCase()));});
+  var dados=(DATA.previsao||[]).filter(function(r){return(!dDe||r.data>=dDe)&&(!dAte||r.data<=dAte);});
   var fP=function(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
   var fD=function(d){return d?d.toLocaleDateString('pt-BR'):'';};
   var s_=function(id,v){var el=document.getElementById(id);if(el)el.textContent=v;};
-  // CC select
-  if(ccEl){var ccs=[...new Set((DATA.previsao||[]).map(function(r){return r.cc;}).filter(Boolean))].sort();var cur=ccEl.value;ccEl.innerHTML='<option value="">Todos</option>'+ccs.map(function(c){return'<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'</option>';}).join('');}
   // Tabela lancamentos
   var tb=document.getElementById('prev-body');
   if(tb)tb.innerHTML=dados.length?dados.map(function(r){return'<tr>'
@@ -2933,6 +2930,11 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   <div class="sec-title">Fluxo de Caixa</div>
   <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
 
+  <div class="filters-bar" style="margin-bottom:16px">
+    <span class="filter-label">Obra</span>
+    <select class="filter-select" id="fc-obra" onchange="renderCaixaInicialCampos();renderFluxo()" style="min-width:180px"><option value="">Todas as obras</option></select>
+  </div>
+
   <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px" id="fc-visao-exec-card">
     <div class="tbl-title" style="margin-bottom:2px">Visão Executiva do Caixa</div>
     <span style="font-size:11px;color:var(--text3)">Saldo de caixa projetado mês a mês (cascata a partir do Caixa Inicial) — obra selecionada acima</span>
@@ -2969,11 +2971,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
         <div class="tbl-title">Resumo Financeiro</div>
         <span style="font-size:11px;color:var(--text3)">Visão executiva — Receitas x Despesas por grupo, acumulado até o mês selecionado</span>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-left:16px">
-        <span class="filter-label">Obra</span>
-        <select class="filter-select" id="fc-obra" onchange="renderCaixaInicialCampos();renderFluxo()" style="min-width:150px"><option value="">Todas as obras</option></select>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-left:16px">
         <span style="font-size:11px;color:var(--text3)">Acumulado até</span>
         <select id="fc-resumo-fin-ate" class="form-input" style="font-size:12px;padding:5px 10px;width:auto" onchange="renderFluxo()"></select>
       </div>
@@ -3788,9 +3786,7 @@ function exportarOrcamento(){}
     <input type="date" id="prev-de" onchange="renderPrevisao()" style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none">
     <span class="filter-label">Ate</span>
     <input type="date" id="prev-ate" onchange="renderPrevisao()" style="border:1px solid var(--border);background:var(--bg);padding:6px 10px;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none">
-    <span class="filter-label">Centro de Custo</span>
-    <select class="filter-select" id="prev-cc" onchange="renderPrevisao()"><option value="">Todos</option></select>
-    <button class="btn-ghost" onclick="document.getElementById('prev-de').value='';document.getElementById('prev-ate').value='';document.getElementById('prev-cc').value='';renderPrevisao()">x Limpar</button>
+    <button class="btn-ghost" onclick="document.getElementById('prev-de').value='';document.getElementById('prev-ate').value='';renderPrevisao()">x Limpar</button>
   </div>
   <div class="tbl-card" style="margin-top:16px">
     <div class="tbl-head">
