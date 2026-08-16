@@ -1214,33 +1214,51 @@ function renderFluxo(){
     const entradasOperFin=totalEntradasFin-entradaEmprFin;
     const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
-    const linhaExec=(label,val,opts)=>{
-      opts=opts||{};
-      return '<tr style="'+(opts.bg?'background:'+opts.bg+';':'')+(opts.borderTop?'border-top:'+opts.borderTop+';':'')+'border-bottom:1px solid var(--border)">'
-        +'<td style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'500')+';color:'+(opts.labelCor||'var(--text)')+'">'+(opts.indent?'<span style="padding-left:16px">':'')+label+(opts.indent?'</span>':'')+'</td>'
-        +'<td class="r" style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'600')+';color:'+(opts.valCor||opts.labelCor||'var(--text)')+'">'+f2(val)+'</td></tr>';
-    };
-    let rowsF='<tr><td colspan="2" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#1B6B35;text-transform:uppercase;letter-spacing:.06em;background:#f4faf5">▸ Receitas</td></tr>';
-    rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'#1B6B35',valCor:'#1B6B35'});
-    if(emprEntradaG)rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'#B35C00',valCor:'#B35C00'});
-    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{bg:'#eaf6ec',fw:'700',labelCor:'#1B6B35',valCor:'#1B6B35'});
-    rowsF+='<tr><td colspan="2" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#943126;text-transform:uppercase;letter-spacing:.06em;background:#fdf3f2">▸ Despesas</td></tr>';
-    ordemGrupos.forEach(k=>{
+    // valores de despesa pré-computados (precisamos do total antes de desenhar as barras, pra escala ficar correta)
+    const despesasFin=ordemGrupos.map(k=>{
       const g=gruposResumoFin[k];
-      if(!g)return;
+      if(!g)return null;
       const valG=somaAte(g.acum,g.mensal);
       totalDespesasFin+=valG;
-      rowsF+=linhaExec(g.label,valG,{labelCor:g.cor,valCor:g.cor,fw:'500'});
-    });
+      return {label:g.label,val:valG,cor:g.cor};
+    }).filter(Boolean);
     const totalReceitasFin=entradasOperFin+entradaEmprFin;
     const saldoFin=totalReceitasFin-totalDespesasFin;
-    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{bg:'#f7f0f0',fw:'700',labelCor:'#943126',valCor:'#943126'});
+    const maxValFin=Math.max(totalEntradasFin,totalDespesasFin,1);
+
+    const linhaExec=(label,val,opts)=>{
+      opts=opts||{};
+      const barCor=opts.valCor||'var(--text)';
+      const pct=Math.min(100,Math.abs(val)/maxValFin*100).toFixed(1);
+      return '<tr style="'+(opts.bg?'background:'+opts.bg+';':'')+'border-bottom:1px solid var(--border)">'
+        +'<td style="padding:'+(opts.pad||'6px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'500')+';color:'+(opts.labelCor||'var(--text)')+';white-space:nowrap">'+label+'</td>'
+        +'<td style="padding:'+(opts.pad||'6px 10px')+';min-width:90px">'+(opts.noBar?'':'<div style="background:var(--surface2);border-radius:3px;height:11px;overflow:hidden"><div style="height:100%;border-radius:3px;width:'+pct+'%;background:'+barCor+'"></div></div>')+'</td>'
+        +'<td class="r" style="padding:'+(opts.pad||'6px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'600')+';color:'+(opts.valCor||opts.labelCor||'var(--text)')+';white-space:nowrap">'+f2(val)+'</td></tr>';
+    };
+    let rowsF='<tr><td colspan="3" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#1B6B35;text-transform:uppercase;letter-spacing:.06em;background:#f4faf5">▸ Receitas</td></tr>';
+    rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'#1B6B35',valCor:'#1B6B35'});
+    if(emprEntradaG)rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'#B35C00',valCor:'#B35C00'});
+    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{bg:'#eaf6ec',fw:'700',labelCor:'#1B6B35',valCor:'#1B6B35',noBar:true});
+    rowsF+='<tr><td colspan="3" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#943126;text-transform:uppercase;letter-spacing:.06em;background:#fdf3f2">▸ Despesas</td></tr>';
+    despesasFin.forEach(d=>{rowsF+=linhaExec(d.label,d.val,{labelCor:d.cor,valCor:d.cor,fw:'500'});});
+    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{bg:'#f7f0f0',fw:'700',labelCor:'#943126',valCor:'#943126',noBar:true});
+
+    const corResultado=saldoFin>=0?{txt:'var(--brand-dark)',bg:'var(--brand-light)',bd:'var(--brand)'}:{txt:'var(--danger-dark)',bg:'var(--danger-light)',bd:'var(--danger)'};
+    const pctDelta=totalReceitasFin?Math.abs(saldoFin)/totalReceitasFin*100:0;
+    rowsF+='<tr><td colspan="3" style="padding:10px 12px 4px">'
+      +'<div style="border-radius:6px;background:'+corResultado.bg+';border:1px solid '+corResultado.bd+';padding:10px 12px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:10px">'
+      +'<span style="font-weight:700;font-size:12.5px;color:'+corResultado.txt+';white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+corResultado.bd+';margin-right:7px"></span>Resultado do Período</span>'
+      +'<span style="font-weight:800;font-size:15px;color:'+corResultado.txt+'">'+f2(saldoFin)+'</span>'
+      +'</div>'
+      +'<div style="font-size:10.5px;color:'+corResultado.txt+';margin-top:4px">'+(saldoFin>=0?'Receitas superam despesas em ':'Despesas superam receitas em ')+pctDelta.toFixed(0)+'% — acumulado do período selecionado</div>'
+      +'</div></td></tr>';
     tbodyF.innerHTML=rowsF;
   }
 
   // Movimentações — Osmar e Relacionados: filtra por texto no complemento, agrupado por Centro de Custo e aberto por parte
-  const theadRel=document.getElementById('thead-fc-relacionados'),tbodyRel=document.getElementById('tbody-fc-relacionados');
-  if(theadRel&&tbodyRel){
+  const vizRel=document.getElementById('fc-relacionados-viz');
+  if(vizRel){
     const PARTES_RELACIONADAS=[
       {nome:'Osmar',termos:['osmar paulo dias filho','venda de um onix','cobrir custos do montagnes','lago negro (osmar)']},
       {nome:'Mauricio Rodrigues',termos:['mauricio rodrigues']},
@@ -1259,35 +1277,39 @@ function renderFluxo(){
       else if(r.tipo==='DESCONTO')alvo.entrou-=r.valor;
       else if(r.tipo==='PAGAMENTO')alvo.saiu+=r.valor;
     });
-    const ccsRel=Object.keys(porCC).sort();
-    theadRel.innerHTML='<tr style="background:#f5f5f5">'
-      +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Centro de Custo / Parte</th>'
-      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Aporte</th>'
-      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Retirada/Pgto</th></tr>';
+    const corLiq=v=>v>=0?'#1B6B35':'#C0392B';
+    // Ordena CCs pela magnitude do líquido (maior impacto primeiro), não alfabético
+    const ccsRel=Object.keys(porCC).map(cc=>{
+      const partesCC=porCC[cc];
+      let ccEntrou=0,ccSaiu=0;
+      PARTES_RELACIONADAS.forEach(p=>{if(partesCC[p.nome]){ccEntrou+=partesCC[p.nome].entrou;ccSaiu+=partesCC[p.nome].saiu;}});
+      return{cc,partesCC,ccEntrou,ccSaiu,ccLiq:ccEntrou-ccSaiu};
+    }).sort((a,b)=>Math.abs(b.ccLiq)-Math.abs(a.ccLiq));
     if(!ccsRel.length){
-      tbodyRel.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
+      vizRel.innerHTML='<div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div>';
     }else{
-      let totEntrou=0,totSaiu=0;
-      let rowsRel=ccsRel.map(cc=>{
-        const partesCC=porCC[cc];
-        let ccEntrou=0,ccSaiu=0;
-        const linhasPartes=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map((p,idx)=>{
-          const v=partesCC[p.nome];ccEntrou+=v.entrou;ccSaiu+=v.saiu;
-          const zebra=idx%2===0?'#ffffff':'#fafafa';
-          return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 12px 6px 26px;font-size:11.5px;color:var(--text3);background:'+zebra+'">'+p.nome+'</td>'
-            +'<td class="r" style="padding:6px 12px;font-size:11.5px;color:#1B6B35;background:'+zebra+'">'+f2(v.entrou)+'</td>'
-            +'<td class="r" style="padding:6px 12px;font-size:11.5px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td></tr>';
+      const barRow=(lbl,val,pct,cor)=>'<div style="display:grid;grid-template-columns:54px 1fr 92px;align-items:center;gap:6px;padding:1px 0">'
+        +'<div style="font-size:10px;color:var(--text3)">'+lbl+'</div>'
+        +'<div style="background:#eee9e2;border-radius:3px;height:9px;overflow:hidden"><div style="height:100%;border-radius:3px;width:'+pct+'%;background:'+cor+'"></div></div>'
+        +'<div style="text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:'+(val?cor:'var(--text3)')+'">'+(val?f2(val):'—')+'</div></div>';
+      vizRel.innerHTML=ccsRel.map(({cc,partesCC,ccEntrou,ccSaiu,ccLiq})=>{
+        const maxCC=Math.max(1,...PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map(p=>Math.max(partesCC[p.nome].entrou,partesCC[p.nome].saiu)));
+        const partesHtml=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map(p=>{
+          const v=partesCC[p.nome],liq=v.entrou-v.saiu;
+          return '<div style="background:#faf9f7;border-radius:6px;padding:8px 12px;margin-bottom:6px">'
+            +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">'
+            +'<div style="font-size:12px;font-weight:600;color:var(--text2)">'+p.nome+'</div>'
+            +'<div style="font-size:11px;font-weight:700;color:'+corLiq(liq)+'">'+(liq>=0?'+':'')+f2(liq)+'</div></div>'
+            +barRow('Aporte',v.entrou,(v.entrou/maxCC*100).toFixed(1),'#1B6B35')
+            +barRow('Retirada',v.saiu,(v.saiu/maxCC*100).toFixed(1),'#C0392B')
+            +'</div>';
         }).join('');
-        totEntrou+=ccEntrou;totSaiu+=ccSaiu;
-        return '<tr style="background:#f4f4f4;font-weight:700"><td style="padding:6px 12px;font-size:12px">'+cc+'</td>'
-          +'<td class="r" style="padding:6px 12px;font-size:12px;color:#1B6B35">'+f2(ccEntrou)+'</td>'
-          +'<td class="r" style="padding:6px 12px;font-size:12px;color:#C0392B">'+f2(ccSaiu)+'</td></tr>'
-          +linhasPartes;
+        return '<div style="padding:14px 0 6px;border-bottom:1px solid var(--border)">'
+          +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">'
+          +'<div style="font-weight:700;font-size:13px">'+cc+'</div>'
+          +'<div style="font-size:12px;font-weight:700;padding:2px 9px;border-radius:10px;background:'+(ccLiq>=0?'var(--brand-light)':'var(--danger-light)')+';color:'+(ccLiq>=0?'var(--brand-dark)':'var(--danger-dark)')+'">Líquido '+(ccLiq>=0?'+':'')+f2(ccLiq)+'</div></div>'
+          +partesHtml+'</div>';
       }).join('');
-      rowsRel+='<tr style="background:#e8e8e8;font-weight:700;border-top:2px solid #999"><td style="padding:8px 12px;font-size:12px">Total</td>'
-        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35">'+f2(totEntrou)+'</td>'
-        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiu)+'</td></tr>';
-      tbodyRel.innerHTML=rowsRel;
     }
 
     // Acumulado por Parte — soma todas as CCs, uma linha por pessoa/empresa
@@ -1303,18 +1325,23 @@ function renderFluxo(){
       theadAcum.innerHTML='<tr style="background:#f5f5f5">'
         +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Parte</th>'
         +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Total Aporte</th>'
-        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Total Retirada/Pgto</th></tr>';
+        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Total Retirada/Pgto</th>'
+        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Líquido</th></tr>';
       let totEntrouG=0,totSaiuG=0;
       let rowsAcum=PARTES_RELACIONADAS.map((p,idx)=>{
         const v=acumPorParte[p.nome];totEntrouG+=v.entrou;totSaiuG+=v.saiu;
+        const liq=v.entrou-v.saiu;
         const zebra=idx%2===0?'#ffffff':'#fafafa';
         return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;font-size:12px;background:'+zebra+'">'+p.nome+'</td>'
           +'<td class="r" style="padding:7px 12px;font-size:12px;color:#1B6B35;background:'+zebra+'">'+f2(v.entrou)+'</td>'
-          +'<td class="r" style="padding:7px 12px;font-size:12px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td></tr>';
+          +'<td class="r" style="padding:7px 12px;font-size:12px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td>'
+          +'<td class="r" style="padding:7px 12px;font-size:12px;font-weight:600;color:'+corLiq(liq)+';background:'+zebra+'">'+f2(liq)+'</td></tr>';
       }).join('');
+      const totLiqG=totEntrouG-totSaiuG;
       rowsAcum+='<tr style="background:#e8e8e8;font-weight:700;border-top:2px solid #999"><td style="padding:8px 12px;font-size:12px">Total</td>'
         +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35">'+f2(totEntrouG)+'</td>'
-        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiuG)+'</td></tr>';
+        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiuG)+'</td>'
+        +'<td class="r" style="padding:8px 12px;font-size:12px;color:'+corLiq(totLiqG)+'">'+f2(totLiqG)+'</td></tr>';
       tbodyAcum.innerHTML=rowsAcum;
     }
   }
@@ -2836,7 +2863,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       </div>
     </div>
     <div style="overflow-x:auto;font-size:12px">
-      <table id="tbl-fc-resumo-fin" style="width:100%;border-collapse:collapse;max-width:360px">
+      <table id="tbl-fc-resumo-fin" style="width:100%;border-collapse:collapse">
         <thead id="thead-fc-resumo-fin"></thead>
         <tbody id="tbody-fc-resumo-fin"></tbody>
       </table>
@@ -2851,11 +2878,12 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       </div>
     </div>
     <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
-      <div style="overflow-x:auto;font-size:12px">
-        <table id="tbl-fc-relacionados" style="width:100%;border-collapse:collapse;max-width:420px">
-          <thead id="thead-fc-relacionados"></thead>
-          <tbody id="tbody-fc-relacionados"></tbody>
-        </table>
+      <div style="font-size:12px;min-width:340px;max-width:480px">
+        <div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px;color:var(--text2)">
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:#1B6B35"></span>Aporte</span>
+          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:#C0392B"></span>Retirada/Pgto</span>
+        </div>
+        <div id="fc-relacionados-viz"></div>
       </div>
       <div style="overflow-x:auto;font-size:12px;border-left:1px solid var(--border);padding-left:20px">
         <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Acumulado por Parte</div>
