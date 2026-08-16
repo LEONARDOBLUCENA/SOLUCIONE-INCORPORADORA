@@ -858,6 +858,61 @@ function renderCharts(csv){
   destroyChart('ch-cc-fat');if(fat.length){const ccs=[...new Set(fat.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc-fat']=new Chart(document.getElementById('ch-cc-fat'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Recebido',data:ccs.map(c=>fat.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
   destroyChart('ch-resultado-caixa');if(csv.length){const rd=lbl.map(l=>{const f=fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),d=dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),p=pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);return(f-d)-p;});CHARTS['ch-resultado-caixa']=new Chart(document.getElementById('ch-resultado-caixa'),{type:'bar',data:{labels:ln,datasets:[{label:'Resultado',data:rd,backgroundColor:rd.map(v=>v>=0?'#1A7A3C':'#C0392B'),borderRadius:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}});}
 }
+function fmtCompactBRL(v){
+  const s=v<0?'-':'';const a=Math.abs(v);
+  if(a>=1000000)return s+'R$ '+(a/1000000).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})+'M';
+  if(a>=1000)return s+'R$ '+(a/1000).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0})+' mil';
+  return s+'R$ '+a.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0});
+}
+function renderFluxoResumoExec(colKeys,colAno,colMes,saldo,rv2,ci){
+  const kpiRow=document.getElementById('fc-kpi-row'),chartHost=document.getElementById('fc-saldo-chart');
+  if(!kpiRow||!chartHost)return;
+  if(!colKeys.length){kpiRow.innerHTML='';chartHost.innerHTML='';return;}
+  const saldoFinal=saldo[saldo.length-1];
+  const geracaoCaixa=rv2.reduce((s,v)=>s+v,0);
+  let idxMin=0;for(let i=1;i<saldo.length;i++)if(saldo[i]<saldo[idxMin])idxMin=i;
+  const mesMinLabel=MESES_ABR[colMes[idxMin]]+'/'+colAno[idxMin];
+  const saldoMin=saldo[idxMin];
+  const mesesNegativos=saldo.filter(v=>v<0).length;
+  const kpi=(label,val,sub,alert)=>'<div style="background:'+(alert?'var(--danger-light)':'var(--surface)')+';border:1px solid '+(alert?'var(--danger)':'var(--border)')+';border-radius:8px;padding:12px 14px">'
+    +'<div style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">'+label+'</div>'
+    +'<div style="font-size:20px;font-weight:700;color:'+(alert?'var(--danger)':'var(--text)')+'">'+val+'</div>'
+    +(sub?'<div style="font-size:11px;color:var(--text3);margin-top:4px">'+sub+'</div>':'')
+    +'</div>';
+  kpiRow.innerHTML=
+    kpi('Saldo Inicial do Período',fmtCompactBRL(ci),'')
+    +kpi('Saldo Final Projetado',fmtCompactBRL(saldoFinal),saldoFinal<0?'caixa negativo':'',saldoFinal<0)
+    +kpi('Geração de Caixa no Período',fmtCompactBRL(geracaoCaixa),geracaoCaixa>=0?'positiva':'negativa')
+    +kpi('Mês de Maior Pressão',mesMinLabel,'saldo projetado: '+fmtCompactBRL(saldoMin),saldoMin<0)
+    +kpi('Meses com Saldo Negativo',String(mesesNegativos),mesesNegativos?'necessário plano de capital':'nenhum no período',mesesNegativos>0);
+
+  const w=Math.max(560,colKeys.length*72),h=190,padL=10,padR=10,padT=22,padB=26;
+  const plotW=w-padL-padR,plotH=h-padT-padB;
+  const maxAbs=Math.max(1,...saldo.map(v=>Math.abs(v)));
+  const zeroY=padT+plotH*(maxAbs)/(maxAbs*2)*(saldo.some(v=>v<0)?1:0);
+  // eixo: se não há valores negativos, baseline no fundo; senão, baseline no meio (zero)
+  const hasNeg=saldo.some(v=>v<0);
+  const base=hasNeg?padT+plotH/2:padT+plotH;
+  const scale=hasNeg?(plotH/2)/maxAbs:plotH/maxAbs;
+  const bw=Math.min(34,plotW/colKeys.length*0.55);
+  let bars='',labels='';
+  colKeys.forEach((k,i)=>{
+    const x=padL+(i+0.5)*(plotW/colKeys.length);
+    const v=saldo[i];
+    const bh=Math.abs(v)*scale;
+    const y=v>=0?base-bh:base;
+    const color=v>=0?'#1B6B35':'#C0392B';
+    bars+='<rect x="'+(x-bw/2)+'" y="'+y+'" width="'+bw+'" height="'+Math.max(2,bh)+'" rx="3" fill="'+color+'"></rect>';
+    bars+='<text x="'+x+'" y="'+(v>=0?y-5:y+bh+13)+'" font-size="10" text-anchor="middle" fill="'+color+'" font-weight="600">'+fmtCompactBRL(v)+'</text>';
+    labels+='<text x="'+x+'" y="'+(h-8)+'" font-size="10" text-anchor="middle" fill="var(--text3)">'+MESES_ABR[colMes[i]]+'/'+String(colAno[i]).slice(-2)+'</text>';
+  });
+  const zeroLine=hasNeg?'<line x1="'+padL+'" y1="'+base+'" x2="'+(w-padR)+'" y2="'+base+'" stroke="var(--border)" stroke-width="1"></line>':'';
+  chartHost.innerHTML='<svg viewBox="0 0 '+w+' '+h+'" width="'+w+'" height="'+h+'" style="min-width:'+w+'px;display:block">'+zeroLine+bars+labels+'</svg>'
+    +'<div style="display:flex;gap:16px;margin-top:10px;font-size:11px;color:var(--text3)">'
+    +'<span><span style="display:inline-block;width:9px;height:9px;background:#1B6B35;border-radius:2px;margin-right:5px"></span>Saldo positivo</span>'
+    +'<span><span style="display:inline-block;width:9px;height:9px;background:#C0392B;border-radius:2px;margin-right:5px"></span>Saldo negativo — risco de caixa</span>'
+    +'</div>';
+}
 function renderFluxo(){
   const obraSel=document.getElementById('fc-obra')?.value||'';
   const thead=document.getElementById('thead-fluxo'),tbody=document.getElementById('tbody-fluxo'),tfoot=document.getElementById('tfoot-fluxo');
@@ -899,7 +954,7 @@ function renderFluxo(){
     }
   });
   const nomes=Object.keys(contas);
-  if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';set('fc-badge','—');const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');if(theadR)theadR.innerHTML='';if(tbodyR)tbodyR.innerHTML='';return;}
+  if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';set('fc-badge','—');const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');if(theadR)theadR.innerHTML='';if(tbodyR)tbodyR.innerHTML='';const kpiRowEmpty=document.getElementById('fc-kpi-row'),chartHostEmpty=document.getElementById('fc-saldo-chart');if(kpiRowEmpty)kpiRowEmpty.innerHTML='';if(chartHostEmpty)chartHostEmpty.innerHTML='';return;}
 
   // Acumulado Anterior (tudo antes de 01/2026) por conta — apenas informativo, não entra no Saldo de Caixa nem no Caixa Inicial
   const acumAnt={};
@@ -1110,6 +1165,7 @@ function renderFluxo(){
     '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial do Mês</td>'+tdAcumDashAzulClaro+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
     '<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa do Mês</td>'+tdAcumDashAzulEscuro+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
   set('fc-badge',nomes.length+(nomes.length===1?' conta':' contas'));
+  renderFluxoResumoExec(colKeys,colAno,colMes,saldo,rv2,ci);
 
   // Resumo — Faturamento / Despesas (Pagamentos + Previsto) / Saldo de Caixa
   const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');
@@ -2739,6 +2795,13 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 <div class="page active" id="page-fluxo">
   <div class="sec-title">Fluxo de Caixa</div>
   <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
+
+  <div class="tbl-card" style="margin-bottom:16px;padding:20px" id="fc-kpi-card">
+    <div class="tbl-title" style="margin-bottom:2px">Visão Executiva do Caixa</div>
+    <span style="font-size:11px;color:var(--text3)">Saldo de caixa projetado mês a mês (cascata a partir do Caixa Inicial) — obra selecionada acima</span>
+    <div id="fc-kpi-row" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin:16px 0 20px"></div>
+    <div id="fc-saldo-chart" style="overflow-x:auto"></div>
+  </div>
 
   <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
     <div style="margin-right:8px">
