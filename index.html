@@ -1292,7 +1292,7 @@ function renderFluxo(){
         +'<div style="font-size:10px;color:var(--text3)">'+lbl+'</div>'
         +'<div style="background:#eee9e2;border-radius:3px;height:9px;overflow:hidden"><div style="height:100%;border-radius:3px;width:'+pct+'%;background:'+cor+'"></div></div>'
         +'<div style="text-align:right;font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;color:'+(val?cor:'var(--text3)')+'">'+(val?f2(val):'—')+'</div></div>';
-      vizRel.innerHTML=ccsRel.map(({cc,partesCC,ccEntrou,ccSaiu,ccLiq})=>{
+      const cardHtml=({cc,partesCC,ccLiq})=>{
         const maxCC=Math.max(1,...PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map(p=>Math.max(partesCC[p.nome].entrou,partesCC[p.nome].saiu)));
         const partesHtml=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map(p=>{
           const v=partesCC[p.nome],liq=v.entrou-v.saiu;
@@ -1309,7 +1309,22 @@ function renderFluxo(){
           +'<div style="font-weight:700;font-size:13px">'+cc+'</div>'
           +'<div style="font-size:12px;font-weight:700;padding:2px 9px;border-radius:10px;background:'+(ccLiq>=0?'var(--brand-light)':'var(--danger-light)')+';color:'+(ccLiq>=0?'var(--brand-dark)':'var(--danger-dark)')+'">Líquido '+(ccLiq>=0?'+':'')+f2(ccLiq)+'</div></div>'
           +partesHtml+'</div>';
-      }).join('');
+      };
+      // Layout em 2 colunas: SPE Montagnes + Ressencia à esquerda, Monter + Solucione Imoveis à direita (pedido explícito).
+      // Qualquer Centro de Custo novo que apareça depois entra na coluna com menos cartões no momento, mantendo a ordem por impacto (líquido).
+      const ORDEM_COL_A=['SPE MONTAGNES','RESSENCIA'],ORDEM_COL_B=['MONTER','SOLUCIONE IMOVEIS'];
+      const normCcNome=s=>(s||'').trim().toUpperCase();
+      const colA=[],colB=[],resto=[];
+      ccsRel.forEach(item=>{
+        const n=normCcNome(item.cc);
+        if(ORDEM_COL_A.includes(n))colA.push(item);
+        else if(ORDEM_COL_B.includes(n))colB.push(item);
+        else resto.push(item);
+      });
+      colA.sort((x,y)=>ORDEM_COL_A.indexOf(normCcNome(x.cc))-ORDEM_COL_A.indexOf(normCcNome(y.cc)));
+      colB.sort((x,y)=>ORDEM_COL_B.indexOf(normCcNome(x.cc))-ORDEM_COL_B.indexOf(normCcNome(y.cc)));
+      resto.forEach(item=>{(colA.length<=colB.length?colA:colB).push(item);});
+      vizRel.innerHTML='<div>'+colA.map(cardHtml).join('')+'</div>'+'<div>'+colB.map(cardHtml).join('')+'</div>';
     }
 
     // Acumulado por Parte — soma todas as CCs, uma linha por pessoa/empresa
@@ -2870,27 +2885,27 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
   </div>
 
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 420px" id="fc-relacionados-card">
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 100%" id="fc-relacionados-card">
     <div class="tbl-head">
       <div>
         <div class="tbl-title">Movimentações — Osmar e Relacionados</div>
         <span style="font-size:11px;color:var(--text3)">Vertical Participações, Osmar Paulo Dias Filho, Mauricio Rodrigues e lançamentos ligados a essas partes</span>
       </div>
     </div>
-    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
-      <div style="font-size:12px;min-width:340px;max-width:480px">
-        <div style="display:flex;gap:16px;margin-bottom:12px;font-size:11px;color:var(--text2)">
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:#1B6B35"></span>Aporte</span>
-          <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:#C0392B"></span>Retirada/Pgto</span>
-        </div>
-        <div id="fc-relacionados-viz"></div>
+    <div style="font-size:12px">
+      <div style="display:flex;gap:16px;margin-bottom:14px;font-size:11px;color:var(--text2)">
+        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:#1B6B35"></span>Aporte</span>
+        <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:#C0392B"></span>Retirada/Pgto</span>
       </div>
-      <div style="overflow-x:auto;font-size:12px;border-left:1px solid var(--border);padding-left:20px">
+      <div id="fc-relacionados-viz" style="display:grid;grid-template-columns:1fr 1fr;gap:0 24px"></div>
+      <div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--border)">
         <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Acumulado por Parte</div>
-        <table id="tbl-fc-relacionados-acum" style="border-collapse:collapse;min-width:280px">
-          <thead id="thead-fc-relacionados-acum"></thead>
-          <tbody id="tbody-fc-relacionados-acum"></tbody>
-        </table>
+        <div style="overflow-x:auto">
+          <table id="tbl-fc-relacionados-acum" style="border-collapse:collapse;width:100%;max-width:520px">
+            <thead id="thead-fc-relacionados-acum"></thead>
+            <tbody id="tbody-fc-relacionados-acum"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
