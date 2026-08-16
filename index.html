@@ -953,6 +953,9 @@ function renderVisaoExecutivaCaixa(colKeys,colAno,colMes,saldo,ci){
     +kpiCard('Meses com Saldo Negativo',String(mesesNegativos),mesesNegativos?'necessário plano de capital':'nenhum',mesesNegativos>0);
   const ctx=document.getElementById('fc-visao-exec-chart')?.getContext('2d');
   if(!ctx)return;
+  const wrapEl=document.getElementById('fc-visao-exec-chart-wrap');
+  const PX_POR_MES=44;
+  if(wrapEl)wrapEl.style.width=Math.max(600,colKeys.length*PX_POR_MES)+'px';
   if(CHARTS['visaoCaixa'])CHARTS['visaoCaixa'].destroy();
   CHARTS['visaoCaixa']=new Chart(ctx,{type:'bar',
     data:{labels:colKeys.map((_,i)=>MESES_ABR[colMes[i]]+'/'+String(colAno[i]).slice(2)),
@@ -962,6 +965,15 @@ function renderVisaoExecutivaCaixa(colKeys,colAno,colMes,saldo,ci){
       scales:{y:{ticks:{callback:v=>v>=1000000||v<=-1000000?(v/1000000).toFixed(1)+'M':(v/1000).toFixed(0)+'k'}},
         x:{ticks:{font:{size:10}}}}}
   });
+  // Rola até o mês atual, com um pouco de folga pra trás — visão executiva mostra o "agora" primeiro
+  const scrollEl=document.getElementById('fc-visao-exec-chart-scroll');
+  if(scrollEl){
+    const hoje=new Date();
+    const chaveHoje=hoje.getFullYear()*100+hoje.getMonth();
+    let idxHoje=colKeys.findIndex(k=>k>=chaveHoje);
+    if(idxHoje<0)idxHoje=colKeys.length-1;
+    scrollEl.scrollLeft=Math.max(0,(idxHoje-2)*PX_POR_MES);
+  }
 }
 function renderFluxo(){
   const obraSel=document.getElementById('fc-obra')?.value||'';
@@ -1270,21 +1282,21 @@ function renderFluxo(){
         +'<td style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'500')+';color:'+(opts.labelCor||'var(--text)')+'">'+(opts.indent?'<span style="padding-left:16px">':'')+label+(opts.indent?'</span>':'')+'</td>'
         +'<td class="r" style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'600')+';color:'+(opts.valCor||opts.labelCor||'var(--text)')+'">'+f2(val)+'</td></tr>';
     };
-    let rowsF='<tr><td colspan="2" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#1B6B35;text-transform:uppercase;letter-spacing:.06em;background:#f4faf5">▸ Receitas</td></tr>';
-    rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'#1B6B35',valCor:'#1B6B35'});
-    if(emprEntradaG)rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'#B35C00',valCor:'#B35C00'});
-    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{bg:'#eaf6ec',fw:'700',labelCor:'#1B6B35',valCor:'#1B6B35'});
-    rowsF+='<tr><td colspan="2" style="padding:6px 12px 3px;font-size:10px;font-weight:700;color:#943126;text-transform:uppercase;letter-spacing:.06em;background:#fdf3f2">▸ Despesas</td></tr>';
+    let rowsF='<tr><td colspan="2" style="padding:14px 4px 4px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em">Receitas</td></tr>';
+    rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400'});
+    if(emprEntradaG)rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400'});
+    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{borderTop:'1px solid var(--border)',fw:'600',pad:'8px 4px',fs:'13px',labelCor:'#1B6B35',valCor:'#1B6B35'});
+    rowsF+='<tr><td colspan="2" style="padding:16px 4px 4px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em">Despesas</td></tr>';
     ordemGrupos.forEach(k=>{
       const g=gruposResumoFin[k];
       if(!g)return;
       const valG=somaAte(g.acum,g.mensal);
       totalDespesasFin+=valG;
-      rowsF+=linhaExec(g.label,valG,{labelCor:g.cor,valCor:g.cor,fw:'500'});
+      rowsF+=linhaExec(g.label,valG,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400'});
     });
     const totalReceitasFin=entradasOperFin+entradaEmprFin;
     const saldoFin=totalReceitasFin-totalDespesasFin;
-    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{bg:'#f7f0f0',fw:'700',labelCor:'#943126',valCor:'#943126'});
+    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{borderTop:'1px solid var(--border)',fw:'600',pad:'8px 4px',fs:'13px',labelCor:'#C0392B',valCor:'#C0392B'});
     tbodyF.innerHTML=rowsF;
   }
 
@@ -1310,10 +1322,10 @@ function renderFluxo(){
       else if(r.tipo==='PAGAMENTO')alvo.saiu+=r.valor;
     });
     const ccsRel=Object.keys(porCC).sort();
-    theadRel.innerHTML='<tr style="background:#f5f5f5">'
-      +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Centro de Custo / Parte</th>'
-      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Aporte</th>'
-      +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Retirada/Pgto</th></tr>';
+    theadRel.innerHTML='<tr>'
+      +'<th style="text-align:left;padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Centro de Custo / Pessoa</th>'
+      +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Aporte</th>'
+      +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Retirada/Pgto</th></tr>';
     if(!ccsRel.length){
       tbodyRel.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
     }else{
@@ -1321,22 +1333,21 @@ function renderFluxo(){
       let rowsRel=ccsRel.map(cc=>{
         const partesCC=porCC[cc];
         let ccEntrou=0,ccSaiu=0;
-        const linhasPartes=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map((p,idx)=>{
+        const linhasPartes=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map(p=>{
           const v=partesCC[p.nome];ccEntrou+=v.entrou;ccSaiu+=v.saiu;
-          const zebra=idx%2===0?'#ffffff':'#fafafa';
-          return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:6px 12px 6px 26px;font-size:11.5px;color:var(--text3);background:'+zebra+'">'+p.nome+'</td>'
-            +'<td class="r" style="padding:6px 12px;font-size:11.5px;color:#1B6B35;background:'+zebra+'">'+f2(v.entrou)+'</td>'
-            +'<td class="r" style="padding:6px 12px;font-size:11.5px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td></tr>';
+          return '<tr><td style="padding:4px 4px 4px 16px;font-size:12px;color:var(--text3)">'+p.nome+'</td>'
+            +'<td class="r" style="padding:4px;font-size:12px;color:var(--text3)">'+f2(v.entrou)+'</td>'
+            +'<td class="r" style="padding:4px;font-size:12px;color:var(--text3)">'+f2(v.saiu)+'</td></tr>';
         }).join('');
         totEntrou+=ccEntrou;totSaiu+=ccSaiu;
-        return '<tr style="background:#f4f4f4;font-weight:700"><td style="padding:6px 12px;font-size:12px">'+cc+'</td>'
-          +'<td class="r" style="padding:6px 12px;font-size:12px;color:#1B6B35">'+f2(ccEntrou)+'</td>'
-          +'<td class="r" style="padding:6px 12px;font-size:12px;color:#C0392B">'+f2(ccSaiu)+'</td></tr>'
+        return '<tr><td style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+cc+'</td>'
+          +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+f2(ccEntrou)+'</td>'
+          +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+f2(ccSaiu)+'</td></tr>'
           +linhasPartes;
       }).join('');
-      rowsRel+='<tr style="background:#e8e8e8;font-weight:700;border-top:2px solid #999"><td style="padding:8px 12px;font-size:12px">Total</td>'
-        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35">'+f2(totEntrou)+'</td>'
-        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiu)+'</td></tr>';
+      rowsRel+='<tr style="border-top:1px solid var(--border)"><td style="padding:8px 4px;font-size:12px;font-weight:600">Total</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#1B6B35">'+f2(totEntrou)+'</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totSaiu)+'</td></tr>';
       tbodyRel.innerHTML=rowsRel;
     }
 
@@ -1350,21 +1361,20 @@ function renderFluxo(){
           if(partesCC[p.nome]){acumPorParte[p.nome].entrou+=partesCC[p.nome].entrou;acumPorParte[p.nome].saiu+=partesCC[p.nome].saiu;}
         });
       });
-      theadAcum.innerHTML='<tr style="background:#f5f5f5">'
-        +'<th style="text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em">Parte</th>'
-        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#1B6B35;text-transform:uppercase;letter-spacing:.05em">Total Aporte</th>'
-        +'<th class="r" style="padding:8px 12px;font-size:11px;font-weight:600;color:#C0392B;text-transform:uppercase;letter-spacing:.05em">Total Retirada/Pgto</th></tr>';
+      theadAcum.innerHTML='<tr>'
+        +'<th style="text-align:left;padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Parte</th>'
+        +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Total Aporte</th>'
+        +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Total Retirada</th></tr>';
       let totEntrouG=0,totSaiuG=0;
-      let rowsAcum=PARTES_RELACIONADAS.map((p,idx)=>{
+      let rowsAcum=PARTES_RELACIONADAS.map(p=>{
         const v=acumPorParte[p.nome];totEntrouG+=v.entrou;totSaiuG+=v.saiu;
-        const zebra=idx%2===0?'#ffffff':'#fafafa';
-        return '<tr style="border-bottom:1px solid var(--border)"><td style="padding:7px 12px;font-size:12px;background:'+zebra+'">'+p.nome+'</td>'
-          +'<td class="r" style="padding:7px 12px;font-size:12px;color:#1B6B35;background:'+zebra+'">'+f2(v.entrou)+'</td>'
-          +'<td class="r" style="padding:7px 12px;font-size:12px;color:#C0392B;background:'+zebra+'">'+f2(v.saiu)+'</td></tr>';
+        return '<tr><td style="padding:6px 4px;font-size:12px">'+p.nome+'</td>'
+          +'<td class="r" style="padding:6px 4px;font-size:12px">'+f2(v.entrou)+'</td>'
+          +'<td class="r" style="padding:6px 4px;font-size:12px">'+f2(v.saiu)+'</td></tr>';
       }).join('');
-      rowsAcum+='<tr style="background:#e8e8e8;font-weight:700;border-top:2px solid #999"><td style="padding:8px 12px;font-size:12px">Total</td>'
-        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#1B6B35">'+f2(totEntrouG)+'</td>'
-        +'<td class="r" style="padding:8px 12px;font-size:12px;color:#C0392B">'+f2(totSaiuG)+'</td></tr>';
+      rowsAcum+='<tr style="border-top:1px solid var(--border)"><td style="padding:8px 4px;font-size:12px;font-weight:600">Total</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#1B6B35">'+f2(totEntrouG)+'</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totSaiuG)+'</td></tr>';
       tbodyAcum.innerHTML=rowsAcum;
     }
   }
@@ -2918,7 +2928,9 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <div class="tbl-title" style="margin-bottom:2px">Visão Executiva do Caixa</div>
     <span style="font-size:11px;color:var(--text3)">Saldo de caixa projetado mês a mês (cascata a partir do Caixa Inicial) — obra selecionada acima</span>
     <div id="fc-visao-exec-kpis" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px"></div>
-    <div style="height:180px;margin-top:16px"><canvas id="fc-visao-exec-chart"></canvas></div>
+    <div style="overflow-x:auto;margin-top:16px" id="fc-visao-exec-chart-scroll">
+      <div style="height:180px" id="fc-visao-exec-chart-wrap"><canvas id="fc-visao-exec-chart"></canvas></div>
+    </div>
     <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--text3)">
       <span><span style="display:inline-block;width:9px;height:9px;background:#1B6B35;margin-right:5px;vertical-align:middle"></span>Saldo positivo</span>
       <span><span style="display:inline-block;width:9px;height:9px;background:#C0392B;margin-right:5px;vertical-align:middle"></span>Saldo negativo — risco de caixa</span>
@@ -2942,7 +2954,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   </div>
 
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:0 1 400px" id="fc-resumo-fin-card">
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);width:380px;flex:0 0 380px" id="fc-resumo-fin-card">
     <div class="tbl-head" style="justify-content:flex-start">
       <div>
         <div class="tbl-title">Resumo Financeiro</div>
@@ -2957,31 +2969,31 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
         <select id="fc-resumo-fin-ate" class="form-input" style="font-size:12px;padding:5px 10px;width:auto" onchange="renderFluxo()"></select>
       </div>
     </div>
-    <div style="overflow-x:auto;font-size:12px">
-      <table id="tbl-fc-resumo-fin" style="width:100%;border-collapse:collapse;max-width:360px">
+    <div style="padding:4px 16px 16px;font-size:12px">
+      <table id="tbl-fc-resumo-fin" style="width:100%;border-collapse:collapse">
         <thead id="thead-fc-resumo-fin"></thead>
         <tbody id="tbody-fc-resumo-fin"></tbody>
       </table>
     </div>
   </div>
 
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 560px" id="fc-relacionados-card">
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 400px;min-width:0" id="fc-relacionados-card">
     <div class="tbl-head">
       <div>
         <div class="tbl-title">Movimentações — Osmar e Relacionados</div>
         <span style="font-size:11px;color:var(--text3)">Vertical Participações, Osmar Paulo Dias Filho, Mauricio Rodrigues e lançamentos ligados a essas partes</span>
       </div>
     </div>
-    <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
-      <div style="overflow-x:auto;font-size:12px">
-        <table id="tbl-fc-relacionados" style="width:100%;border-collapse:collapse;max-width:420px">
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;padding:4px 16px 16px">
+      <div style="overflow-x:auto;font-size:12px;flex:1 1 320px;min-width:280px">
+        <table id="tbl-fc-relacionados" style="width:100%;border-collapse:collapse">
           <thead id="thead-fc-relacionados"></thead>
           <tbody id="tbody-fc-relacionados"></tbody>
         </table>
       </div>
-      <div style="overflow-x:auto;font-size:12px;border-left:1px solid var(--border);padding-left:20px">
-        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Acumulado por Parte</div>
-        <table id="tbl-fc-relacionados-acum" style="border-collapse:collapse;min-width:280px">
+      <div style="overflow-x:auto;font-size:12px;border-left:1px solid var(--border);padding-left:24px;flex:0 0 auto">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Acumulado por Parte</div>
+        <table id="tbl-fc-relacionados-acum" style="border-collapse:collapse;min-width:260px">
           <thead id="thead-fc-relacionados-acum"></thead>
           <tbody id="tbody-fc-relacionados-acum"></tbody>
         </table>
