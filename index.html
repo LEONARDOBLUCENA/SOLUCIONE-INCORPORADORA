@@ -930,6 +930,39 @@ function renderCharts(csv){
   destroyChart('ch-cc-fat');if(fat.length){const ccs=[...new Set(fat.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc-fat']=new Chart(document.getElementById('ch-cc-fat'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Recebido',data:ccs.map(c=>fat.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
   destroyChart('ch-resultado-caixa');if(csv.length){const rd=lbl.map(l=>{const f=fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),d=dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),p=pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);return(f-d)-p;});CHARTS['ch-resultado-caixa']=new Chart(document.getElementById('ch-resultado-caixa'),{type:'bar',data:{labels:ln,datasets:[{label:'Resultado',data:rd,backgroundColor:rd.map(v=>v>=0?'#1A7A3C':'#C0392B'),borderRadius:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}});}
 }
+// ---------- Visão Executiva do Caixa — reaproveita o saldo mensal já calculado no renderFluxo ----------
+function renderVisaoExecutivaCaixa(colKeys,colAno,colMes,saldo,ci){
+  const kpisEl=document.getElementById('fc-visao-exec-kpis');
+  if(!kpisEl)return;
+  if(!colKeys.length){kpisEl.innerHTML='<div style="grid-column:1/-1;color:var(--text3);font-size:12px">Sem dados suficientes pra projetar.</div>';const cv=document.getElementById('fc-visao-exec-chart');if(cv&&CHARTS['visaoCaixa']){CHARTS['visaoCaixa'].destroy();CHARTS['visaoCaixa']=null;}return;}
+  const saldoFinal=saldo[saldo.length-1];
+  const geracao=saldoFinal-ci;
+  let idxPior=0;for(let i=1;i<saldo.length;i++)if(saldo[i]<saldo[idxPior])idxPior=i;
+  const mesesNegativos=saldo.filter(v=>v<0).length;
+  const fmtM=v=>{const s=v<0?'-':'';const a=Math.abs(v);return s+'R$ '+(a>=1000000?(a/1000000).toFixed(1)+'M':a>=1000?(a/1000).toFixed(0)+' mil':a.toFixed(0));};
+  const kpiCard=(label,valor,sub,ruim)=>'<div style="background:'+(ruim?'#FDECEA':'#fff')+';border:1px solid '+(ruim?'#F5C6C0':'var(--border)')+';border-radius:6px;padding:12px 14px">'
+    +'<div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px">'+label+'</div>'
+    +'<div style="font-family:\'Playfair Display\',serif;font-size:18px;font-weight:700;color:'+(ruim?'#C0392B':'var(--text)')+'">'+valor+'</div>'
+    +(sub?'<div style="font-size:10px;color:'+(ruim?'#C0392B':'var(--text3)')+';margin-top:3px">'+sub+'</div>':'')
+  +'</div>';
+  kpisEl.innerHTML=
+    kpiCard('Saldo Inicial do Período',fmtM(ci),null,ci<0)
+    +kpiCard('Saldo Final Projetado',fmtM(saldoFinal),saldoFinal<0?'caixa negativo':null,saldoFinal<0)
+    +kpiCard('Geração de Caixa no Período',(geracao>=0?'+':'')+fmtM(geracao),geracao<0?'negativa':null,geracao<0)
+    +kpiCard('Mês de Maior Pressão',MESES_ABR[colMes[idxPior]]+'/'+colAno[idxPior],'saldo projetado '+fmtM(saldo[idxPior]),saldo[idxPior]<0)
+    +kpiCard('Meses com Saldo Negativo',String(mesesNegativos),mesesNegativos?'necessário plano de capital':'nenhum',mesesNegativos>0);
+  const ctx=document.getElementById('fc-visao-exec-chart')?.getContext('2d');
+  if(!ctx)return;
+  if(CHARTS['visaoCaixa'])CHARTS['visaoCaixa'].destroy();
+  CHARTS['visaoCaixa']=new Chart(ctx,{type:'bar',
+    data:{labels:colKeys.map((_,i)=>MESES_ABR[colMes[i]]+'/'+String(colAno[i]).slice(2)),
+      datasets:[{data:saldo,backgroundColor:saldo.map(v=>v>=0?'#1B6B35':'#C0392B'),borderRadius:2}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>fmtM(c.parsed.y)}}},
+      scales:{y:{ticks:{callback:v=>v>=1000000||v<=-1000000?(v/1000000).toFixed(1)+'M':(v/1000).toFixed(0)+'k'}},
+        x:{ticks:{font:{size:10}}}}}
+  });
+}
 function renderFluxo(){
   const obraSel=document.getElementById('fc-obra')?.value||'';
   const thead=document.getElementById('thead-fluxo'),tbody=document.getElementById('tbody-fluxo'),tfoot=document.getElementById('tfoot-fluxo');
@@ -1170,6 +1203,7 @@ function renderFluxo(){
   // Caixa Inicial + Saldo acumulado (descontando previsto)
   const ci=obraSel?parseFloat(DATA.caixaInicial[obraSel]||0)||0:obras.reduce((s,o)=>s+(parseFloat(DATA.caixaInicial[o]||0)||0),0);
   const saldo=[];let acc=ci;rv2.forEach((v,i)=>{acc+=v;saldo.push(acc);});
+  renderVisaoExecutivaCaixa(colKeys,colAno,colMes,saldo,ci);
   const ciMeses=rv2.map((_,i)=>i===0?ci:saldo[i-1]);
   const tdAcumDashRed='<td class="r" style="padding:4px 6px;font-size:10px;background:#922B21;color:rgba(255,255,255,.5)">—</td>';
   const tdAcumDashCinza='<td class="r" style="padding:4px 6px;font-size:10px;background:#f0f0f0;color:#bbb">—</td>';
@@ -2213,6 +2247,44 @@ function filtraDash(dados, prefix){
     return true;
   });
 }
+// ---------- Comparação com mês anterior (KPIs Entradas/Saídas do Dashboard) ----------
+// Só faz sentido comparar quando o filtro está travado num único ano+mês — com múltiplos
+// meses selecionados (ou "todos"), não existe um "mês anterior" único pra comparar.
+function totalRealizadoMes(dadosBase, prefix, ano, mes){
+  var ccs=getMultiDrop('wrap-'+prefix+'-cc');
+  var contas=getMultiDrop('wrap-'+prefix+'-conta');
+  var nomes=getSearchDrop('list-'+prefix+'-nome');
+  var tot=0;
+  dadosBase.forEach(function(r){
+    if(r.ano!==ano||r.mes!==mes)return;
+    if(ccs.size&&!Array.from(ccs).some(function(c){return ccMatch(r.cc||'',c);}))return;
+    if(contas.size&&!contas.has(r.conta||''))return;
+    if(nomes.size&&!nomes.has(extrairNome(r.complemento)))return;
+    var comp=(r.complemento||'').toLowerCase();
+    if(comp.includes('a pagar')||comp.includes('a receber'))return; // só realizado, igual ao KPI principal
+    tot+=r.valor;
+  });
+  return tot;
+}
+function renderComparacaoMes(elId, dadosBase, prefix, totAtual, corSobeEBom){
+  var el=document.getElementById(elId);
+  if(!el)return;
+  var anos=getMultiDrop('wrap-'+prefix+'-ano');
+  var meses=getMultiDrop('wrap-'+prefix+'-mes');
+  if(anos.size!==1||meses.size!==1){el.textContent='';return;} // sem período único selecionado — não compara
+  var ano=parseInt([...anos][0],10), mes=parseInt([...meses][0],10);
+  var anoAnt=mes===0?ano-1:ano, mesAnt=mes===0?11:mes-1;
+  var totAnt=totalRealizadoMes(dadosBase, prefix, anoAnt, mesAnt);
+  if(!totAnt){el.textContent='';return;} // sem mês anterior pra comparar, não mostra nada enganoso
+  var MESES_ABR2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var variacao=(totAtual-totAnt)/Math.abs(totAnt)*100;
+  var subiu=variacao>=0;
+  var bom=subiu===corSobeEBom;
+  var cor=bom?'#1B6B35':'#C0392B';
+  var seta=subiu?'▲':'▼';
+  el.style.color=cor;
+  el.textContent=seta+' '+Math.abs(variacao).toFixed(1)+'% vs. '+MESES_ABR2[mesAnt]+'/'+anoAnt;
+}
 function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoFat){
   var fmtV=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
   // Extrair nome do cliente/fornecedor do complemento
@@ -2265,6 +2337,7 @@ function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoF
   var kpiTotId=kpiRealId.replace('-rec','-tot').replace('-pag','-tot');
   var elT=document.getElementById(kpiTotId);if(elT)elT.textContent=fmtV(totR+totF);
   var badge=document.getElementById(badgeId);if(badge)badge.textContent=linhas.length+' itens';
+  return {totR:totR,totF:totF};
 }
 function extrairNome(comp){
   if(!comp)return '(sem complemento)';
@@ -2402,7 +2475,8 @@ function renderDashFat(){
   populateDashFilters();
   var csv=DATA.csv||[];
   var fat=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df');
-  renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-prov',fat,true);
+  var totaisFat=renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-prov',fat,true);
+  renderComparacaoMes('df-kpi-rec-cmp', csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df', totaisFat.totR, true);
   atualizarKpiInadimplencia('receber','df-kpi-inad');
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesFat=Array.from({length:12},function(){return{rec:0,arec:0};});
@@ -2430,7 +2504,8 @@ function renderDashDesp(){
   populateDashFilters();
   var csv=DATA.csv||[];
   var pag=filtraDash(csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd');
-  renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-prov',pag,false);
+  var totaisPag=renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-prov',pag,false);
+  renderComparacaoMes('dd-kpi-pag-cmp', csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd', totaisPag.totR, false);
   atualizarKpiInadimplencia('pagar','dd-kpi-inad');
   var MESES_PT2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesDesp=Array.from({length:12},function(){return{pag:0,apag:0};});
@@ -2839,6 +2914,17 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   <div class="sec-title">Fluxo de Caixa</div>
   <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
 
+  <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px" id="fc-visao-exec-card">
+    <div class="tbl-title" style="margin-bottom:2px">Visão Executiva do Caixa</div>
+    <span style="font-size:11px;color:var(--text3)">Saldo de caixa projetado mês a mês (cascata a partir do Caixa Inicial) — obra selecionada acima</span>
+    <div id="fc-visao-exec-kpis" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px"></div>
+    <div style="height:180px;margin-top:16px"><canvas id="fc-visao-exec-chart"></canvas></div>
+    <div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--text3)">
+      <span><span style="display:inline-block;width:9px;height:9px;background:#1B6B35;margin-right:5px;vertical-align:middle"></span>Saldo positivo</span>
+      <span><span style="display:inline-block;width:9px;height:9px;background:#C0392B;margin-right:5px;vertical-align:middle"></span>Saldo negativo — risco de caixa</span>
+    </div>
+  </div>
+
   <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
     <div style="margin-right:8px">
       <div class="tbl-title" style="margin-bottom:2px">Projeção</div>
@@ -2856,7 +2942,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   </div>
 
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 420px" id="fc-resumo-fin-card">
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:0 1 400px" id="fc-resumo-fin-card">
     <div class="tbl-head" style="justify-content:flex-start">
       <div>
         <div class="tbl-title">Resumo Financeiro</div>
@@ -2879,7 +2965,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
   </div>
 
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 420px" id="fc-relacionados-card">
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 560px" id="fc-relacionados-card">
     <div class="tbl-head">
       <div>
         <div class="tbl-title">Movimentações — Osmar e Relacionados</div>
@@ -3791,6 +3877,7 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid #1B6B35">
       <div class="kpi-label">Entradas</div>
       <div class="kpi-val" id="df-kpi-rec" style="color:#1B6B35">—</div>
+      <div id="df-kpi-rec-cmp" style="font-size:11px;font-weight:600;margin-top:4px"></div>
     </div>
     <div class="kpi-card" style="border-top:3px solid rgba(27,107,53,0.4)">
       <div class="kpi-label">A Receber</div>
@@ -3885,6 +3972,7 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid #C0392B">
       <div class="kpi-label">Saídas</div>
       <div class="kpi-val" id="dd-kpi-pag" style="color:#C0392B">—</div>
+      <div id="dd-kpi-pag-cmp" style="font-size:11px;font-weight:600;margin-top:4px"></div>
     </div>
     <div class="kpi-card" style="border-top:3px solid rgba(192,57,43,0.4)">
       <div class="kpi-label">A Pagar</div>
