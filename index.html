@@ -953,14 +953,23 @@ function renderVisaoExecutivaCaixa(colKeys,colAno,colMes,saldo,ci){
     +kpiCard('Meses com Saldo Negativo',String(mesesNegativos),mesesNegativos?'necessário plano de capital':'nenhum',mesesNegativos>0);
   const ctx=document.getElementById('fc-visao-exec-chart')?.getContext('2d');
   if(!ctx)return;
+  const canvasEl=document.getElementById('fc-visao-exec-chart');
   const wrapEl=document.getElementById('fc-visao-exec-chart-wrap');
-  const PX_POR_MES=44;
-  if(wrapEl)wrapEl.style.width=Math.max(600,colKeys.length*PX_POR_MES)+'px';
+  const PX_POR_MES=70;
+  const larguraTotal=Math.max(600,colKeys.length*PX_POR_MES);
+  // Canvas com largura fixa em pixel real (não CSS responsivo) — garante que ele realmente
+  // fique mais largo que o card e force a rolagem, sem depender de ResizeObserver reagir a
+  // tempo (isso tava deixando o gráfico "grudado" na largura do card, sem rolar de verdade).
+  canvasEl.width=larguraTotal;
+  canvasEl.height=180;
+  canvasEl.style.width=larguraTotal+'px';
+  canvasEl.style.height='180px';
+  if(wrapEl)wrapEl.style.width=larguraTotal+'px';
   if(CHARTS['visaoCaixa'])CHARTS['visaoCaixa'].destroy();
   CHARTS['visaoCaixa']=new Chart(ctx,{type:'bar',
     data:{labels:colKeys.map((_,i)=>MESES_ABR[colMes[i]]+'/'+String(colAno[i]).slice(2)),
       datasets:[{data:saldo,backgroundColor:saldo.map(v=>v>=0?'#1B6B35':'#C0392B'),borderRadius:2}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+    options:{responsive:false,maintainAspectRatio:false,plugins:{legend:{display:false},
       tooltip:{callbacks:{label:c=>fmtM(c.parsed.y)}}},
       scales:{y:{ticks:{callback:v=>v>=1000000||v<=-1000000?(v/1000000).toFixed(1)+'M':(v/1000).toFixed(0)+'k'}},
         x:{ticks:{font:{size:10}}}}}
@@ -2953,8 +2962,8 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <button onclick="abrirProjecaoFluxo()" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 18px;cursor:pointer;border-radius:6px;font-weight:600">Buscar</button>
   </div>
 
-  <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);width:380px;flex:0 0 380px" id="fc-resumo-fin-card">
+  <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:stretch">
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);min-width:0" id="fc-resumo-fin-card">
     <div class="tbl-head" style="justify-content:flex-start">
       <div>
         <div class="tbl-title">Resumo Financeiro</div>
@@ -2977,7 +2986,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
   </div>
 
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);flex:1 1 400px;min-width:0" id="fc-relacionados-card">
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);min-width:0" id="fc-relacionados-card">
     <div class="tbl-head">
       <div>
         <div class="tbl-title">Movimentações — Osmar e Relacionados</div>
