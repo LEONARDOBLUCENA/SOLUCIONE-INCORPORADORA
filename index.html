@@ -159,7 +159,7 @@ function showMsgModal(msg){
     el=document.createElement('div');
     el.id='wamsg-modal';
     el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-    el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:560px;width:90%;max-height:80vh;display:flex;flex-direction:column;gap:12px"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:15px">Mensagem WhatsApp</span><button onclick="document.getElementById(\'wamsg-modal\').style.display=\'none\'" style="background:none;border:none;font-size:18px;cursor:pointer">x</button></div><textarea id="wamsg-txt" readonly style="flex:1;min-height:320px;border:1px solid #ddd;padding:12px;font-family:monospace;font-size:12px;resize:vertical;outline:none;background:#f9f9f9"></textarea><button id="wamsg-copy" onclick="var t=document.getElementById(\'wamsg-txt\');t.select();document.execCommand(\'copy\');document.getElementById(\'wamsg-copy\').textContent=\'Copiado!\'" style="background:#25D366;color:#fff;border:none;padding:10px;font-size:14px;cursor:pointer;border-radius:6px;font-family:DM Sans,sans-serif">Copiar mensagem</button></div>';
+    el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:12px;font-family:\'DM Sans\',sans-serif"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Mensagem WhatsApp</span><button onclick="document.getElementById(\'wamsg-modal\').style.display=\'none\'" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div><textarea id="wamsg-txt" readonly style="flex:1;min-height:320px;border:1px solid #ddd;padding:12px;font-family:monospace;font-size:12px;resize:vertical;outline:none;background:#f9f9f9"></textarea><button id="wamsg-copy" onclick="var t=document.getElementById(\'wamsg-txt\');t.select();document.execCommand(\'copy\');document.getElementById(\'wamsg-copy\').textContent=\'Copiado!\'" style="background:#25D366;color:#fff;border:none;padding:10px;font-size:14px;cursor:pointer;border-radius:6px;font-family:DM Sans,sans-serif">Copiar mensagem</button></div>';
     document.body.appendChild(el);
   }
   document.getElementById('wamsg-txt').value=msg;
@@ -574,6 +574,14 @@ function migrarFontesAntigas(){
     else if(c.startsWith('recebimento')){r.fonte='contas-recebidas';mudou=true;}
     else if(c.startsWith('a pagar')){r.fonte='contas-a-pagar';mudou=true;}
     else if(c.startsWith('pagamento')){r.fonte='contas-pagas';mudou=true;}
+    // Reserva: complemento com texto diferente do padrão (ex: "Pag. tarifa bancária...",
+    // "Pagto C.M. ...", "Desconto obtido...") não batia em nenhum prefixo acima e ficava
+    // sem fonte pra sempre — invisível na aba Contas Pagas, mas ainda somado no Fluxo de
+    // Caixa (que não filtra por fonte). Isso causava divergência entre os dois. Usa "tipo",
+    // mais confiável que o texto. Só PAGAMENTO entra aqui — DESCONTO ("Desconto concedido")
+    // é do lado da receita e o Fluxo já trata isso certo sem precisar de fonte.
+    else if(r.tipo==='PAGAMENTO'){r.fonte='contas-pagas';mudou=true;}
+    else if(r.tipo==='FATURAMENTO'){r.fonte='contas-recebidas';mudou=true;}
   });
   return mudou;
 }
@@ -2347,7 +2355,7 @@ function abrirProjecaoFluxo(){
   var fmtD=function(d){return d.toLocaleDateString('pt-BR');};
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:420px;width:92%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:440px;width:90%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
     +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Projeção de Fluxo de Caixa</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
     +'<div style="font-size:13px;color:var(--text3)">'+fmtD(de)+' até '+fmtD(ate)+(obraSel?' — '+obraSel:' — Todas as obras')+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
@@ -2379,7 +2387,7 @@ function abrirDetalheProjecao(tipo){
       +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.conta||'')+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmt(r.valor)+'</td></tr>';
   }).join(''):'<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nenhum lançamento</td></tr>';
-  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:700px;width:94%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
     +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+titulo+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center">'
     +'<button onclick="abrirProjecaoFluxo()" style="background:none;border:1px solid var(--border);padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;color:var(--text3)">← Voltar</button>'
@@ -2609,6 +2617,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 .nav-logo-text{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;color:#fff;letter-spacing:.02em;line-height:1.25}
 .nav-logo-text span{color:var(--brand)}
 .nav-tabs{display:flex;flex-direction:column;padding:10px 0;overflow-y:auto}
+.nav-section-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.09em;color:rgba(255,255,255,.35);padding:16px 24px 6px;}
+.nav-section-label:first-child{padding-top:6px}
 .nav-tab{background:none;border:none;color:rgba(255,255,255,.55);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;padding:13px 24px;cursor:pointer;text-align:left;border-left:3px solid transparent;transition:all .2s;white-space:normal;line-height:1.35}
 .nav-tab:hover{color:rgba(255,255,255,.9);background:rgba(255,255,255,.05)}
 .nav-tab.active{color:#fff;border-left-color:var(--brand);background:rgba(255,255,255,.07)}
@@ -2799,16 +2809,19 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <div class="nav-logo-text">Monter Adm | <span>BI</span></div>
   </div>
   <div class="nav-tabs">
+    <div class="nav-section-label">Visão Geral</div>
     <button class="nav-tab" data-tab="dash" onclick="goTab(this);renderDash()">Dashboard</button>
     <button class="nav-tab active" data-tab="fluxo" onclick="goTab(this)">Fluxo de Caixa</button>
-    <button class="nav-tab" data-tab="dtlh" onclick="goTab(this);updateDtlhFilters();renderDtlh()">Dashboard Resumo Exec.</button>
-    <button class="nav-tab" data-tab="orcamento" onclick="goTab(this);renderOrcamentoTable()">Orç. Engenharia</button>
-    <button class="nav-tab" data-tab="prev" onclick="goTab(this)">Previsão por Período</button>
-    <button class="nav-tab" data-tab="estoque" onclick="goTab(this);renderEstoqueTable()">Estoque</button>
+    <button class="nav-tab" data-tab="dtlh" onclick="goTab(this);updateDtlhFilters();renderDtlh()">Resumo Executivo</button>
+    <div class="nav-section-label">Contas</div>
     <button class="nav-tab" data-tab="contaspagar" onclick="goTab(this);renderContasAPagar()">Contas a Pagar</button>
     <button class="nav-tab" data-tab="contaspagas" onclick="goTab(this);renderContasPagas()">Contas Pagas</button>
-    <button class="nav-tab" data-tab="contasrecebidas" onclick="goTab(this);renderContasRecebidas()">Contas Recebidas</button>
     <button class="nav-tab" data-tab="contasareceber" onclick="goTab(this);renderContasAReceber()">Contas a Receber</button>
+    <button class="nav-tab" data-tab="contasrecebidas" onclick="goTab(this);renderContasRecebidas()">Contas Recebidas</button>
+    <div class="nav-section-label">Obra</div>
+    <button class="nav-tab" data-tab="orcamento" onclick="goTab(this);renderOrcamentoTable()">Orç. Engenharia</button>
+    <button class="nav-tab" data-tab="estoque" onclick="goTab(this);renderEstoqueTable()">Estoque</button>
+    <button class="nav-tab" data-tab="prev" onclick="goTab(this)">Previsão por Período</button>
   </div>
 </aside>
 <div class="main-content">
