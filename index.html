@@ -2567,21 +2567,47 @@ function abrirDetalheFluxo(opts){
   });
   var soma=linhas.reduce(function(s,r){return s+r.valor;},0);
   var fmtD=function(d){if(!d)return '';var dt=d instanceof Date?d:new Date(d);return dt.toLocaleDateString('pt-BR');};
+  window._detalheFluxoLinhas=linhas;
+  window._detalheFluxoTitulo=opts.titulo||'Detalhe';
+  var anosDisp=[...new Set(linhas.map(function(r){return r.ano;}).filter(function(v){return v!=null;}))].sort();
+  var mesesDisp=[...new Set(linhas.map(function(r){return r.mes;}).filter(function(v){return v!=null;}))].sort(function(a,b){return a-b;});
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  var linhasHtml=linhas.length?linhas.map(function(r){
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+(opts.titulo||'Detalhe')+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<span style="font-size:11px;font-weight:600;color:var(--text3)">Filtrar</span>'
+    +'<select id="detfluxo-ano" onchange="filtrarDetalheFluxo()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:4px"><option value="">Todos os anos</option>'+anosDisp.map(function(a){return '<option value="'+a+'">'+a+'</option>';}).join('')+'</select>'
+    +'<select id="detfluxo-mes" onchange="filtrarDetalheFluxo()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:4px"><option value="">Todos os meses</option>'+mesesDisp.map(function(m){return '<option value="'+m+'">'+MESES_ABR[m]+'</option>';}).join('')+'</select>'
+    +'</div>'
+    +'<div id="detfluxo-resumo" style="font-size:13px;color:var(--text3)"></div>'
+    +'<div style="overflow-y:auto;max-height:50vh;border:1px solid var(--border);border-radius:6px">'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Data</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Complemento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Obra</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Conta</th><th class="r" style="padding:6px 10px;font-size:11px;color:var(--text3)">Valor</th></tr></thead><tbody id="detfluxo-tbody"></tbody></table>'
+    +'</div></div>';
+  filtrarDetalheFluxo();
+}
+function filtrarDetalheFluxo(){
+  var todas=window._detalheFluxoLinhas||[];
+  var anoSel=document.getElementById('detfluxo-ano')?document.getElementById('detfluxo-ano').value:'';
+  var mesSel=document.getElementById('detfluxo-mes')?document.getElementById('detfluxo-mes').value:'';
+  var linhas=todas.filter(function(r){
+    if(anoSel&&String(r.ano)!==anoSel)return false;
+    if(mesSel&&String(r.mes)!==mesSel)return false;
+    return true;
+  });
+  var soma=linhas.reduce(function(s,r){return s+r.valor;},0);
+  var fmtD=function(d){if(!d)return '';var dt=d instanceof Date?d:new Date(d);return dt.toLocaleDateString('pt-BR');};
+  var resumoEl=document.getElementById('detfluxo-resumo');
+  if(resumoEl)resumoEl.textContent=linhas.length+' lançamento(s) — total '+fmt(soma);
+  var tbodyEl=document.getElementById('detfluxo-tbody');
+  if(!tbodyEl)return;
+  tbodyEl.innerHTML=linhas.length?linhas.map(function(r){
     return '<tr><td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmtD(r.data)+'</td>'
       +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.complemento||'')+'</td>'
       +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.cc||'')+'</td>'
       +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.conta||'')+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmt(r.valor)+'</td></tr>';
   }).join(''):'<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nenhum lançamento</td></tr>';
-  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+(opts.titulo||'Detalhe')+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
-    +'<div style="font-size:13px;color:var(--text3)">'+linhas.length+' lançamento(s) — total '+fmt(soma)+'</div>'
-    +'<div style="overflow-y:auto;max-height:55vh;border:1px solid var(--border);border-radius:6px">'
-    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Data</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Complemento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Obra</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Conta</th><th class="r" style="padding:6px 10px;font-size:11px;color:var(--text3)">Valor</th></tr></thead><tbody>'+linhasHtml+'</tbody></table>'
-    +'</div></div>';
 }
 var EMPR_PAG_COD_G=['20307','1.05.03'];
 
