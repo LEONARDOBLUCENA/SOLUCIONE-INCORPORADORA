@@ -2441,7 +2441,25 @@ function abrirProjecaoFluxo(){
   var entradas=linhas.filter(function(r){return r.tipo==='FATURAMENTO';}).reduce(function(s,r){return s+r.valor;},0)
     -linhas.filter(function(r){return r.tipo==='DESCONTO';}).reduce(function(s,r){return s+r.valor;},0);
   var saidas=linhas.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
-  var saldo=entradas-saidas;
+  // "Previsto Engenharia" — só aparece quando o filtro de Obra é especificamente SPE Montagnes.
+  // Soma o mesmo DATA.previsto[obra][mês] que já alimenta a linha "Previsto" do grupo Custo de
+  // Obra na tabela grande do Fluxo de Caixa — não é um cálculo novo, é o mesmo valor.
+  var mostrarPrevistoEng=obraSel&&normCC(obraSel)===normCC('SPE MONTAGNES');
+  var previstoEng=0;
+  if(mostrarPrevistoEng){
+    Object.keys(DATA.previsto||{}).forEach(function(obraKey){
+      if(!ccMatch(obraKey,obraSel))return;
+      Object.entries(DATA.previsto[obraKey]).forEach(function(kv){
+        var k=parseInt(kv[0]),v=parseFloat(kv[1])||0;
+        if(!v)return;
+        var anoK=Math.floor(k/100),mesK=k%100;
+        var inicioMes=new Date(anoK,mesK,1);
+        var fimMes=new Date(anoK,mesK+1,0,23,59,59);
+        if(fimMes>=de&&inicioMes<=ate)previstoEng+=v;
+      });
+    });
+  }
+  var saldo=entradas-saidas-previstoEng;
   var fmtD=function(d){return d.toLocaleDateString('pt-BR');};
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
@@ -2451,6 +2469,7 @@ function abrirProjecaoFluxo(){
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<div onclick="abrirDetalheProjecao(\'entradas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#eaf6ec;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#1B6B35">Entradas</span><span style="font-size:15px;font-weight:700;color:#1B6B35">'+fmt(entradas)+'</span></div>'
     +'<div onclick="abrirDetalheProjecao(\'saidas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fbeaea;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#C0392B">Saídas</span><span style="font-size:15px;font-weight:700;color:#C0392B">'+fmt(saidas)+'</span></div>'
+    +(mostrarPrevistoEng?'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fdf3f2;border-radius:6px;border-left:3px solid #C0392B" title="Vem da linha Previsto do grupo Custo de Obra"><span style="font-size:12px;font-weight:600;color:#943126">Previsto Engenharia</span><span style="font-size:14px;font-weight:700;color:#943126">'+fmt(previstoEng)+'</span></div>':'')
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:'+(saldo>=0?'#eaf6ec':'#fbeaea')+';border-radius:6px;border-top:2px solid '+(saldo>=0?'#1B6B35':'#C0392B')+'"><span style="font-size:14px;font-weight:700">Saldo</span><span style="font-size:18px;font-weight:800;color:'+(saldo>=0?'#1B6B35':'#C0392B')+'">'+fmt(saldo)+'</span></div>'
     +'</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no período. Meses já passados mostram só o que foi realizado; mês atual e futuros incluem provisão (a pagar/a receber).</div>'
