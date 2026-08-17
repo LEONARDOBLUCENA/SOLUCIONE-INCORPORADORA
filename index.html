@@ -2297,44 +2297,6 @@ function filtraDash(dados, prefix){
     return true;
   });
 }
-// ---------- Comparação com mês anterior (KPIs Entradas/Saídas do Dashboard) ----------
-// Só faz sentido comparar quando o filtro está travado num único ano+mês — com múltiplos
-// meses selecionados (ou "todos"), não existe um "mês anterior" único pra comparar.
-function totalRealizadoMes(dadosBase, prefix, ano, mes){
-  var ccs=getMultiDrop('wrap-'+prefix+'-cc');
-  var contas=getMultiDrop('wrap-'+prefix+'-conta');
-  var nomes=getSearchDrop('list-'+prefix+'-nome');
-  var tot=0;
-  dadosBase.forEach(function(r){
-    if(r.ano!==ano||r.mes!==mes)return;
-    if(ccs.size&&!Array.from(ccs).some(function(c){return ccMatch(r.cc||'',c);}))return;
-    if(contas.size&&!contas.has(r.conta||''))return;
-    if(nomes.size&&!nomes.has(extrairNome(r.complemento)))return;
-    var comp=(r.complemento||'').toLowerCase();
-    if(comp.includes('a pagar')||comp.includes('a receber'))return; // só realizado, igual ao KPI principal
-    tot+=r.valor;
-  });
-  return tot;
-}
-function renderComparacaoMes(elId, dadosBase, prefix, totAtual, corSobeEBom){
-  var el=document.getElementById(elId);
-  if(!el)return;
-  var anos=getMultiDrop('wrap-'+prefix+'-ano');
-  var meses=getMultiDrop('wrap-'+prefix+'-mes');
-  if(anos.size!==1||meses.size!==1){el.textContent='';return;} // sem período único selecionado — não compara
-  var ano=parseInt([...anos][0],10), mes=parseInt([...meses][0],10);
-  var anoAnt=mes===0?ano-1:ano, mesAnt=mes===0?11:mes-1;
-  var totAnt=totalRealizadoMes(dadosBase, prefix, anoAnt, mesAnt);
-  if(!totAnt){el.textContent='';return;} // sem mês anterior pra comparar, não mostra nada enganoso
-  var MESES_ABR2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  var variacao=(totAtual-totAnt)/Math.abs(totAnt)*100;
-  var subiu=variacao>=0;
-  var bom=subiu===corSobeEBom;
-  var cor=bom?'#1B6B35':'#C0392B';
-  var seta=subiu?'▲':'▼';
-  el.style.color=cor;
-  el.textContent=seta+' '+Math.abs(variacao).toFixed(1)+'% vs. '+MESES_ABR2[mesAnt]+'/'+anoAnt;
-}
 function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoFat){
   var fmtV=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
   // Extrair nome do cliente/fornecedor do complemento
@@ -2670,7 +2632,6 @@ function renderDashFat(){
   var csv=DATA.csv||[];
   var fat=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df');
   var totaisFat=renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-prov',fat,true);
-  renderComparacaoMes('df-kpi-rec-cmp', csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df', totaisFat.totR, true);
   atualizarKpiInadimplencia('receber','df-kpi-inad');
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesFat=Array.from({length:12},function(){return{rec:0,arec:0};});
@@ -2699,7 +2660,6 @@ function renderDashDesp(){
   var csv=DATA.csv||[];
   var pag=filtraDash(csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd');
   var totaisPag=renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-prov',pag,false);
-  renderComparacaoMes('dd-kpi-pag-cmp', csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd', totaisPag.totR, false);
   atualizarKpiInadimplencia('pagar','dd-kpi-inad');
   var MESES_PT2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesDesp=Array.from({length:12},function(){return{pag:0,apag:0};});
@@ -4012,7 +3972,6 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid #1B6B35">
       <div class="kpi-label">Entradas</div>
       <div class="kpi-val" id="df-kpi-rec" style="color:#1B6B35">—</div>
-      <div id="df-kpi-rec-cmp" style="font-size:11px;font-weight:600;margin-top:4px"></div>
     </div>
     <div class="kpi-card" style="border-top:3px solid rgba(27,107,53,0.4)">
       <div class="kpi-label">A Receber</div>
@@ -4107,7 +4066,6 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid #C0392B">
       <div class="kpi-label">Saídas</div>
       <div class="kpi-val" id="dd-kpi-pag" style="color:#C0392B">—</div>
-      <div id="dd-kpi-pag-cmp" style="font-size:11px;font-weight:600;margin-top:4px"></div>
     </div>
     <div class="kpi-card" style="border-top:3px solid rgba(192,57,43,0.4)">
       <div class="kpi-label">A Pagar</div>
