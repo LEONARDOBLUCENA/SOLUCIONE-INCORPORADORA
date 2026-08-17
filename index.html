@@ -2460,11 +2460,14 @@ function abrirProjecaoFluxo(){
     {key:'MARKETING',label:'Despesas de Marketing',cor:'#6C3483'},
     {key:'ADMIN',label:'Despesas Administrativas',cor:'#1A5276'},
     {key:'FINANCEIRAS',label:'Despesas Financeiras',cor:'#943126'},
+    {key:'EMPRESTIMOS',label:'Empréstimos',cor:'#B35C00'},
     {key:'OUTRAS',label:'Outras Despesas',cor:'#424949'}
   ];
+  var EMPR_PAG_COD=['20307','1.05.03'];
+  var codigoDe=function(c){return (c||'').split(' - ')[0].trim();};
   var saidasPorGrupo={};
   linhas.filter(function(r){return r.tipo==='PAGAMENTO';}).forEach(function(r){
-    var g=grupoDeConta(r.conta||'');
+    var g=EMPR_PAG_COD.includes(codigoDe(r.conta))?'EMPRESTIMOS':grupoDeConta(r.conta||'');
     saidasPorGrupo[g]=(saidasPorGrupo[g]||0)+r.valor;
   });
   // "Previsto Engenharia" — só existe quando o filtro de Obra é especificamente SPE Montagnes.
