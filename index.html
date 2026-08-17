@@ -272,9 +272,7 @@ const SIENGE_PROXY_URL='https://sienge-proxymonter-production.up.railway.app';
 const SYNC_FONTES=[
   {titulo:'Contas Pagas',endpoint:'/api/sienge/sync-contas-pagas',fonte:'contas-pagas'},
   {titulo:'Contas a Receber',endpoint:'/api/sienge/sync-contas-a-receber',fonte:'contas-a-receber'},
-  // snapshotTotal:true = ignora o período do modal, sempre busca e substitui o livro inteiro
-  // (evita a duplicação de títulos com vencimento muito no futuro).
-  {titulo:'Contas a Pagar',endpoint:'/api/sienge/sync-contas-a-pagar',fonte:'contas-a-pagar',snapshotTotal:true}
+  {titulo:'Contas a Pagar',endpoint:'/api/sienge/sync-contas-a-pagar',fonte:'contas-a-pagar'}
 ];
 
 function abrirSyncGlobal(){
@@ -349,14 +347,16 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
     statusEl.style.color='var(--text3)';statusEl.textContent='Buscando '+item.titulo+'... ('+passoAtual+' de '+totalPassos+')';
     if(barra)barra.style.width=Math.round(((passoAtual-1)/totalPassos)*90+5)+'%';
     try{
-      // snapshotTotal ignora o período do modal — sempre busca o livro inteiro em aberto,
-      // com um período fixo bem largo (passado distante até +10 anos), pra garantir que o
-      // Sienge devolva todos os títulos abertos, inclusive os de vencimento bem no futuro.
+      // tetoAnos: usa a data De do modal normalmente, mas nunca deixa o Até passar de
+      // "hoje + N anos" — Contas a Receber não precisa de janela larga como Contas a Pagar
+      // precisa (nunca teve o mesmo problema de duplicação por vencimento muito no futuro),
+      // então não faz sentido pagar o preço de página extra só porque o modal está com um
+      // "Até" bem lá na frente (útil especificamente pra Contas a Pagar).
       let startDate=de, endDate=ate;
-      if(item.snapshotTotal){
+      if(item.tetoAnos){
         const hoje=new Date();
-        startDate='2015-01-01';
-        endDate=new Date(hoje.getFullYear()+10,hoje.getMonth(),hoje.getDate()).toISOString().slice(0,10);
+        const tetoData=new Date(hoje.getFullYear()+item.tetoAnos,hoje.getMonth(),hoje.getDate()).toISOString().slice(0,10);
+        if(tetoData<endDate)endDate=tetoData;
       }
       const r=await fetch(SIENGE_PROXY_URL+item.endpoint+'?startDate='+startDate+'&endDate='+endDate);
       const dados=await r.json();
@@ -383,7 +383,7 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
           fonte: item.fonte
         };
       });
-      resultados.push({titulo:item.titulo,fonte:item.fonte,novos,avisos:dados.avisos||[],chamadasSienge:dados.chamadasSienge||0});
+      resultados.push({titulo:item.titulo,fonte:item.fonte,novos,avisos:dados.avisos||[],chamadasSienge:dados.chamadasSienge||0,endDateEfetivo:endDate});
     }catch(e){
       resultados.push({titulo:item.titulo,fonte:item.fonte,erro:e.message});
     }
@@ -416,19 +416,20 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
 
   const deTs=new Date(de+'T00:00:00').getTime();
   const ateTs=new Date(ate+'T23:59:59').getTime();
-  const fontesSnapshotTotal=new Set(fontes.filter(f=>f.snapshotTotal).map(f=>f.fonte));
   let totalImportado=0,totalRemovido=0;
   resultados.forEach(r=>{
     if(r.erro)return; // não mexe nessa aba
     if(!r.novos.length)return; // veio vazio — não apaga sem repor
     const antes=DATA.csv.length;
-    const ehSnapshotTotal=fontesSnapshotTotal.has(r.fonte);
+    // Usa o Até que foi realmente consultado nessa fonte (pode ser menor que o do modal, se
+    // a fonte tiver um teto) — assim a remoção nunca apaga dado que estava fora do que foi
+    // buscado de novo, evitando perder informação que existia além do teto.
+    const ateTsFonte=r.endDateEfetivo?new Date(r.endDateEfetivo+'T23:59:59').getTime():ateTs;
     DATA.csv=DATA.csv.filter(function(row){
       if(row.fonte!==r.fonte)return true;
-      if(ehSnapshotTotal)return false; // snapshot total: remove tudo dessa fonte, sem olhar data
       if(!row.data)return true;
       const t=(row.data instanceof Date?row.data:new Date(row.data)).getTime();
-      return t<deTs||t>ateTs;
+      return t<deTs||t>ateTsFonte;
     });
     totalRemovido+=antes-DATA.csv.length;
     DATA.csv=[...DATA.csv,...r.novos];
