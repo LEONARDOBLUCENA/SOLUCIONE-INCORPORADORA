@@ -1053,6 +1053,18 @@ function renderFluxo(){
     +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
 
   const f2=v=>v===0?'<span style="color:#ccc;font-size:10px">—</span>':(v<0?'<span style="color:#C0392B">'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  const escOc=s=>String(s).replace(/'/g,"\\'").replace(/\n/g,' ');
+  // f2c: número clicável por conta (linha individual). f2g: número clicável por tipo/grupo (linhas de total).
+  const f2c=(v,conta,ano,mes,anoMin)=>{
+    if(v===0)return f2(v);
+    const a="'"+escOc(conta)+"',"+(ano!=null?ano:'null')+","+(mes!=null?mes:'null')+","+(anoMin!=null?anoMin:'null');
+    return '<span onclick="abrirDetalheFluxoCel('+a+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(v)+'</span>';
+  };
+  const f2g=(v,tipo,grupo,tituloBase,ano,mes,anoMin)=>{
+    if(v===0)return f2(v);
+    const a=(tipo?"'"+escOc(tipo)+"'":'null')+','+(grupo?"'"+escOc(grupo)+"'":'null')+",'"+escOc(tituloBase)+"',"+(ano!=null?ano:'null')+','+(mes!=null?mes:'null')+','+(anoMin!=null?anoMin:'null');
+    return '<span onclick="abrirDetalheFluxoTipoGrupo('+a+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(v)+'</span>';
+  };
   const tdS=(bg)=>'style="'+SD+bg+';padding:5px 6px 5px 12px;font-size:11px"';
   const tdSB=(bg)=>'style="'+SD+bg+';padding:5px 12px;font-size:11px;font-weight:700"';
 
@@ -1087,11 +1099,11 @@ function renderFluxo(){
       const zebra=idx%2===0?'#ffffff':'#f4faf5';
       rows+='<tr style="border-left:3px solid #A9DFBF;border-bottom:1px solid #edf2ee">'
         +'<td '+tdS(zebra)+'>'+c+'</td>'
-        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
-        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
-        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#eef6ef;font-size:10px">'+f2(tot)+'</td></tr>';
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2c(aa,c,null,null,colKeys[0])+'</td>'
+        +vals.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2c(v,c,colAno[i],colMes[i])+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#eef6ef;font-size:10px">'+f2c(tot,c,null,null,null)+'</td></tr>';
     });
-    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Entradas</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumFatVisivel)+'</td>'+tFMVisivel.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumFatVisivel+tFMVisivel.reduce((s,v)=>s+v,0))+'</td></tr>';
+    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Entradas</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(acumFatVisivel,'FATURAMENTO',null,'Total Entradas',null,null,colKeys[0])+'</td>'+tFMVisivel.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(v,'FATURAMENTO',null,'Total Entradas',colAno[i],colMes[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2g(acumFatVisivel+tFMVisivel.reduce((s,v)=>s+v,0),'FATURAMENTO',null,'Total Entradas',null,null,null)+'</td></tr>';
   }
   // Saldo em cascata: começa nas Entradas e vai descontando cada grupo de despesa, para mostrar o quanto cada um pesa no caixa
   // Só considera os meses 2026+ (mesmo critério do Resultado do Período) — Acum. Anterior nunca entra em nenhum saldo
@@ -1154,15 +1166,15 @@ function renderFluxo(){
       const zebra=idx%2===0?'#ffffff':g.zebra;
       rows+='<tr style="border-left:3px solid '+g.borda+';border-bottom:1px solid '+g.divisor+'">'
         +'<td '+tdS(zebra)+'>'+c+'</td>'
-        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
-        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
-        +'<td class="r" style="padding:4px 8px;font-weight:600;background:'+g.totBg+';font-size:10px">'+f2(tot)+'</td></tr>';
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2c(aa,c,null,null,colKeys[0])+'</td>'
+        +vals.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2c(v,c,colAno[i],colMes[i])+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:'+g.totBg+';font-size:10px">'+f2c(tot,c,null,null,null)+'</td></tr>';
     });
     if(g.key==='CUSTO_OBRA'){
       rows+=prevRows;
       prevTotalMes.forEach((v,i)=>totGrupo[i]+=v);
     }
-    rows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumGrupoTot)+'</td>'+totGrupo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0))+'</td></tr>';
+    rows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(acumGrupoTot,null,g.key,g.totLabel,null,null,colKeys[0])+'</td>'+totGrupo.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(v,null,g.key,g.totLabel,colAno[i],colMes[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2g(acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0),null,g.key,g.totLabel,null,null,null)+'</td></tr>';
     gruposResumoFin[g.key]={total:acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0),acum:acumGrupoTot,mensal:totGrupo.slice(),label:g.totLabel,cor:g.hdrText};
     saldoMensal=saldoMensal.map((v,i)=>v-totGrupo[i]);
     rows+=linhaSaldo();
@@ -1283,27 +1295,35 @@ function renderFluxo(){
     const entradasOperFin=totalEntradasFin-entradaEmprFin;
     const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
+    const EMPR_FAT_COD_RF=['10501','1.05.03'];
     const linhaExec=(label,val,opts)=>{
       opts=opts||{};
+      const conteudoVal=opts.onclick?'<span onclick="'+opts.onclick+'" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(val)+'</span>':f2(val);
       return '<tr style="'+(opts.bg?'background:'+opts.bg+';':'')+(opts.borderTop?'border-top:'+opts.borderTop+';':'')+'border-bottom:1px solid var(--border)">'
         +'<td style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'500')+';color:'+(opts.labelCor||'var(--text)')+'">'+(opts.indent?'<span style="padding-left:16px">':'')+label+(opts.indent?'</span>':'')+'</td>'
-        +'<td class="r" style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'600')+';color:'+(opts.valCor||opts.labelCor||'var(--text)')+'">'+f2(val)+'</td></tr>';
+        +'<td class="r" style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'600')+';color:'+(opts.valCor||opts.labelCor||'var(--text)')+'">'+conteudoVal+'</td></tr>';
+    };
+    const ocResumo=(tipo,grupo,titulo,codIncl,codExcl)=>{
+      const g=grupo?"'"+grupo+"'":'null';
+      const ci=codIncl?"["+codIncl.map(c=>"'"+c+"'").join(',')+"]":'null';
+      const ce=codExcl?"["+codExcl.map(c=>"'"+c+"'").join(',')+"]":'null';
+      return 'abrirDetalheResumoFin(\''+tipo+'\','+g+',\''+titulo+'\','+(cutoffKey!=null?cutoffKey:'null')+','+ci+','+ce+')';
     };
     let rowsF='<tr><td colspan="2" style="padding:14px 4px 4px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em">Receitas</td></tr>';
-    rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400'});
-    if(emprEntradaG)rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400'});
-    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{borderTop:'1px solid var(--border)',fw:'600',pad:'8px 4px',fs:'13px',labelCor:'#1B6B35',valCor:'#1B6B35'});
+    rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400',onclick:ocResumo('FATURAMENTO',null,'Entradas',null,EMPR_FAT_COD_RF)});
+    if(emprEntradaG)rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400',onclick:ocResumo('',null,'Entrada Empréstimo',EMPR_FAT_COD_RF)});
+    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{borderTop:'1px solid var(--border)',fw:'600',pad:'8px 4px',fs:'13px',labelCor:'#1B6B35',valCor:'#1B6B35',onclick:ocResumo('FATURAMENTO',null,'Total de Entradas')});
     rowsF+='<tr><td colspan="2" style="padding:16px 4px 4px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em">Despesas</td></tr>';
     ordemGrupos.forEach(k=>{
       const g=gruposResumoFin[k];
       if(!g)return;
       const valG=somaAte(g.acum,g.mensal);
       totalDespesasFin+=valG;
-      rowsF+=linhaExec(g.label,valG,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400'});
+      rowsF+=linhaExec(g.label,valG,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400',onclick:ocResumo('PAGAMENTO',k,g.label)});
     });
     const totalReceitasFin=entradasOperFin+entradaEmprFin;
     const saldoFin=totalReceitasFin-totalDespesasFin;
-    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{borderTop:'1px solid var(--border)',fw:'600',pad:'8px 4px',fs:'13px',labelCor:'#C0392B',valCor:'#C0392B'});
+    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{borderTop:'1px solid var(--border)',fw:'600',pad:'8px 4px',fs:'13px',labelCor:'#C0392B',valCor:'#C0392B',onclick:ocResumo('PAGAMENTO',null,'Total Despesas')});
     tbodyF.innerHTML=rowsF;
   }
 
@@ -2514,6 +2534,77 @@ function abrirProjecaoFluxo(curtoPrazo){
     +'</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no período. Meses já passados mostram só o que foi realizado; mês atual e futuros incluem provisão (a pagar/a receber)'+(curtoPrazo?', inclusive Custo de Obra — usa exatamente o lançado em Contas a Pagar, sem o Previsto manual.':'.')+'</div>'
     +'</div>';
+}
+
+// ---------- Detalhe genérico (clique num número do Fluxo de Caixa / Resumo Financeiro) ----------
+function abrirDetalheFluxo(opts){
+  opts=opts||{};
+  var obraSel=opts.obraSel||'';
+  var linhas=(DATA.csv||[]).filter(function(r){
+    if(opts.tipo&&r.tipo!==opts.tipo)return false;
+    if(opts.conta&&r.conta!==opts.conta)return false;
+    if(opts.grupo){
+      var g=EMPR_PAG_COD_G.includes((r.conta||'').split(' - ')[0].trim())?'EMPRESTIMOS':grupoDeConta(r.conta||'');
+      if(g!==opts.grupo)return false;
+    }
+    if(opts.anoMin!=null&&(r.ano==null||r.ano*100+r.mes>=opts.anoMin))return false; // "Acum. Anterior" — só antes do início da tabela
+    if(opts.ateKey!=null&&r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)>opts.ateKey)return false; // "Acumulado até" — usado no Resumo Financeiro
+    if(opts.codigosIncluir){
+      var cod=(r.conta||'').split(' - ')[0].trim();
+      if(!opts.codigosIncluir.includes(cod))return false;
+    }
+    if(opts.codigosExcluir){
+      var cod2=(r.conta||'').split(' - ')[0].trim();
+      if(opts.codigosExcluir.includes(cod2))return false;
+    }
+    if(opts.ano!=null&&r.ano!==opts.ano)return false;
+    if(opts.mes!=null&&r.mes!==opts.mes)return false;
+    if(obraSel&&!ccMatch(r.cc||'',obraSel))return false;
+    return true;
+  }).sort(function(a,b){
+    var ta=a.data?new Date(a.data).getTime():0,tb=b.data?new Date(b.data).getTime():0;
+    return ta-tb;
+  });
+  var soma=linhas.reduce(function(s,r){return s+r.valor;},0);
+  var fmtD=function(d){if(!d)return '';var dt=d instanceof Date?d:new Date(d);return dt.toLocaleDateString('pt-BR');};
+  var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
+  el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  var linhasHtml=linhas.length?linhas.map(function(r){
+    return '<tr><td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmtD(r.data)+'</td>'
+      +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.complemento||'')+'</td>'
+      +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.cc||'')+'</td>'
+      +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.conta||'')+'</td>'
+      +'<td class="r" style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmt(r.valor)+'</td></tr>';
+  }).join(''):'<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nenhum lançamento</td></tr>';
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+(opts.titulo||'Detalhe')+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="font-size:13px;color:var(--text3)">'+linhas.length+' lançamento(s) — total '+fmt(soma)+'</div>'
+    +'<div style="overflow-y:auto;max-height:55vh;border:1px solid var(--border);border-radius:6px">'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Data</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Complemento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Obra</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Conta</th><th class="r" style="padding:6px 10px;font-size:11px;color:var(--text3)">Valor</th></tr></thead><tbody>'+linhasHtml+'</tbody></table>'
+    +'</div></div>';
+}
+var EMPR_PAG_COD_G=['20307','1.05.03'];
+
+function abrirDetalheFluxoCel(conta,ano,mes,anoMin){
+  var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
+  var titulo=conta;
+  if(ano!=null&&mes!=null)titulo+=' — '+MESES_ABR[mes]+'/'+ano;
+  else if(anoMin!=null)titulo+=' — Acumulado Anterior';
+  else titulo+=' — Total geral';
+  abrirDetalheFluxo({conta:conta,ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo});
+}
+function abrirDetalheFluxoTipoGrupo(tipo,grupo,tituloBase,ano,mes,anoMin){
+  var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
+  var titulo=tituloBase;
+  if(ano!=null&&mes!=null)titulo+=' — '+MESES_ABR[mes]+'/'+ano;
+  else if(anoMin!=null)titulo+=' — Acumulado Anterior';
+  else titulo+=' — Total geral';
+  abrirDetalheFluxo({tipo:tipo||null,grupo:grupo||null,ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo});
+}
+function abrirDetalheResumoFin(tipo,grupo,tituloBase,ateKey,codigosIncluir,codigosExcluir){
+  var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
+  var titulo=tituloBase+(ateKey!=null?' — acumulado até '+MESES_ABR[ateKey%100]+'/'+Math.floor(ateKey/100):' — acumulado (todos os meses)');
+  abrirDetalheFluxo({tipo:tipo||null,grupo:grupo||null,ateKey:ateKey,codigosIncluir:codigosIncluir||null,codigosExcluir:codigosExcluir||null,obraSel:obraSel,titulo:titulo});
 }
 
 function abrirDetalheProjecao(tipo){
