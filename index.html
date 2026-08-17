@@ -2424,9 +2424,10 @@ function abrirDetalheInadimplencia(tipo){
     +'</div></div>';
 }
 
-function abrirProjecaoFluxo(){
-  var deStr=document.getElementById('fc-proj-de').value;
-  var ateStr=document.getElementById('fc-proj-ate').value;
+function abrirProjecaoFluxo(curtoPrazo){
+  var prefixo=curtoPrazo?'fc-cp-':'fc-proj-';
+  var deStr=document.getElementById(prefixo+'de').value;
+  var ateStr=document.getElementById(prefixo+'ate').value;
   if(!deStr||!ateStr){alert('Preencha Data Inicial e Data Final.');return;}
   var de=new Date(deStr+'T00:00:00');
   var ate=new Date(ateStr+'T23:59:59');
@@ -2442,8 +2443,10 @@ function abrirProjecaoFluxo(){
     var comp=(r.complemento||'').toLowerCase();
     var ehAPagarOuAReceber=comp.includes('a pagar')||comp.includes('a receber');
     if(ehAPagarOuAReceber){
-      // Mesma regra do resto do Fluxo de Caixa
-      if(r.tipo==='PAGAMENTO'&&grupoDeConta(r.conta||'')==='CUSTO_OBRA')return false; // Custo de Obra nunca considera provisão
+      // Previsão Curto Prazo: Custo de Obra usa exatamente o que está lançado em Contas a
+      // Pagar (sem essa exclusão) — não usa o Previsto manual. As outras fontes continuam
+      // seguindo a mesma regra do resto do Fluxo de Caixa (só exclui em mês já passado).
+      if(!curtoPrazo&&r.tipo==='PAGAMENTO'&&grupoDeConta(r.conta||'')==='CUSTO_OBRA')return false; // Custo de Obra nunca considera provisão (na projeção normal)
       if(r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)<chaveAtual)return false; // outros: só exclui em mês passado
     }
     return true;
@@ -2470,10 +2473,11 @@ function abrirProjecaoFluxo(){
     var g=EMPR_PAG_COD.includes(codigoDe(r.conta))?'EMPRESTIMOS':grupoDeConta(r.conta||'');
     saidasPorGrupo[g]=(saidasPorGrupo[g]||0)+r.valor;
   });
-  // "Previsto Engenharia" — só existe quando o filtro de Obra é especificamente SPE Montagnes.
-  // Soma o mesmo DATA.previsto[obra][mês] que já alimenta a linha "Previsto" do grupo Custo de
-  // Obra na tabela grande do Fluxo de Caixa — não é um cálculo novo, é o mesmo valor.
-  var mostrarPrevistoEng=obraSel&&normCC(obraSel)===normCC('SPE MONTAGNES');
+  // "Previsto Engenharia" — só existe na projeção normal (não no Curto Prazo, que já usa o
+  // lançamento real de Contas a Pagar em vez do Previsto manual) e quando a Obra é SPE
+  // Montagnes. Soma o mesmo DATA.previsto[obra][mês] que já alimenta a linha "Previsto" do
+  // grupo Custo de Obra na tabela grande do Fluxo de Caixa — não é um cálculo novo.
+  var mostrarPrevistoEng=!curtoPrazo&&obraSel&&normCC(obraSel)===normCC('SPE MONTAGNES');
   var previstoEng=0;
   if(mostrarPrevistoEng){
     Object.keys(DATA.previsto||{}).forEach(function(obraKey){
@@ -2497,7 +2501,7 @@ function abrirProjecaoFluxo(){
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
   el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:440px;width:90%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Projeção de Fluxo de Caixa</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+(curtoPrazo?'Previsão Curto Prazo':'Projeção de Fluxo de Caixa')+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
     +'<div style="font-size:13px;color:var(--text3)">'+fmtD(de)+' até '+fmtD(ate)+(obraSel?' — '+obraSel:' — Todas as obras')+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<div onclick="abrirDetalheProjecao(\'entradas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#eaf6ec;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#1B6B35">Entradas</span><span style="font-size:15px;font-weight:700;color:#1B6B35">'+fmt(entradas)+'</span></div>'
@@ -2508,7 +2512,7 @@ function abrirProjecaoFluxo(){
     }).join('')
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:'+(saldo>=0?'#eaf6ec':'#fbeaea')+';border-radius:6px;border-top:2px solid '+(saldo>=0?'#1B6B35':'#C0392B')+'"><span style="font-size:14px;font-weight:700">Saldo</span><span style="font-size:18px;font-weight:800;color:'+(saldo>=0?'#1B6B35':'#C0392B')+'">'+fmt(saldo)+'</span></div>'
     +'</div>'
-    +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no período. Meses já passados mostram só o que foi realizado; mês atual e futuros incluem provisão (a pagar/a receber).</div>'
+    +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no período. Meses já passados mostram só o que foi realizado; mês atual e futuros incluem provisão (a pagar/a receber)'+(curtoPrazo?', inclusive Custo de Obra — usa exatamente o lançado em Contas a Pagar, sem o Previsto manual.':'.')+'</div>'
     +'</div>';
 }
 
@@ -3004,6 +3008,22 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <input type="date" id="fc-proj-ate" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px">
     </div>
     <button onclick="abrirProjecaoFluxo()" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 18px;cursor:pointer;border-radius:6px;font-weight:600">Buscar</button>
+  </div>
+
+  <div class="filters-bar" style="margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;gap:16px">
+    <div style="margin-right:4px">
+      <div class="tbl-title" style="margin-bottom:2px;font-size:13px">Previsão Curto Prazo</div>
+      <span style="font-size:11px;color:var(--text3)">Igual acima, mas Custo de Obra usa o lançado em Contas a Pagar, não o Previsto manual</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:11px;font-weight:600;color:var(--text3)">Data Inicial</label>
+      <input type="date" id="fc-cp-de" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:11px;font-weight:600;color:var(--text3)">Data Final</label>
+      <input type="date" id="fc-cp-ate" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px">
+    </div>
+    <button onclick="abrirProjecaoFluxo(true)" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 18px;cursor:pointer;border-radius:6px;font-weight:600">Buscar</button>
   </div>
 
   <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px" id="fc-visao-exec-card">
