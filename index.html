@@ -2441,6 +2441,20 @@ function abrirProjecaoFluxo(){
   var entradas=linhas.filter(function(r){return r.tipo==='FATURAMENTO';}).reduce(function(s,r){return s+r.valor;},0)
     -linhas.filter(function(r){return r.tipo==='DESCONTO';}).reduce(function(s,r){return s+r.valor;},0);
   var saidas=linhas.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
+  // Saídas por grupo — mesma classificação (grupoDeConta) e mesmos rótulos usados no resto
+  // do Fluxo de Caixa, pra não inventar uma segunda taxonomia paralela.
+  var GRUPOS_SAIDA=[
+    {key:'CUSTO_OBRA',label:'Custo de Obra',cor:'#9C640C'},
+    {key:'MARKETING',label:'Despesas de Marketing',cor:'#6C3483'},
+    {key:'ADMIN',label:'Despesas Administrativas',cor:'#1A5276'},
+    {key:'FINANCEIRAS',label:'Despesas Financeiras',cor:'#943126'},
+    {key:'OUTRAS',label:'Outras Despesas',cor:'#424949'}
+  ];
+  var saidasPorGrupo={};
+  linhas.filter(function(r){return r.tipo==='PAGAMENTO';}).forEach(function(r){
+    var g=grupoDeConta(r.conta||'');
+    saidasPorGrupo[g]=(saidasPorGrupo[g]||0)+r.valor;
+  });
   // "Previsto Engenharia" — só aparece quando o filtro de Obra é especificamente SPE Montagnes.
   // Soma o mesmo DATA.previsto[obra][mês] que já alimenta a linha "Previsto" do grupo Custo de
   // Obra na tabela grande do Fluxo de Caixa — não é um cálculo novo, é o mesmo valor.
@@ -2469,6 +2483,9 @@ function abrirProjecaoFluxo(){
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<div onclick="abrirDetalheProjecao(\'entradas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#eaf6ec;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#1B6B35">Entradas</span><span style="font-size:15px;font-weight:700;color:#1B6B35">'+fmt(entradas)+'</span></div>'
     +'<div onclick="abrirDetalheProjecao(\'saidas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fbeaea;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#C0392B">Saídas</span><span style="font-size:15px;font-weight:700;color:#C0392B">'+fmt(saidas)+'</span></div>'
+    +GRUPOS_SAIDA.filter(function(g){return saidasPorGrupo[g.key];}).map(function(g){
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 14px 6px 24px"><span style="font-size:12px;color:'+g.cor+'">'+g.label+'</span><span style="font-size:12px;font-weight:600;color:'+g.cor+'">'+fmt(saidasPorGrupo[g.key])+'</span></div>';
+    }).join('')
     +(mostrarPrevistoEng?'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fdf3f2;border-radius:6px;border-left:3px solid #C0392B" title="Vem da linha Previsto do grupo Custo de Obra"><span style="font-size:12px;font-weight:600;color:#943126">Previsto Engenharia</span><span style="font-size:14px;font-weight:700;color:#943126">'+fmt(previstoEng)+'</span></div>':'')
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:'+(saldo>=0?'#eaf6ec':'#fbeaea')+';border-radius:6px;border-top:2px solid '+(saldo>=0?'#1B6B35':'#C0392B')+'"><span style="font-size:14px;font-weight:700">Saldo</span><span style="font-size:18px;font-weight:800;color:'+(saldo>=0?'#1B6B35':'#C0392B')+'">'+fmt(saldo)+'</span></div>'
     +'</div>'
