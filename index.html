@@ -9,7 +9,7 @@
 
 const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previsao:[],dtmPct:{},dtmUnid:{},dtmOrc:{}};
 const GHUB={token:['ghp_DMtc','LFDDPZIq7QGo','GgJvmTc1TbfSMf0H9mw1'].join(''),repo:'LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA',file:'data.json',raw:'https://raw.githubusercontent.com/LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA/main/data.json'};
-let _ghubSaving=false,_ghubDirty=false,_ghubSha=null;
+let _ghubSaving=false,_ghubDirty=false,_ghubSha=null,_ultimoCsvCarregado=0;
 const CHARTS={};
 const MESES_PT=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
@@ -272,9 +272,7 @@ const SIENGE_PROXY_URL='https://sienge-proxymonter-production.up.railway.app';
 const SYNC_FONTES=[
   {titulo:'Contas Pagas',endpoint:'/api/sienge/sync-contas-pagas',fonte:'contas-pagas'},
   {titulo:'Contas a Receber',endpoint:'/api/sienge/sync-contas-a-receber',fonte:'contas-a-receber'},
-  // snapshotTotal:true = ignora o período do modal, sempre busca e substitui o livro inteiro
-  // (evita a duplicação de títulos com vencimento muito no futuro).
-  {titulo:'Contas a Pagar',endpoint:'/api/sienge/sync-contas-a-pagar',fonte:'contas-a-pagar',snapshotTotal:true}
+  {titulo:'Contas a Pagar',endpoint:'/api/sienge/sync-contas-a-pagar',fonte:'contas-a-pagar'}
 ];
 
 function abrirSyncGlobal(){
@@ -349,14 +347,16 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
     statusEl.style.color='var(--text3)';statusEl.textContent='Buscando '+item.titulo+'... ('+passoAtual+' de '+totalPassos+')';
     if(barra)barra.style.width=Math.round(((passoAtual-1)/totalPassos)*90+5)+'%';
     try{
-      // snapshotTotal ignora o período do modal — sempre busca o livro inteiro em aberto,
-      // com um período fixo bem largo (passado distante até +10 anos), pra garantir que o
-      // Sienge devolva todos os títulos abertos, inclusive os de vencimento bem no futuro.
+      // tetoAnos: usa a data De do modal normalmente, mas nunca deixa o Até passar de
+      // "hoje + N anos" — Contas a Receber não precisa de janela larga como Contas a Pagar
+      // precisa (nunca teve o mesmo problema de duplicação por vencimento muito no futuro),
+      // então não faz sentido pagar o preço de página extra só porque o modal está com um
+      // "Até" bem lá na frente (útil especificamente pra Contas a Pagar).
       let startDate=de, endDate=ate;
-      if(item.snapshotTotal){
+      if(item.tetoAnos){
         const hoje=new Date();
-        startDate='2015-01-01';
-        endDate=new Date(hoje.getFullYear()+10,hoje.getMonth(),hoje.getDate()).toISOString().slice(0,10);
+        const tetoData=new Date(hoje.getFullYear()+item.tetoAnos,hoje.getMonth(),hoje.getDate()).toISOString().slice(0,10);
+        if(tetoData<endDate)endDate=tetoData;
       }
       const r=await fetch(SIENGE_PROXY_URL+item.endpoint+'?startDate='+startDate+'&endDate='+endDate);
       const dados=await r.json();
@@ -383,7 +383,7 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
           fonte: item.fonte
         };
       });
-      resultados.push({titulo:item.titulo,fonte:item.fonte,novos,avisos:dados.avisos||[],chamadasSienge:dados.chamadasSienge||0});
+      resultados.push({titulo:item.titulo,fonte:item.fonte,novos,avisos:dados.avisos||[],chamadasSienge:dados.chamadasSienge||0,endDateEfetivo:endDate});
     }catch(e){
       resultados.push({titulo:item.titulo,fonte:item.fonte,erro:e.message});
     }
@@ -416,19 +416,20 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
 
   const deTs=new Date(de+'T00:00:00').getTime();
   const ateTs=new Date(ate+'T23:59:59').getTime();
-  const fontesSnapshotTotal=new Set(fontes.filter(f=>f.snapshotTotal).map(f=>f.fonte));
   let totalImportado=0,totalRemovido=0;
   resultados.forEach(r=>{
     if(r.erro)return; // não mexe nessa aba
     if(!r.novos.length)return; // veio vazio — não apaga sem repor
     const antes=DATA.csv.length;
-    const ehSnapshotTotal=fontesSnapshotTotal.has(r.fonte);
+    // Usa o Até que foi realmente consultado nessa fonte (pode ser menor que o do modal, se
+    // a fonte tiver um teto) — assim a remoção nunca apaga dado que estava fora do que foi
+    // buscado de novo, evitando perder informação que existia além do teto.
+    const ateTsFonte=r.endDateEfetivo?new Date(r.endDateEfetivo+'T23:59:59').getTime():ateTs;
     DATA.csv=DATA.csv.filter(function(row){
       if(row.fonte!==r.fonte)return true;
-      if(ehSnapshotTotal)return false; // snapshot total: remove tudo dessa fonte, sem olhar data
       if(!row.data)return true;
       const t=(row.data instanceof Date?row.data:new Date(row.data)).getTime();
-      return t<deTs||t>ateTs;
+      return t<deTs||t>ateTsFonte;
     });
     totalRemovido+=antes-DATA.csv.length;
     DATA.csv=[...DATA.csv,...r.novos];
@@ -1455,6 +1456,14 @@ function ghubPayload(){
 }
 async function ghubSave(){
   if(_ghubSaving){_ghubDirty=true;return;}
+  // Trava de segurança: se o que está na tela agora tem MUITO menos lançamento do que a
+  // última carga bem-sucedida da nuvem, isso é sinal de que algo deu errado (carregamento
+  // ainda não terminou, falha de rede no meio, etc.) — salvar nesse estado sobrescreveria
+  // dado bom com dado incompleto, sem volta. Só deixa passar se o usuário confirmar.
+  if(_ultimoCsvCarregado>20&&DATA.csv.length<_ultimoCsvCarregado*0.5){
+    const confirmou=confirm('ATENÇÃO: a tela está mostrando '+DATA.csv.length+' lançamento(s), bem menos que os '+_ultimoCsvCarregado+' carregados da nuvem originalmente.\n\nSalvar agora pode APAGAR dado bom que já estava salvo. Isso normalmente acontece quando a página ainda está carregando ou a conexão falhou no meio.\n\nRecomendado: cancele e recarregue a página (F5) antes de continuar.\n\nSalvar mesmo assim?');
+    if(!confirmou){setJbinStatus('error: salvamento bloqueado (poucos dados)');return;}
+  }
   _ghubSaving=true;_ghubDirty=false;
   setJbinStatus('saving');
   try{
@@ -1471,6 +1480,7 @@ async function ghubSave(){
     if(!r.ok){const err=await r.text();throw new Error(r.status+': '+err);}
     const j=await r.json();
     _ghubSha=j.content?.sha||_ghubSha;
+    _ultimoCsvCarregado=DATA.csv.length; // salvou com sucesso — esse tamanho vira a nova referência
     setJbinStatus('ok');
   }catch(e){console.error('ghubSave error:',e);setJbinStatus('error: '+e.message.slice(0,40));}
   _ghubSaving=false;
@@ -1485,6 +1495,7 @@ async function jbinLoad(){
     const d=await r.json();
     if(!d||!d.csv)return setJbinStatus('empty');
     DATA.csv=(d.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));
+    _ultimoCsvCarregado=DATA.csv.length;
     // Correção automática: contas que são sempre Despesa Financeira/Custo de Obra ou sempre Faturamento, independente do texto do complemento
     DATA.csv.forEach(r=>{
       const c=r.conta||'';
@@ -1522,7 +1533,7 @@ function setJbinStatus(s){
 function autoSave(){ghubSave();}
 
 function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
-function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};migrarFontesAntigas();renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
+function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};DATA.previsto=p.data.previsto||DATA.previsto||{};_ultimoCsvCarregado=DATA.csv.length;migrarFontesAntigas();renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 
 </script>
@@ -2296,44 +2307,6 @@ function filtraDash(dados, prefix){
     return true;
   });
 }
-// ---------- Comparação com mês anterior (KPIs Entradas/Saídas do Dashboard) ----------
-// Só faz sentido comparar quando o filtro está travado num único ano+mês — com múltiplos
-// meses selecionados (ou "todos"), não existe um "mês anterior" único pra comparar.
-function totalRealizadoMes(dadosBase, prefix, ano, mes){
-  var ccs=getMultiDrop('wrap-'+prefix+'-cc');
-  var contas=getMultiDrop('wrap-'+prefix+'-conta');
-  var nomes=getSearchDrop('list-'+prefix+'-nome');
-  var tot=0;
-  dadosBase.forEach(function(r){
-    if(r.ano!==ano||r.mes!==mes)return;
-    if(ccs.size&&!Array.from(ccs).some(function(c){return ccMatch(r.cc||'',c);}))return;
-    if(contas.size&&!contas.has(r.conta||''))return;
-    if(nomes.size&&!nomes.has(extrairNome(r.complemento)))return;
-    var comp=(r.complemento||'').toLowerCase();
-    if(comp.includes('a pagar')||comp.includes('a receber'))return; // só realizado, igual ao KPI principal
-    tot+=r.valor;
-  });
-  return tot;
-}
-function renderComparacaoMes(elId, dadosBase, prefix, totAtual, corSobeEBom){
-  var el=document.getElementById(elId);
-  if(!el)return;
-  var anos=getMultiDrop('wrap-'+prefix+'-ano');
-  var meses=getMultiDrop('wrap-'+prefix+'-mes');
-  if(anos.size!==1||meses.size!==1){el.textContent='';return;} // sem período único selecionado — não compara
-  var ano=parseInt([...anos][0],10), mes=parseInt([...meses][0],10);
-  var anoAnt=mes===0?ano-1:ano, mesAnt=mes===0?11:mes-1;
-  var totAnt=totalRealizadoMes(dadosBase, prefix, anoAnt, mesAnt);
-  if(!totAnt){el.textContent='';return;} // sem mês anterior pra comparar, não mostra nada enganoso
-  var MESES_ABR2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-  var variacao=(totAtual-totAnt)/Math.abs(totAnt)*100;
-  var subiu=variacao>=0;
-  var bom=subiu===corSobeEBom;
-  var cor=bom?'#1B6B35':'#C0392B';
-  var seta=subiu?'▲':'▼';
-  el.style.color=cor;
-  el.textContent=seta+' '+Math.abs(variacao).toFixed(1)+'% vs. '+MESES_ABR2[mesAnt]+'/'+anoAnt;
-}
 function renderTabelaDash(tbodyId,tfootId,badgeId,kpiRealId,kpiFutId,dados,tipoFat){
   var fmtV=function(v){return v===0?'—':'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
   // Extrair nome do cliente/fornecedor do complemento
@@ -2567,21 +2540,47 @@ function abrirDetalheFluxo(opts){
   });
   var soma=linhas.reduce(function(s,r){return s+r.valor;},0);
   var fmtD=function(d){if(!d)return '';var dt=d instanceof Date?d:new Date(d);return dt.toLocaleDateString('pt-BR');};
+  window._detalheFluxoLinhas=linhas;
+  window._detalheFluxoTitulo=opts.titulo||'Detalhe';
+  var anosDisp=[...new Set(linhas.map(function(r){return r.ano;}).filter(function(v){return v!=null;}))].sort();
+  var mesesDisp=[...new Set(linhas.map(function(r){return r.mes;}).filter(function(v){return v!=null;}))].sort(function(a,b){return a-b;});
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  var linhasHtml=linhas.length?linhas.map(function(r){
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+(opts.titulo||'Detalhe')+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<span style="font-size:11px;font-weight:600;color:var(--text3)">Filtrar</span>'
+    +'<select id="detfluxo-ano" onchange="filtrarDetalheFluxo()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:4px"><option value="">Todos os anos</option>'+anosDisp.map(function(a){return '<option value="'+a+'">'+a+'</option>';}).join('')+'</select>'
+    +'<select id="detfluxo-mes" onchange="filtrarDetalheFluxo()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:4px"><option value="">Todos os meses</option>'+mesesDisp.map(function(m){return '<option value="'+m+'">'+MESES_ABR[m]+'</option>';}).join('')+'</select>'
+    +'</div>'
+    +'<div id="detfluxo-resumo" style="font-size:13px;color:var(--text3)"></div>'
+    +'<div style="overflow-y:auto;max-height:50vh;border:1px solid var(--border);border-radius:6px">'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Data</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Complemento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Obra</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Conta</th><th class="r" style="padding:6px 10px;font-size:11px;color:var(--text3)">Valor</th></tr></thead><tbody id="detfluxo-tbody"></tbody></table>'
+    +'</div></div>';
+  filtrarDetalheFluxo();
+}
+function filtrarDetalheFluxo(){
+  var todas=window._detalheFluxoLinhas||[];
+  var anoSel=document.getElementById('detfluxo-ano')?document.getElementById('detfluxo-ano').value:'';
+  var mesSel=document.getElementById('detfluxo-mes')?document.getElementById('detfluxo-mes').value:'';
+  var linhas=todas.filter(function(r){
+    if(anoSel&&String(r.ano)!==anoSel)return false;
+    if(mesSel&&String(r.mes)!==mesSel)return false;
+    return true;
+  });
+  var soma=linhas.reduce(function(s,r){return s+r.valor;},0);
+  var fmtD=function(d){if(!d)return '';var dt=d instanceof Date?d:new Date(d);return dt.toLocaleDateString('pt-BR');};
+  var resumoEl=document.getElementById('detfluxo-resumo');
+  if(resumoEl)resumoEl.textContent=linhas.length+' lançamento(s) — total '+fmt(soma);
+  var tbodyEl=document.getElementById('detfluxo-tbody');
+  if(!tbodyEl)return;
+  tbodyEl.innerHTML=linhas.length?linhas.map(function(r){
     return '<tr><td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmtD(r.data)+'</td>'
       +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.complemento||'')+'</td>'
       +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.cc||'')+'</td>'
       +'<td style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+(r.conta||'')+'</td>'
       +'<td class="r" style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmt(r.valor)+'</td></tr>';
   }).join(''):'<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nenhum lançamento</td></tr>';
-  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+(opts.titulo||'Detalhe')+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
-    +'<div style="font-size:13px;color:var(--text3)">'+linhas.length+' lançamento(s) — total '+fmt(soma)+'</div>'
-    +'<div style="overflow-y:auto;max-height:55vh;border:1px solid var(--border);border-radius:6px">'
-    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Data</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Complemento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Obra</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Conta</th><th class="r" style="padding:6px 10px;font-size:11px;color:var(--text3)">Valor</th></tr></thead><tbody>'+linhasHtml+'</tbody></table>'
-    +'</div></div>';
 }
 var EMPR_PAG_COD_G=['20307','1.05.03'];
 
@@ -2643,7 +2642,6 @@ function renderDashFat(){
   var csv=DATA.csv||[];
   var fat=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df');
   var totaisFat=renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-prov',fat,true);
-  renderComparacaoMes('df-kpi-rec-cmp', csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df', totaisFat.totR, true);
   atualizarKpiInadimplencia('receber','df-kpi-inad');
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesFat=Array.from({length:12},function(){return{rec:0,arec:0};});
@@ -2672,7 +2670,6 @@ function renderDashDesp(){
   var csv=DATA.csv||[];
   var pag=filtraDash(csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd');
   var totaisPag=renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-prov',pag,false);
-  renderComparacaoMes('dd-kpi-pag-cmp', csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd', totaisPag.totR, false);
   atualizarKpiInadimplencia('pagar','dd-kpi-inad');
   var MESES_PT2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesDesp=Array.from({length:12},function(){return{pag:0,apag:0};});
@@ -3985,7 +3982,6 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid #1B6B35">
       <div class="kpi-label">Entradas</div>
       <div class="kpi-val" id="df-kpi-rec" style="color:#1B6B35">—</div>
-      <div id="df-kpi-rec-cmp" style="font-size:11px;font-weight:600;margin-top:4px"></div>
     </div>
     <div class="kpi-card" style="border-top:3px solid rgba(27,107,53,0.4)">
       <div class="kpi-label">A Receber</div>
@@ -4080,7 +4076,6 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid #C0392B">
       <div class="kpi-label">Saídas</div>
       <div class="kpi-val" id="dd-kpi-pag" style="color:#C0392B">—</div>
-      <div id="dd-kpi-pag-cmp" style="font-size:11px;font-weight:600;margin-top:4px"></div>
     </div>
     <div class="kpi-card" style="border-top:3px solid rgba(192,57,43,0.4)">
       <div class="kpi-label">A Pagar</div>
