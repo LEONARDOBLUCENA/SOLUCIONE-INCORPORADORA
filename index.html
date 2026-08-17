@@ -21,13 +21,13 @@ const GRUPO_CONTA={
   '2010105':'CUSTO_OBRA','2010106':'CUSTO_OBRA','2010107':'CUSTO_OBRA','2010401':'CUSTO_OBRA','2010302':'CUSTO_OBRA','2010303':'CUSTO_OBRA',
   '20505':'CUSTO_OBRA','2010304':'CUSTO_OBRA','2010305':'CUSTO_OBRA','2010402':'CUSTO_OBRA','2020101':'CUSTO_OBRA','2020201':'CUSTO_OBRA',
   '2020203':'CUSTO_OBRA','2010201':'CUSTO_OBRA','2010306':'CUSTO_OBRA','2020205':'CUSTO_OBRA','2010498':'CUSTO_OBRA','20501':'CUSTO_OBRA','2020199':'CUSTO_OBRA',
-  '2900102':'CUSTO_OBRA','2900202':'CUSTO_OBRA','2900302':'CUSTO_OBRA','2900402':'CUSTO_OBRA',
+  '2900102':'CUSTO_OBRA','2900202':'CUSTO_OBRA','2900302':'CUSTO_OBRA','2900402':'CUSTO_OBRA','2010103':'CUSTO_OBRA','2010104':'CUSTO_OBRA',
   // DESPESAS DE MARKETING
   '20613':'MARKETING','20615':'MARKETING',
   // DESPESAS ADMINISTRATIVAS
   '2020102':'ADMIN','2020104':'ADMIN','2020105':'ADMIN','2020111':'ADMIN','2020202':'ADMIN','2020207':'ADMIN','2020209':'ADMIN','2020210':'ADMIN',
   '2020211':'ADMIN','2020212':'ADMIN','2020216':'ADMIN','2020219':'ADMIN','2020220':'ADMIN','2020221':'ADMIN','2020224':'ADMIN',
-  '2020225':'ADMIN','2020222':'ADMIN','2020299':'ADMIN','20503':'ADMIN','20601':'ADMIN',
+  '2020225':'ADMIN','2020222':'ADMIN','2020299':'ADMIN','20503':'ADMIN','20601':'ADMIN','2020107':'ADMIN','2020213':'ADMIN',
   // DESPESAS FINANCEIRAS (inclui tributárias sobre faturamento)
   '20301':'FINANCEIRAS','20303':'FINANCEIRAS','20305':'FINANCEIRAS','20307':'FINANCEIRAS','20401':'FINANCEIRAS','20402':'FINANCEIRAS',
   '20403':'FINANCEIRAS','20407':'FINANCEIRAS','20409':'FINANCEIRAS','20410':'FINANCEIRAS','20411':'FINANCEIRAS','20412':'FINANCEIRAS',
@@ -1332,9 +1332,10 @@ function renderFluxo(){
     theadRel.innerHTML='<tr>'
       +'<th style="text-align:left;padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Centro de Custo / Pessoa</th>'
       +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Aporte</th>'
-      +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Retirada/Pgto</th></tr>';
+      +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Retirada/Pgto</th>'
+      +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Saldo</th></tr>';
     if(!ccsRel.length){
-      tbodyRel.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
+      tbodyRel.innerHTML='<tr><td colspan="4"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
     }else{
       let totEntrou=0,totSaiu=0;
       let rowsRel=ccsRel.map(cc=>{
@@ -1342,19 +1343,25 @@ function renderFluxo(){
         let ccEntrou=0,ccSaiu=0;
         const linhasPartes=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map(p=>{
           const v=partesCC[p.nome];ccEntrou+=v.entrou;ccSaiu+=v.saiu;
+          const sv=v.entrou-v.saiu;
           return '<tr><td style="padding:4px 4px 4px 16px;font-size:12px;color:var(--text3)">'+p.nome+'</td>'
             +'<td class="r" style="padding:4px;font-size:12px;color:var(--text3)">'+f2(v.entrou)+'</td>'
-            +'<td class="r" style="padding:4px;font-size:12px;color:var(--text3)">'+f2(v.saiu)+'</td></tr>';
+            +'<td class="r" style="padding:4px;font-size:12px;color:var(--text3)">'+f2(v.saiu)+'</td>'
+            +'<td class="r" style="padding:4px;font-size:12px;color:'+(sv>=0?'#1B6B35':'#C0392B')+'">'+f2(sv)+'</td></tr>';
         }).join('');
         totEntrou+=ccEntrou;totSaiu+=ccSaiu;
+        const ccSaldo=ccEntrou-ccSaiu;
         return '<tr><td style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+cc+'</td>'
           +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+f2(ccEntrou)+'</td>'
-          +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+f2(ccSaiu)+'</td></tr>'
+          +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+f2(ccSaiu)+'</td>'
+          +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600;color:'+(ccSaldo>=0?'#1B6B35':'#C0392B')+'">'+f2(ccSaldo)+'</td></tr>'
           +linhasPartes;
       }).join('');
+      const totSaldo=totEntrou-totSaiu;
       rowsRel+='<tr style="border-top:1px solid var(--border)"><td style="padding:8px 4px;font-size:12px;font-weight:600">Total</td>'
         +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#1B6B35">'+f2(totEntrou)+'</td>'
-        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totSaiu)+'</td></tr>';
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totSaiu)+'</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:'+(totSaldo>=0?'#1B6B35':'#C0392B')+'">'+f2(totSaldo)+'</td></tr>';
       tbodyRel.innerHTML=rowsRel;
     }
 
@@ -1371,17 +1378,22 @@ function renderFluxo(){
       theadAcum.innerHTML='<tr>'
         +'<th style="text-align:left;padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Parte</th>'
         +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Total Aporte</th>'
-        +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Total Retirada</th></tr>';
+        +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Total Retirada</th>'
+        +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Saldo</th></tr>';
       let totEntrouG=0,totSaiuG=0;
       let rowsAcum=PARTES_RELACIONADAS.map(p=>{
         const v=acumPorParte[p.nome];totEntrouG+=v.entrou;totSaiuG+=v.saiu;
+        const sv=v.entrou-v.saiu;
         return '<tr><td style="padding:6px 4px;font-size:12px">'+p.nome+'</td>'
           +'<td class="r" style="padding:6px 4px;font-size:12px">'+f2(v.entrou)+'</td>'
-          +'<td class="r" style="padding:6px 4px;font-size:12px">'+f2(v.saiu)+'</td></tr>';
+          +'<td class="r" style="padding:6px 4px;font-size:12px">'+f2(v.saiu)+'</td>'
+          +'<td class="r" style="padding:6px 4px;font-size:12px;color:'+(sv>=0?'#1B6B35':'#C0392B')+'">'+f2(sv)+'</td></tr>';
       }).join('');
+      const totSaldoG=totEntrouG-totSaiuG;
       rowsAcum+='<tr style="border-top:1px solid var(--border)"><td style="padding:8px 4px;font-size:12px;font-weight:600">Total</td>'
         +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#1B6B35">'+f2(totEntrouG)+'</td>'
-        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totSaiuG)+'</td></tr>';
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totSaiuG)+'</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:'+(totSaldoG>=0?'#1B6B35':'#C0392B')+'">'+f2(totSaldoG)+'</td></tr>';
       tbodyAcum.innerHTML=rowsAcum;
     }
   }
@@ -2455,7 +2467,7 @@ function abrirProjecaoFluxo(){
     var g=grupoDeConta(r.conta||'');
     saidasPorGrupo[g]=(saidasPorGrupo[g]||0)+r.valor;
   });
-  // "Previsto Engenharia" — só aparece quando o filtro de Obra é especificamente SPE Montagnes.
+  // "Previsto Engenharia" — só existe quando o filtro de Obra é especificamente SPE Montagnes.
   // Soma o mesmo DATA.previsto[obra][mês] que já alimenta a linha "Previsto" do grupo Custo de
   // Obra na tabela grande do Fluxo de Caixa — não é um cálculo novo, é o mesmo valor.
   var mostrarPrevistoEng=obraSel&&normCC(obraSel)===normCC('SPE MONTAGNES');
@@ -2473,6 +2485,10 @@ function abrirProjecaoFluxo(){
       });
     });
   }
+  // Previsto Engenharia entra dentro de Custo de Obra (é provisão da mesma natureza) — assim
+  // o total de Saídas exibido bate exatamente com a soma dos grupos mostrados abaixo dele.
+  var saidasExibida=saidas+previstoEng;
+  if(mostrarPrevistoEng)saidasPorGrupo['CUSTO_OBRA']=(saidasPorGrupo['CUSTO_OBRA']||0)+previstoEng;
   var saldo=entradas-saidas-previstoEng;
   var fmtD=function(d){return d.toLocaleDateString('pt-BR');};
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
@@ -2482,11 +2498,11 @@ function abrirProjecaoFluxo(){
     +'<div style="font-size:13px;color:var(--text3)">'+fmtD(de)+' até '+fmtD(ate)+(obraSel?' — '+obraSel:' — Todas as obras')+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:10px">'
     +'<div onclick="abrirDetalheProjecao(\'entradas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#eaf6ec;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#1B6B35">Entradas</span><span style="font-size:15px;font-weight:700;color:#1B6B35">'+fmt(entradas)+'</span></div>'
-    +'<div onclick="abrirDetalheProjecao(\'saidas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fbeaea;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#C0392B">Saídas</span><span style="font-size:15px;font-weight:700;color:#C0392B">'+fmt(saidas)+'</span></div>'
+    +'<div onclick="abrirDetalheProjecao(\'saidas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fbeaea;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#C0392B">Saídas</span><span style="font-size:15px;font-weight:700;color:#C0392B">'+fmt(saidasExibida)+'</span></div>'
     +GRUPOS_SAIDA.filter(function(g){return saidasPorGrupo[g.key];}).map(function(g){
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 14px 6px 24px"><span style="font-size:12px;color:'+g.cor+'">'+g.label+'</span><span style="font-size:12px;font-weight:600;color:'+g.cor+'">'+fmt(saidasPorGrupo[g.key])+'</span></div>';
+      var notaPrevisto=(g.key==='CUSTO_OBRA'&&mostrarPrevistoEng&&previstoEng)?'<div style="padding:2px 14px 2px 36px;font-size:11px;color:var(--text3)">inclui Previsto Engenharia: '+fmt(previstoEng)+'</div>':'';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 14px 6px 24px"><span style="font-size:12px;color:'+g.cor+'">'+g.label+'</span><span style="font-size:12px;font-weight:600;color:'+g.cor+'">'+fmt(saidasPorGrupo[g.key])+'</span></div>'+notaPrevisto;
     }).join('')
-    +(mostrarPrevistoEng?'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fdf3f2;border-radius:6px;border-left:3px solid #C0392B" title="Vem da linha Previsto do grupo Custo de Obra"><span style="font-size:12px;font-weight:600;color:#943126">Previsto Engenharia</span><span style="font-size:14px;font-weight:700;color:#943126">'+fmt(previstoEng)+'</span></div>':'')
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:'+(saldo>=0?'#eaf6ec':'#fbeaea')+';border-radius:6px;border-top:2px solid '+(saldo>=0?'#1B6B35':'#C0392B')+'"><span style="font-size:14px;font-weight:700">Saldo</span><span style="font-size:18px;font-weight:800;color:'+(saldo>=0?'#1B6B35':'#C0392B')+'">'+fmt(saldo)+'</span></div>'
     +'</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no período. Meses já passados mostram só o que foi realizado; mês atual e futuros incluem provisão (a pagar/a receber).</div>'
