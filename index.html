@@ -290,35 +290,41 @@ function processContasRecebidasText(txt){
   const todas=rows.map(r=>{
     const data=parseDateBR(findColKey(r,['Data','data']).value);
     const complemento=findColKey(r,['Complemento','complemento','Historico','Lançamento']).value;
-    const valor=Math.abs(parseBRNum(findColExact(r,['Valor'],['Valor']).value));
+    const valorAbs=Math.abs(parseBRNum(findColExact(r,['Valor'],['Valor']).value));
     const cc=normCC(findColExact(r,['Nome centro de custo','Nome Centro de Custo','Nome CC'],['centro de custo','cc']).value);
     const conta=findColExact(r,['Conta','Plano de Contas'],['Conta','conta']).value;
     const cu=complemento.toUpperCase();
-    // Classificação idêntica à usada no restante do BI (ver processCSVText).
-    let tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
+    const ehDescontoConcedido=cu.includes('DESCONTO CONCEDIDO');
+    // Recebimento e Desconto Concedido (mesmo título, reduz o que entrou de fato) contam como
+    // entrada — sem o desconto concedido o Fluxo de Caixa não bate com o total baixado.
+    // Desconto Obtido continua fora daqui (é redutor de despesa, não de receita).
+    let tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER')||ehDescontoConcedido)?'FATURAMENTO':'PAGAMENTO';
     if(conta.includes('2020299')||conta.includes('2010498')||conta.includes('2020199')||conta.includes('20499')){tipo='PAGAMENTO';}
     if(conta.includes('10501')){tipo='FATURAMENTO';}
     if(conta.includes('20301')||conta.includes('20307')||conta.includes('2010305')){tipo='PAGAMENTO';}
-    return{data,complemento,valor,cc,conta,tipo};
+    // Desconto Concedido entra negativo (reduz a receita) — não é caixa a mais entrando.
+    const valor=(tipo==='FATURAMENTO'&&ehDescontoConcedido)?-valorAbs:valorAbs;
+    return{data,complemento,valor,cc,conta,tipo,ehDescontoConcedido};
   });
   const datasValidas=todas.map(r=>r.data).filter(Boolean);
   if(!datasValidas.length){setStatus('crf-paste-status','Nenhuma data válida encontrada nas linhas coladas.',false);return;}
   const minData=new Date(Math.min.apply(null,datasValidas.map(d=>d.getTime())));
   const maxData=new Date(Math.max.apply(null,datasValidas.map(d=>d.getTime())));
-  const recebimentos=todas.filter(r=>r.tipo==='FATURAMENTO'&&r.data&&r.valor>0).map(r=>({
+  const recebimentos=todas.filter(r=>r.tipo==='FATURAMENTO'&&r.data&&r.valor!==0).map(r=>({
     data:r.data,complemento:r.complemento,valor:r.valor,cc:r.cc,conta:r.conta,tipo:'FATURAMENTO',
     mes:r.data.getMonth(),ano:r.data.getFullYear(),fonte:'contas-recebidas'
   }));
+  const qtdDesconto=recebimentos.filter(r=>r.valor<0).length;
   const ignoradas=todas.length-recebimentos.length;
   if(!recebimentos.length){
-    const confirmou=confirm('Nenhuma linha de Recebimento encontrada no texto colado (só Pagamento/Desconto, ou período sem recebimento).\n\nMesmo assim, isso vai REMOVER os lançamentos de Contas Recebidas já existentes entre '+minData.toLocaleDateString('pt-BR')+' e '+maxData.toLocaleDateString('pt-BR')+' (porque não veio nenhum dado novo pra substituir). Quer continuar?');
+    const confirmou=confirm('Nenhuma linha de Recebimento/Desconto Concedido encontrada no texto colado (só Pagamento, ou período sem recebimento).\n\nMesmo assim, isso vai REMOVER os lançamentos de Contas Recebidas já existentes entre '+minData.toLocaleDateString('pt-BR')+' e '+maxData.toLocaleDateString('pt-BR')+' (porque não veio nenhum dado novo pra substituir). Quer continuar?');
     if(!confirmou){setStatus('crf-paste-status','Importação cancelada — nada foi alterado.',false);return;}
   }
   const antesCount=DATA.csv.length;
   DATA.csv=DATA.csv.filter(r=>!(r.fonte==='contas-recebidas'&&r.data&&r.data>=minData&&r.data<=maxData));
   const removidos=antesCount-DATA.csv.length;
   DATA.csv=[...DATA.csv,...recebimentos];
-  setStatus('crf-paste-status','Período '+minData.toLocaleDateString('pt-BR')+' a '+maxData.toLocaleDateString('pt-BR')+': +'+recebimentos.length+' recebimento(s) importado(s), '+removidos+' lançamento(s) antigo(s) do mesmo período removido(s), '+ignoradas+' linha(s) de Pagamento/Desconto ignorada(s).',true);
+  setStatus('crf-paste-status','Período '+minData.toLocaleDateString('pt-BR')+' a '+maxData.toLocaleDateString('pt-BR')+': +'+recebimentos.length+' lançamento(s) importado(s) ('+qtdDesconto+' de Desconto Concedido, negativo), '+removidos+' lançamento(s) antigo(s) do mesmo período removido(s), '+ignoradas+' linha(s) de Pagamento ignorada(s).',true);
   renderContasRecebidas();renderFluxo();renderCaixaInicialCampos();autoSave();
 }
 
