@@ -366,9 +366,11 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
         if(chamadasAcumuladas>=COTA_DIARIA_SIENGE)cotaEstourou=true;
         continue;
       }
-      // avisos só existem quando o Sienge devolveu erro real numa página (ex: 429) — sinal
-      // confiável de que a cota já era, sem precisar chutar limite exato.
-      if((dados.avisos||[]).length>0)cotaEstourou=true;
+      // avisosCriticos só existem quando o Sienge devolveu erro real de cota/limite (status
+      // 429) — sinal confiável de que a cota já era, sem precisar chutar limite exato.
+      // "avisos" comuns (endpoint sem paginação, duplicata removida) são informativos e
+      // não implicam estouro de cota — não devem travar as próximas fontes.
+      if((dados.avisosCriticos||[]).length>0)cotaEstourou=true;
       if(chamadasAcumuladas>=COTA_DIARIA_SIENGE)cotaEstourou=true;
       const novos=dados.csv.map(function(row){
         return {
