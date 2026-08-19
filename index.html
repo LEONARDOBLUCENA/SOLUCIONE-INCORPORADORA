@@ -46,6 +46,9 @@ function ccMatch(a,b){return normCC(a)===normCC(b);}
 function parseBRNum(s){if(!s)return 0;s=String(s).trim().replace(/\s/g,'').replace(/R\$\s*/,'');if(!s||s==='-')return 0;if(s.includes(','))return parseFloat(s.replace(/\./g,'').replace(',','.'))||0;const dots=(s.match(/\./g)||[]).length;if(dots===1){const p=s.split('.');if(p[1].length===3)s=s.replace('.','');}else if(dots>1)s=s.replace(/\./g,'');return parseFloat(s)||0;}
 function parseDateBR(s){if(!s)return null;s=String(s).trim();const m=s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);if(m){let y=parseInt(m[3]);if(y<100)y+=2000;const d=new Date(y,parseInt(m[2])-1,parseInt(m[1]));return isNaN(d.getTime())?null:d;}const m2=s.match(/^(\d{4})-(\d{2})-(\d{2})/);if(m2){const d=new Date(parseInt(m2[1]),parseInt(m2[2])-1,parseInt(m2[3]));return isNaN(d.getTime())?null:d;}return null;}
 function parseTSV(text){const lines=text.trim().split('\n').map(l=>l.replace(/\r$/,'')).filter(l=>l.trim());if(lines.length<2)return[];const headers=lines[0].split('\t').map(h=>h.trim());return lines.slice(1).map(line=>{const cols=line.split('\t');const row={};headers.forEach((h,i)=>{row[h]=(cols[i]||'').trim();});return row;});}
+// Igual ao parseTSV, mas detecta o delimitador (tab, ; ou ,) pelo cabeçalho — cobre tanto colar
+// via Excel (vira tab) quanto colar direto de um .csv exportado com ; (caso do relatório do Sienge).
+function parseDelimited(text){const lines=text.trim().split('\n').map(l=>l.replace(/\r$/,'')).filter(l=>l.trim());if(lines.length<2)return[];const header=lines[0];let delim='\t',max=0;['\t',';',','].forEach(d=>{const n=header.split(d).length-1;if(n>max){max=n;delim=d;}});const headers=header.split(delim).map(h=>h.trim());return lines.slice(1).map(line=>{const cols=line.split(delim);const row={};headers.forEach((h,i)=>{row[h]=(cols[i]||'').trim();});return row;});}
 function findColKey(row,cands){for(const c of cands){const key=Object.keys(row).find(k=>k.toLowerCase().replace(/[^a-z0-9]/g,'').includes(c.toLowerCase().replace(/[^a-z0-9]/g,'')));if(key!==undefined)return{foundKey:key,value:(row[key]||'').trim()};}return{foundKey:null,value:''};};
 function findColExact(row,exact,fallback){const keys=Object.keys(row);for(const name of exact){const key=keys.find(k=>k.trim().toLowerCase()===name.trim().toLowerCase());if(key!==undefined)return{foundKey:key,value:(row[key]||'').trim()};}return findColKey(row,fallback||exact);}
 function fillSelect(id,values,vFn,lFn){const sel=document.getElementById(id);if(!sel)return;const cur=sel.value,first=sel.options[0]?sel.options[0].textContent:'';sel.innerHTML='<option value="">'+first+'</option>';values.forEach(v=>{const o=document.createElement('option');o.value=vFn(v);o.textContent=lFn(v);sel.appendChild(o);});if(cur)sel.value=cur;}
@@ -233,7 +236,7 @@ function renderPrevisao(){
   if(sEl){var sp=tR-tP;sEl.textContent=fP(Math.abs(sp));sEl.style.color=sp>=0?'#1B6B35':'#C0392B';}
   s_('prev-count',dados.length+' lancamentos');
 }
-window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
+window.addEventListener('load',()=>{jbinLoad();wirePaste('paste-csv',processCSVText,'status-csv');wirePaste('crf-paste',processContasRecebidasText,'crf-paste-status');const dtObraEl=document.getElementById('dt-obra');if(dtObraEl)dtObraEl.addEventListener('change',renderDtlh);});
 
 function processCSVText(txt){
   const rows=parseTSV(txt);
@@ -262,6 +265,62 @@ function processCSVText(txt){
   renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
+
+// ---------- Importação de Contas Recebidas (colar do relatório) ----------
+// Mesmo relatório usado no resto do BI (Data, Complemento, Nome centro de custo, Conta, Valor).
+// Só entra o que a classificação abaixo (idêntica à do processCSVText) reconhece como FATURAMENTO
+// — ou seja, só Recebimento de verdade, excluindo inclusive o caso de reembolso de despesa que
+// tem "Recebimento" no texto mas é redutor de despesa (conta 2020299 etc.), conforme já tratado
+// no resto do BI. Pagamento e Desconto são ignorados.
+//
+// Anti-duplicação: o período (De/Até) é o intervalo de datas encontrado nas linhas coladas —
+// não precisa digitar nada. Antes de inserir os novos, remove qualquer lançamento de
+// Contas Recebidas já existente dentro desse mesmo período, então colar de novo (mesmo período,
+// período maior ou período menor) sempre deixa os dados atualizados, sem duplicar.
+function processContasRecebidasText(txt){
+  const rows=parseDelimited(txt);
+  if(!rows.length){setStatus('crf-paste-status','Nenhum dado encontrado — confira se colou o relatório com a linha de cabeçalho junto.',false);return;}
+  const allH=Object.keys(rows[0]),first=rows[0];
+  const mData={data:findColKey(first,['Data','data']),complemento:findColKey(first,['Complemento','complemento','Historico','Lançamento']),valor:findColExact(first,['Valor'],['Valor']),cc:findColExact(first,['Nome centro de custo','Nome Centro de Custo','Nome CC'],['centro de custo','cc']),conta:findColExact(first,['Conta','Plano de Contas'],['Conta','conta'])};
+  renderDiag('diag-contasrecebidas',allH,[{label:'Data',foundKey:mData.data.foundKey},{label:'Complemento',foundKey:mData.complemento.foundKey},{label:'Valor',foundKey:mData.valor.foundKey},{label:'Nome Centro de Custo',foundKey:mData.cc.foundKey},{label:'Conta',foundKey:mData.conta.foundKey}],first);
+  if(!mData.data.foundKey||!mData.valor.foundKey){
+    setStatus('crf-paste-status','Não encontrei as colunas de Data e/ou Valor no texto colado — confira o diagnóstico abaixo.',false);
+    return;
+  }
+  const todas=rows.map(r=>{
+    const data=parseDateBR(findColKey(r,['Data','data']).value);
+    const complemento=findColKey(r,['Complemento','complemento','Historico','Lançamento']).value;
+    const valor=Math.abs(parseBRNum(findColExact(r,['Valor'],['Valor']).value));
+    const cc=normCC(findColExact(r,['Nome centro de custo','Nome Centro de Custo','Nome CC'],['centro de custo','cc']).value);
+    const conta=findColExact(r,['Conta','Plano de Contas'],['Conta','conta']).value;
+    const cu=complemento.toUpperCase();
+    // Classificação idêntica à usada no restante do BI (ver processCSVText).
+    let tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER'))?'FATURAMENTO':cu.includes('DESCONTO CONCEDIDO')?'DESCONTO':'PAGAMENTO';
+    if(conta.includes('2020299')||conta.includes('2010498')||conta.includes('2020199')||conta.includes('20499')){tipo='PAGAMENTO';}
+    if(conta.includes('10501')){tipo='FATURAMENTO';}
+    if(conta.includes('20301')||conta.includes('20307')||conta.includes('2010305')){tipo='PAGAMENTO';}
+    return{data,complemento,valor,cc,conta,tipo};
+  });
+  const datasValidas=todas.map(r=>r.data).filter(Boolean);
+  if(!datasValidas.length){setStatus('crf-paste-status','Nenhuma data válida encontrada nas linhas coladas.',false);return;}
+  const minData=new Date(Math.min.apply(null,datasValidas.map(d=>d.getTime())));
+  const maxData=new Date(Math.max.apply(null,datasValidas.map(d=>d.getTime())));
+  const recebimentos=todas.filter(r=>r.tipo==='FATURAMENTO'&&r.data&&r.valor>0).map(r=>({
+    data:r.data,complemento:r.complemento,valor:r.valor,cc:r.cc,conta:r.conta,tipo:'FATURAMENTO',
+    mes:r.data.getMonth(),ano:r.data.getFullYear(),fonte:'contas-recebidas'
+  }));
+  const ignoradas=todas.length-recebimentos.length;
+  if(!recebimentos.length){
+    const confirmou=confirm('Nenhuma linha de Recebimento encontrada no texto colado (só Pagamento/Desconto, ou período sem recebimento).\n\nMesmo assim, isso vai REMOVER os lançamentos de Contas Recebidas já existentes entre '+minData.toLocaleDateString('pt-BR')+' e '+maxData.toLocaleDateString('pt-BR')+' (porque não veio nenhum dado novo pra substituir). Quer continuar?');
+    if(!confirmou){setStatus('crf-paste-status','Importação cancelada — nada foi alterado.',false);return;}
+  }
+  const antesCount=DATA.csv.length;
+  DATA.csv=DATA.csv.filter(r=>!(r.fonte==='contas-recebidas'&&r.data&&r.data>=minData&&r.data<=maxData));
+  const removidos=antesCount-DATA.csv.length;
+  DATA.csv=[...DATA.csv,...recebimentos];
+  setStatus('crf-paste-status','Período '+minData.toLocaleDateString('pt-BR')+' a '+maxData.toLocaleDateString('pt-BR')+': +'+recebimentos.length+' recebimento(s) importado(s), '+removidos+' lançamento(s) antigo(s) do mesmo período removido(s), '+ignoradas+' linha(s) de Pagamento/Desconto ignorada(s).',true);
+  renderContasRecebidas();renderFluxo();renderCaixaInicialCampos();autoSave();
+}
 
 // ---------- Sync Sienge (único botão — ordem: Contas Pagas, Contas a Receber, Contas a Pagar) ----------
 const SIENGE_PROXY_URL='https://sienge-proxymonter-production.up.railway.app';
@@ -3276,7 +3335,18 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
 
 <div class="page" id="page-contasrecebidas">
   <div class="sec-title">Contas Recebidas (Entradas)</div>
-  <div class="sec-sub">Preenchimento manual, por enquanto. Alimenta as Entradas do Dashboard e do Fluxo de Caixa, por conta/apropriação.</div>
+  <div class="sec-sub">Importação por colar planilha (mesmo relatório usado no resto do BI — Data, Complemento, Nome centro de custo, Conta, Valor). Só linhas de Recebimento entram aqui; Pagamento e Desconto são ignorados. Alimenta as Entradas do Dashboard e do Fluxo de Caixa, por conta/apropriação.</div>
+  <div class="tbl-card" style="margin-bottom:16px">
+    <div class="tbl-head">
+      <div class="tbl-title">Importar (colar do relatório)</div>
+    </div>
+    <div style="padding:16px 20px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:12px;color:var(--text3)">Cole aqui (Ctrl+V) o conteúdo do relatório para o período desejado. O período é detectado automaticamente pelas datas coladas — qualquer lançamento de Contas Recebidas já existente dentro desse mesmo período é substituído pelos dados novos, então pode colar o mesmo intervalo (ou um intervalo maior/menor) quantas vezes precisar sem duplicar.</div>
+      <textarea id="crf-paste" placeholder="Cole aqui o relatório (Ctrl+V)..." style="width:100%;min-height:90px;border:1px solid var(--border);padding:10px;font-family:monospace;font-size:12px;resize:vertical;outline:none;background:var(--surface2)"></textarea>
+      <div id="crf-paste-status" class="paste-status"></div>
+      <div id="diag-contasrecebidas" style="display:none"></div>
+    </div>
+  </div>
   <div id="resumo-contasrecebidas"></div>
   <div class="tbl-card">
     <div class="tbl-head">
@@ -3297,7 +3367,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <div class="tbl-wrap">
       <table>
         <thead><tr><th>Data</th><th>Complemento</th><th>Obra</th><th>Conta</th><th class="r">Valor (R$)</th><th></th></tr></thead>
-        <tbody id="body-contasrecebidas"><tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda — use o formulário acima para adicionar</p></div></td></tr></tbody>
+        <tbody id="body-contasrecebidas"><tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda — cole o relatório na caixa acima</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
