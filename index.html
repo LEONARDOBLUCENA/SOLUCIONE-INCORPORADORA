@@ -446,7 +446,8 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
           tipo: row.tipo,
           mes: row.mes,
           ano: row.ano,
-          fonte: item.fonte
+          fonte: item.fonte,
+          porBens: !!row.porBens // baixa "Por Bens" — entra no Dashboard, mas nunca no Fluxo de Caixa
         };
       });
       resultados.push({titulo:item.titulo,fonte:item.fonte,novos,avisos:dados.avisos||[],chamadasSienge:dados.chamadasSienge||0,endDateEfetivo:endDate});
@@ -1045,7 +1046,9 @@ function renderFluxo(){
   const thead=document.getElementById('thead-fluxo'),tbody=document.getElementById('tbody-fluxo'),tfoot=document.getElementById('tfoot-fluxo');
   if(!thead||!tbody||!tfoot)return;
   {const obrasVistasFc=new Map();DATA.csv.map(r=>r.cc).filter(Boolean).forEach(o=>{const k=normCC(o);if(!obrasVistasFc.has(k))obrasVistasFc.set(k,o.trim());});fillSelect('fc-obra',[...obrasVistasFc.values()].sort(),v=>v,v=>v);}
-  const dados=DATA.csv.filter(r=>!obraSel||ccMatch(r.cc||'',obraSel));
+  // porBens: baixa quitada com bens/permuta — não é saída/entrada real de caixa, nunca entra
+  // no Fluxo de Caixa (só no Dashboard, com subdivisão própria no KPI).
+  const dados=DATA.csv.filter(r=>(!obraSel||ccMatch(r.cc||'',obraSel))&&!r.porBens);
 
   // Colunas dinâmicas: todas as combinações ano-mes presentes nos dados, ordenadas
   const colSet=new Set();
@@ -2486,6 +2489,7 @@ function abrirProjecaoFluxo(curtoPrazo){
   var hoje=new Date();
   var chaveAtual=hoje.getFullYear()*100+hoje.getMonth();
   var linhas=(DATA.csv||[]).filter(function(r){
+    if(r.porBens)return false; // baixa "Por Bens" não é caixa real — nunca entra na projeção
     if(!r.data)return false;
     var t=(r.data instanceof Date?r.data:new Date(r.data)).getTime();
     if(t<de.getTime()||t>ate.getTime())return false;
@@ -2571,6 +2575,7 @@ function abrirDetalheFluxo(opts){
   opts=opts||{};
   var obraSel=opts.obraSel||'';
   var linhas=(DATA.csv||[]).filter(function(r){
+    if(r.porBens)return false; // detalhe do Fluxo de Caixa — nunca inclui baixa "Por Bens"
     if(opts.tipo&&r.tipo!==opts.tipo)return false;
     if(opts.conta&&r.conta!==opts.conta)return false;
     if(opts.grupo){
@@ -2700,6 +2705,14 @@ function renderDashFat(){
   var fat=filtraDash(csv.filter(function(r){return r.tipo==='FATURAMENTO';}), 'df');
   var totaisFat=renderTabelaDash('df-tbody','df-tfoot','df-badge','df-kpi-rec','df-kpi-prov',fat,true);
   atualizarKpiInadimplencia('receber','df-kpi-inad');
+  // Subdivisão "Por Bens" — continua somado dentro de "Entradas" acima (Dashboard mostra o
+  // total cheio), só exibida à parte aqui como informação; quem exclui de verdade é o Fluxo
+  // de Caixa (renderFluxo/abrirProjecaoFluxo), que nunca considera porBens:true.
+  var fatPorBensEl=document.getElementById('df-kpi-porbens');
+  if(fatPorBensEl){
+    var fatPorBens=fat.filter(function(r){return r.porBens;}).reduce(function(s,r){return s+r.valor;},0);
+    fatPorBensEl.textContent=fatPorBens?'R$ '+fatPorBens.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+  }
   var MESES_PT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesFat=Array.from({length:12},function(){return{rec:0,arec:0};});
   fat.forEach(function(r){
@@ -2728,6 +2741,12 @@ function renderDashDesp(){
   var pag=filtraDash(csv.filter(function(r){return r.tipo==='PAGAMENTO';}), 'dd');
   var totaisPag=renderTabelaDash('dd-tbody','dd-tfoot','dd-badge','dd-kpi-pag','dd-kpi-prov',pag,false);
   atualizarKpiInadimplencia('pagar','dd-kpi-inad');
+  // Subdivisão "Por Bens" — mesma lógica do lado das Entradas, ver comentário lá.
+  var pagPorBensEl=document.getElementById('dd-kpi-porbens');
+  if(pagPorBensEl){
+    var pagPorBens=pag.filter(function(r){return r.porBens;}).reduce(function(s,r){return s+r.valor;},0);
+    pagPorBensEl.textContent=pagPorBens?'R$ '+pagPorBens.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—';
+  }
   var MESES_PT2=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
   var porMesDesp=Array.from({length:12},function(){return{pag:0,apag:0};});
   pag.forEach(function(r){
@@ -4046,7 +4065,7 @@ function exportarOrcamento(){}
   </div>
 
   <!-- KPIs Faturamento -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;margin-top:14px">
     <div class="kpi-card" style="border-top:3px solid #1B6B35">
       <div class="kpi-label">Entradas</div>
       <div class="kpi-val" id="df-kpi-rec" style="color:#1B6B35">—</div>
@@ -4058,6 +4077,10 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid #B35C00;cursor:pointer" onclick="abrirDetalheInadimplencia('receber')" title="Clique para ver os títulos">
       <div class="kpi-label">Inadimplência</div>
       <div class="kpi-val" id="df-kpi-inad" style="color:#B35C00">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #6C3483" title="Já incluso em Entradas — mostrado à parte porque não conta para o Fluxo de Caixa">
+      <div class="kpi-label">dos quais, Por Bens</div>
+      <div class="kpi-val" id="df-kpi-porbens" style="color:#6C3483;font-size:20px">—</div>
     </div>
   </div>
 
@@ -4140,7 +4163,7 @@ function exportarOrcamento(){}
   </div>
 
   <!-- KPIs Despesas -->
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:14px">
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px;margin-top:14px">
     <div class="kpi-card" style="border-top:3px solid #C0392B">
       <div class="kpi-label">Saídas</div>
       <div class="kpi-val" id="dd-kpi-pag" style="color:#C0392B">—</div>
@@ -4152,6 +4175,10 @@ function exportarOrcamento(){}
     <div class="kpi-card" style="border-top:3px solid #B35C00;cursor:pointer" onclick="abrirDetalheInadimplencia('pagar')" title="Clique para ver os títulos">
       <div class="kpi-label">Contas Atrasadas</div>
       <div class="kpi-val" id="dd-kpi-inad" style="color:#B35C00">—</div>
+    </div>
+    <div class="kpi-card" style="border-top:3px solid #6C3483" title="Já incluso em Saídas — mostrado à parte porque não conta para o Fluxo de Caixa">
+      <div class="kpi-label">dos quais, Por Bens</div>
+      <div class="kpi-val" id="dd-kpi-porbens" style="color:#6C3483;font-size:20px">—</div>
     </div>
   </div>
 
