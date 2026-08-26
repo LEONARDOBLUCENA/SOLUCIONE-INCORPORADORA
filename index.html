@@ -498,6 +498,7 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
   try{
     renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();
     renderFluxo();renderCaixaInicialCampos();
+    renderDash();updateDtlhFilters();renderDtlh(); // atualiza Dashboard e Resumo Executivo na hora — sem precisar de F5
     autoSave();
   }catch(errRender){
     erroAoAtualizarTelas=errRender;
