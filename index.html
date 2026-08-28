@@ -1327,7 +1327,9 @@ function renderFluxo(){
     theadR.innerHTML='<tr style="background:#f5f5f5">'
       +'<th style="'+thSDr+'"></th>'
       +'<th class="r" style="padding:6px 8px;width:90px;font-size:10px;background:#f5f5f5;position:sticky;top:0;color:#666">Acum.<br>Anterior</th>'
-      +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
+      +colKeys.map((k,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]
+        +(k>=chaveAtualFluxo?'<br><span style="font-size:8px;font-weight:700;color:#B7950B;letter-spacing:.04em" title="Mês ainda não fechado — inclui provisão (\'a pagar\'/\'a receber\') em aberto">PREVISTO</span>':'')
+        +'</th>').join('')
       +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
     const acumPagTotal=pagN.reduce((s,c)=>s+acumPag(c),0);
     const tdAcumDashR='<td class="r" style="padding:5px 6px;font-size:11px;background:#1a5276;color:rgba(255,255,255,.4)">—</td>';
