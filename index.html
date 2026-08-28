@@ -1221,8 +1221,7 @@ function renderFluxo(){
   gruposDef.forEach(g=>{
     const lista=pagN.filter(c=>grupoDeConta(c)===g.key);
     if(!lista.length)return;
-    if(rows)rows+=spacerRow;
-    rows+='<tr style="background:'+g.hdrBg+'"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:'+g.hdrText+';'+SD+g.hdrBg+'">▶ '+g.titulo+'</td></tr>';
+    let grpRows='<tr style="background:'+g.hdrBg+'"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:'+g.hdrText+';'+SD+g.hdrBg+'">▶ '+g.titulo+'</td></tr>';
     const totGrupo=Array(NC).fill(0);
     let acumGrupoTot=0;
     lista.forEach((c,idx)=>{
@@ -1234,18 +1233,26 @@ function renderFluxo(){
       acumGrupoTot+=aa;
       vals.forEach((v,i)=>{totGrupo[i]+=v;});
       const zebra=idx%2===0?'#ffffff':g.zebra;
-      rows+='<tr style="border-left:3px solid '+g.borda+';border-bottom:1px solid '+g.divisor+'">'
+      grpRows+='<tr style="border-left:3px solid '+g.borda+';border-bottom:1px solid '+g.divisor+'">'
         +'<td '+tdS(zebra)+'>'+c+'</td>'
         +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2c(aa,c,null,null,colKeys[0])+'</td>'
         +vals.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2c(v,c,colAno[i],colMes[i])+'</td>').join('')
         +'<td class="r" style="padding:4px 8px;font-weight:600;background:'+g.totBg+';font-size:10px">'+f2c(tot,c,null,null,null)+'</td></tr>';
     });
     if(g.key==='CUSTO_OBRA'){
-      rows+=prevRows;
+      grpRows+=prevRows;
       prevTotalMes.forEach((v,i)=>totGrupo[i]+=v);
     }
-    rows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(acumGrupoTot,null,g.key,g.totLabel,null,null,colKeys[0])+'</td>'+totGrupo.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(v,null,g.key,g.totLabel,colAno[i],colMes[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2g(acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0),null,g.key,g.totLabel,null,null,null)+'</td></tr>';
-    gruposResumoFin[g.key]={total:acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0),acum:acumGrupoTot,mensal:totGrupo.slice(),label:g.totLabel,cor:g.hdrText};
+    const grpTotalGeral=acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0);
+    // Grupo "Outras Despesas" só aparece quando tem algum valor de verdade — a pedido do
+    // Leonardo (28/08/2026). Os outros 4 grupos continuam sempre visíveis (mesmo zerados),
+    // já que eles têm sentido fixo/estrutural pro Leonardo acompanhar; Outras Despesas é o
+    // grupo "sobra"/fallback, então só faz sentido mostrar quando realmente tiver lançamento.
+    if(g.key==='OUTRAS'&&grpTotalGeral===0&&acumGrupoTot===0&&totGrupo.every(v=>v===0))return;
+    grpRows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(acumGrupoTot,null,g.key,g.totLabel,null,null,colKeys[0])+'</td>'+totGrupo.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(v,null,g.key,g.totLabel,colAno[i],colMes[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2g(grpTotalGeral,null,g.key,g.totLabel,null,null,null)+'</td></tr>';
+    if(rows)rows+=spacerRow;
+    rows+=grpRows;
+    gruposResumoFin[g.key]={total:grpTotalGeral,acum:acumGrupoTot,mensal:totGrupo.slice(),label:g.totLabel,cor:g.hdrText};
     saldoMensal=saldoMensal.map((v,i)=>v-totGrupo[i]);
     rows+=linhaSaldo();
   });
@@ -1306,16 +1313,11 @@ function renderFluxo(){
   const saldo=[];let acc=ci;rv2.forEach((v,i)=>{acc+=v;saldo.push(acc);});
   renderVisaoExecutivaCaixa(colKeys,colAno,colMes,saldo,ci);
   const ciMeses=rv2.map((_,i)=>i===0?ci:saldo[i-1]);
-  const tdAcumDashRed='<td class="r" style="padding:4px 6px;font-size:10px;background:#922B21;color:rgba(255,255,255,.5)">—</td>';
-  const tdAcumDashCinza='<td class="r" style="padding:4px 6px;font-size:10px;background:#f0f0f0;color:#bbb">—</td>';
-  const tdAcumDashAzulClaro='<td class="r" style="padding:4px 6px;font-size:10px;background:#EAF4FB;color:#9bb8cc">—</td>';
-  const tdAcumDashAzulEscuro='<td class="r" style="padding:4px 6px;font-size:10px;background:#1a5276;color:rgba(255,255,255,.4)">—</td>';
-  tfoot.innerHTML=
-    spacerRow+
-    '<tr style="background:#922B21;font-weight:700"><td style="'+SD+'#922B21;padding:6px 12px;font-size:11px;color:#fff">Total Pagamentos + Previsto</td>'+tdAcumDashRed+pagPrevMes.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#fff;font-weight:600">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:#fff;font-weight:700">'+f2(pagPrevTot)+'</td></tr>'+
-    '<tr style="border-top:2px solid #bbb;font-weight:700;background:#f0f0f0"><td style="'+SD+'#f0f0f0;padding:6px 12px;font-size:11px">Resultado do Período</td>'+tdAcumDashCinza+rv2.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(rt2>=0?'#1B6B35':'#C0392B')+'">'+f2(rt2)+'</td></tr>'+
-    '<tr style="background:#EAF4FB;font-weight:600"><td style="'+SD+'#EAF4FB;padding:6px 12px;font-size:11px">Caixa Inicial do Mês</td>'+tdAcumDashAzulClaro+ciMeses.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:#1a5276">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#d6eaf8;font-size:10px;color:#1a5276">'+f2(ci)+'</td></tr>'+
-    '<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa do Mês</td>'+tdAcumDashAzulEscuro+saldo.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
+  // As 4 linhas de rodapé (Total Pagamentos + Previsto, Resultado do Período, Caixa Inicial do
+  // Mês, Saldo de Caixa do Mês) foram ocultadas a pedido do Leonardo (28/08/2026) — os cálculos
+  // acima (rv2/rt2/ci/saldo) continuam ativos porque alimentam a Visão Executiva do Caixa logo
+  // acima da tabela (renderVisaoExecutivaCaixa), só a exibição dessas 4 linhas foi removida.
+  tfoot.innerHTML='';
   set('fc-badge',nomes.length+(nomes.length===1?' conta':' contas'));
 
   // Resumo — Faturamento / Despesas (Pagamentos + Previsto) / Saldo de Caixa
