@@ -28,6 +28,7 @@ const GRUPO_CONTA={
   '2020102':'ADMIN','2020104':'ADMIN','2020105':'ADMIN','2020111':'ADMIN','2020202':'ADMIN','2020207':'ADMIN','2020209':'ADMIN','2020210':'ADMIN',
   '2020211':'ADMIN','2020212':'ADMIN','2020216':'ADMIN','2020219':'ADMIN','2020220':'ADMIN','2020221':'ADMIN','2020224':'ADMIN',
   '2020225':'ADMIN','2020222':'ADMIN','2020299':'ADMIN','20503':'ADMIN','20601':'ADMIN','2020107':'ADMIN','2020213':'ADMIN',
+  '2020106':'ADMIN','2020206':'ADMIN',
   // DESPESAS FINANCEIRAS (inclui tributárias sobre faturamento)
   '20301':'FINANCEIRAS','20303':'FINANCEIRAS','20305':'FINANCEIRAS','20307':'FINANCEIRAS','20401':'FINANCEIRAS','20402':'FINANCEIRAS',
   '20403':'FINANCEIRAS','20407':'FINANCEIRAS','20409':'FINANCEIRAS','20410':'FINANCEIRAS','20411':'FINANCEIRAS','20412':'FINANCEIRAS',
@@ -499,15 +500,22 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
     renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();
     renderFluxo();renderCaixaInicialCampos();
     renderDash();updateDtlhFilters();renderDtlh(); // atualiza Dashboard e Resumo Executivo na hora — sem precisar de F5
-    autoSave();
   }catch(errRender){
     erroAoAtualizarTelas=errRender;
-    console.error('Erro ao atualizar as telas depois do sync (os dados já foram salvos normalmente):',errRender);
+    console.error('Erro ao atualizar as telas depois do sync:',errRender);
   }
 
-  statusEl.style.color=erroAoAtualizarTelas?'#B35C00':'#1B6B35';
-  statusEl.textContent='Pronto! '+totalImportado+' lançamentos importados no total ('+totalRemovido+' antigos removidos).\n\n'+resumo
-    +(erroAoAtualizarTelas?'\n\nOs dados foram salvos, mas houve um erro ao atualizar as telas — dá um F5 pra ver tudo certinho.':'');
+  // Aguarda o salvamento na nuvem de verdade antes de dizer "Pronto!" — evita o usuário
+  // precisar esperar ~30s "no escuro" e dar F5 só pra garantir que salvou.
+  statusEl.style.color='#888';
+  statusEl.textContent='⟳ Salvando na nuvem — aguarde, não feche essa janela...';
+  const salvouOk=await autoSave();
+
+  statusEl.style.color=(erroAoAtualizarTelas||!salvouOk)?'#B35C00':'#1B6B35';
+  statusEl.textContent=(salvouOk?'✓ Pronto! ':'✕ Atenção — falha ao salvar na nuvem! ')
+    +totalImportado+' lançamentos importados no total ('+totalRemovido+' antigos removidos).\n\n'+resumo
+    +(salvouOk?'\n\n✓ Dados salvos na nuvem com sucesso — já pode fechar ou atualizar a página.':'\n\n✕ NÃO deu pra confirmar o salvamento na nuvem. NÃO feche essa janela — espere e tente sincronizar de novo, ou dê F5 e confira se os dados foram atualizados antes de continuar.')
+    +(erroAoAtualizarTelas?'\n\nTambém houve um erro ao atualizar as telas — dá um F5 pra ver tudo certinho.':'');
   btn.textContent='Sincronizar de novo';btn.disabled=false;
 }
 
@@ -1143,7 +1151,7 @@ function renderFluxo(){
   });
   const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)||acumPag(c)!==0).sort();
 
-  const EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307','1.05.03'];
+  const EMPR_FAT_COD=['10501','1.05.03','10598'],EMPR_PAG_COD=['20307','1.05.03'];
   const codigoDe=c=>(c||'').split(' - ')[0].trim();
 
   let acumFatTot=0,acumFatVisivel=0;
@@ -1357,7 +1365,7 @@ function renderFluxo(){
     const entradasOperFin=totalEntradasFin-entradaEmprFin;
     const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
-    const EMPR_FAT_COD_RF=['10501','1.05.03'];
+    const EMPR_FAT_COD_RF=['10501','1.05.03','10598'];
     const linhaExec=(label,val,opts)=>{
       opts=opts||{};
       const conteudoVal=opts.onclick?'<span onclick="'+opts.onclick+'" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(val)+'</span>':f2(val);
@@ -1404,45 +1412,54 @@ function renderFluxo(){
       if(!parte)return;
       const cc=r.cc||'(Sem CC)';
       if(!porCC[cc])porCC[cc]={};
-      if(!porCC[cc][parte.nome])porCC[cc][parte.nome]={entrou:0,saiu:0};
+      if(!porCC[cc][parte.nome])porCC[cc][parte.nome]={entrou:0,retirado:0,aRetirar:0};
       const alvo=porCC[cc][parte.nome];
       if(r.tipo==='FATURAMENTO')alvo.entrou+=r.valor;
       else if(r.tipo==='DESCONTO')alvo.entrou-=r.valor;
-      else if(r.tipo==='PAGAMENTO')alvo.saiu+=r.valor;
+      else if(r.tipo==='PAGAMENTO'){
+        // "A pagar" no complemento = provisão ainda não paga (mesmo critério usado no resto
+        // do BI); tudo o mais é retirada/pagamento já realizado.
+        if((r.complemento||'').toLowerCase().includes('a pagar'))alvo.aRetirar+=r.valor;
+        else alvo.retirado+=r.valor;
+      }
     });
     const ccsRel=Object.keys(porCC).sort();
     theadRel.innerHTML='<tr>'
       +'<th style="text-align:left;padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Centro de Custo / Pessoa</th>'
       +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Aporte</th>'
-      +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Retirada/Pgto</th>'
+      +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Retirado</th>'
+      +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">A Retirar</th>'
       +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Saldo</th></tr>';
     if(!ccsRel.length){
-      tbodyRel.innerHTML='<tr><td colspan="4"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
+      tbodyRel.innerHTML='<tr><td colspan="5"><div class="empty-state"><p>Nenhuma movimentação encontrada para essas partes</p></div></td></tr>';
     }else{
-      let totEntrou=0,totSaiu=0;
+      let totEntrou=0,totRetirado=0,totARetirar=0;
       let rowsRel=ccsRel.map(cc=>{
         const partesCC=porCC[cc];
-        let ccEntrou=0,ccSaiu=0;
+        let ccEntrou=0,ccRetirado=0,ccARetirar=0;
         const linhasPartes=PARTES_RELACIONADAS.filter(p=>partesCC[p.nome]).map(p=>{
-          const v=partesCC[p.nome];ccEntrou+=v.entrou;ccSaiu+=v.saiu;
-          const sv=v.entrou-v.saiu;
+          const v=partesCC[p.nome];ccEntrou+=v.entrou;ccRetirado+=v.retirado;ccARetirar+=v.aRetirar;
+          const sv=v.entrou-v.retirado-v.aRetirar;
           return '<tr><td style="padding:4px 4px 4px 16px;font-size:12px;color:var(--text3)">'+p.nome+'</td>'
             +'<td class="r" style="padding:4px;font-size:12px;color:var(--text3)">'+f2(v.entrou)+'</td>'
-            +'<td class="r" style="padding:4px;font-size:12px;color:var(--text3)">'+f2(v.saiu)+'</td>'
+            +'<td class="r" style="padding:4px;font-size:12px;color:var(--text3)">'+f2(v.retirado)+'</td>'
+            +'<td class="r" style="padding:4px;font-size:12px;color:var(--text3)">'+f2(v.aRetirar)+'</td>'
             +'<td class="r" style="padding:4px;font-size:12px;color:'+(sv>=0?'#1B6B35':'#C0392B')+'">'+f2(sv)+'</td></tr>';
         }).join('');
-        totEntrou+=ccEntrou;totSaiu+=ccSaiu;
-        const ccSaldo=ccEntrou-ccSaiu;
+        totEntrou+=ccEntrou;totRetirado+=ccRetirado;totARetirar+=ccARetirar;
+        const ccSaldo=ccEntrou-ccRetirado-ccARetirar;
         return '<tr><td style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+cc+'</td>'
           +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+f2(ccEntrou)+'</td>'
-          +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+f2(ccSaiu)+'</td>'
+          +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+f2(ccRetirado)+'</td>'
+          +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600">'+f2(ccARetirar)+'</td>'
           +'<td class="r" style="padding:10px 4px 4px;font-size:12px;font-weight:600;color:'+(ccSaldo>=0?'#1B6B35':'#C0392B')+'">'+f2(ccSaldo)+'</td></tr>'
           +linhasPartes;
       }).join('');
-      const totSaldo=totEntrou-totSaiu;
+      const totSaldo=totEntrou-totRetirado-totARetirar;
       rowsRel+='<tr style="border-top:1px solid var(--border)"><td style="padding:8px 4px;font-size:12px;font-weight:600">Total</td>'
         +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#1B6B35">'+f2(totEntrou)+'</td>'
-        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totSaiu)+'</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totRetirado)+'</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:rgba(192,57,43,0.6)">'+f2(totARetirar)+'</td>'
         +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:'+(totSaldo>=0?'#1B6B35':'#C0392B')+'">'+f2(totSaldo)+'</td></tr>';
       tbodyRel.innerHTML=rowsRel;
     }
@@ -1451,30 +1468,33 @@ function renderFluxo(){
     const theadAcum=document.getElementById('thead-fc-relacionados-acum'),tbodyAcum=document.getElementById('tbody-fc-relacionados-acum');
     if(theadAcum&&tbodyAcum){
       const acumPorParte={};
-      PARTES_RELACIONADAS.forEach(p=>acumPorParte[p.nome]={entrou:0,saiu:0});
+      PARTES_RELACIONADAS.forEach(p=>acumPorParte[p.nome]={entrou:0,retirado:0,aRetirar:0});
       Object.values(porCC).forEach(partesCC=>{
         PARTES_RELACIONADAS.forEach(p=>{
-          if(partesCC[p.nome]){acumPorParte[p.nome].entrou+=partesCC[p.nome].entrou;acumPorParte[p.nome].saiu+=partesCC[p.nome].saiu;}
+          if(partesCC[p.nome]){acumPorParte[p.nome].entrou+=partesCC[p.nome].entrou;acumPorParte[p.nome].retirado+=partesCC[p.nome].retirado;acumPorParte[p.nome].aRetirar+=partesCC[p.nome].aRetirar;}
         });
       });
       theadAcum.innerHTML='<tr>'
         +'<th style="text-align:left;padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Parte</th>'
         +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Total Aporte</th>'
-        +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Total Retirada</th>'
+        +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Total Retirado</th>'
+        +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Total A Retirar</th>'
         +'<th class="r" style="padding:0 4px 8px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--border)">Saldo</th></tr>';
-      let totEntrouG=0,totSaiuG=0;
+      let totEntrouG=0,totRetiradoG=0,totARetirarG=0;
       let rowsAcum=PARTES_RELACIONADAS.map(p=>{
-        const v=acumPorParte[p.nome];totEntrouG+=v.entrou;totSaiuG+=v.saiu;
-        const sv=v.entrou-v.saiu;
+        const v=acumPorParte[p.nome];totEntrouG+=v.entrou;totRetiradoG+=v.retirado;totARetirarG+=v.aRetirar;
+        const sv=v.entrou-v.retirado-v.aRetirar;
         return '<tr><td style="padding:6px 4px;font-size:12px">'+p.nome+'</td>'
           +'<td class="r" style="padding:6px 4px;font-size:12px">'+f2(v.entrou)+'</td>'
-          +'<td class="r" style="padding:6px 4px;font-size:12px">'+f2(v.saiu)+'</td>'
+          +'<td class="r" style="padding:6px 4px;font-size:12px">'+f2(v.retirado)+'</td>'
+          +'<td class="r" style="padding:6px 4px;font-size:12px">'+f2(v.aRetirar)+'</td>'
           +'<td class="r" style="padding:6px 4px;font-size:12px;color:'+(sv>=0?'#1B6B35':'#C0392B')+'">'+f2(sv)+'</td></tr>';
       }).join('');
-      const totSaldoG=totEntrouG-totSaiuG;
+      const totSaldoG=totEntrouG-totRetiradoG-totARetirarG;
       rowsAcum+='<tr style="border-top:1px solid var(--border)"><td style="padding:8px 4px;font-size:12px;font-weight:600">Total</td>'
         +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#1B6B35">'+f2(totEntrouG)+'</td>'
-        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totSaiuG)+'</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:#C0392B">'+f2(totRetiradoG)+'</td>'
+        +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:rgba(192,57,43,0.6)">'+f2(totARetirarG)+'</td>'
         +'<td class="r" style="padding:8px 4px;font-size:12px;font-weight:600;color:'+(totSaldoG>=0?'#1B6B35':'#C0392B')+'">'+f2(totSaldoG)+'</td></tr>';
       tbodyAcum.innerHTML=rowsAcum;
     }
@@ -1516,17 +1536,18 @@ function ghubPayload(){
     orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto||{}});
 }
 async function ghubSave(){
-  if(_ghubSaving){_ghubDirty=true;return;}
+  if(_ghubSaving){_ghubDirty=true;return false;}
   // Trava de segurança: se o que está na tela agora tem MUITO menos lançamento do que a
   // última carga bem-sucedida da nuvem, isso é sinal de que algo deu errado (carregamento
   // ainda não terminou, falha de rede no meio, etc.) — salvar nesse estado sobrescreveria
   // dado bom com dado incompleto, sem volta. Só deixa passar se o usuário confirmar.
   if(_ultimoCsvCarregado>20&&DATA.csv.length<_ultimoCsvCarregado*0.5){
     const confirmou=confirm('ATENÇÃO: a tela está mostrando '+DATA.csv.length+' lançamento(s), bem menos que os '+_ultimoCsvCarregado+' carregados da nuvem originalmente.\n\nSalvar agora pode APAGAR dado bom que já estava salvo. Isso normalmente acontece quando a página ainda está carregando ou a conexão falhou no meio.\n\nRecomendado: cancele e recarregue a página (F5) antes de continuar.\n\nSalvar mesmo assim?');
-    if(!confirmou){setJbinStatus('error: salvamento bloqueado (poucos dados)');return;}
+    if(!confirmou){setJbinStatus('error: salvamento bloqueado (poucos dados)');return false;}
   }
   _ghubSaving=true;_ghubDirty=false;
   setJbinStatus('saving');
+  let ok=false;
   try{
     // Sempre buscar SHA atual para evitar conflito 409
     const rr=await fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
@@ -1543,9 +1564,11 @@ async function ghubSave(){
     _ghubSha=j.content?.sha||_ghubSha;
     _ultimoCsvCarregado=DATA.csv.length; // salvou com sucesso — esse tamanho vira a nova referência
     setJbinStatus('ok');
-  }catch(e){console.error('ghubSave error:',e);setJbinStatus('error: '+e.message.slice(0,40));}
+    ok=true;
+  }catch(e){console.error('ghubSave error:',e);setJbinStatus('error: '+e.message.slice(0,40));ok=false;}
   _ghubSaving=false;
-  if(_ghubDirty)ghubSave();
+  if(_ghubDirty){return ghubSave();}
+  return ok;
 }
 async function jbinLoad(){
   setJbinStatus('loading');
@@ -1591,7 +1614,7 @@ function setJbinStatus(s){
   const[txt,col]=map[s]||['','#888'];
   el.textContent=txt;el.style.color=col;
 }
-function autoSave(){ghubSave();}
+function autoSave(){return ghubSave();}
 
 function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
 function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};DATA.previsto=p.data.previsto||DATA.previsto||{};_ultimoCsvCarregado=DATA.csv.length;migrarFontesAntigas();renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
