@@ -1151,7 +1151,7 @@ function renderFluxo(){
   });
   const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)||acumPag(c)!==0).sort();
 
-  const EMPR_FAT_COD=['10501','1.05.03','10598'],EMPR_PAG_COD=['20307','1.05.03'];
+  const EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307','1.05.03','10598'];
   const codigoDe=c=>(c||'').split(' - ')[0].trim();
 
   let acumFatTot=0,acumFatVisivel=0;
@@ -1365,7 +1365,7 @@ function renderFluxo(){
     const entradasOperFin=totalEntradasFin-entradaEmprFin;
     const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
-    const EMPR_FAT_COD_RF=['10501','1.05.03','10598'];
+    const EMPR_FAT_COD_RF=['10501','1.05.03'];
     const linhaExec=(label,val,opts)=>{
       opts=opts||{};
       const conteudoVal=opts.onclick?'<span onclick="'+opts.onclick+'" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(val)+'</span>':f2(val);
@@ -1403,7 +1403,8 @@ function renderFluxo(){
     const PARTES_RELACIONADAS=[
       {nome:'Osmar',termos:['osmar paulo dias filho','venda de um onix','cobrir custos do montagnes','lago negro (osmar)']},
       {nome:'Mauricio Rodrigues',termos:['mauricio rodrigues']},
-      {nome:'Vertical Participações',termos:['vertical participa']}
+      {nome:'Vertical Participações',termos:['vertical participa']},
+      {nome:'Oxy Companhia',termos:['oxy companhia']}
     ];
     const parteDe=comp=>{const cl=(comp||'').toLowerCase();return PARTES_RELACIONADAS.find(p=>p.termos.some(t=>cl.includes(t)));};
     const porCC={};
@@ -2544,7 +2545,7 @@ function abrirProjecaoFluxo(curtoPrazo){
     {key:'EMPRESTIMOS',label:'Empréstimos',cor:'#B35C00'},
     {key:'OUTRAS',label:'Outras Despesas',cor:'#424949'}
   ];
-  var EMPR_PAG_COD=['20307','1.05.03'];
+  var EMPR_PAG_COD=['20307','1.05.03','10598'];
   var codigoDe=function(c){return (c||'').split(' - ')[0].trim();};
   var saidasPorGrupo={};
   linhas.filter(function(r){return r.tipo==='PAGAMENTO';}).forEach(function(r){
@@ -2668,7 +2669,7 @@ function filtrarDetalheFluxo(){
       +'<td class="r" style="padding:6px 10px;font-size:12px;border-bottom:1px solid var(--border)">'+fmt(r.valor)+'</td></tr>';
   }).join(''):'<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nenhum lançamento</td></tr>';
 }
-var EMPR_PAG_COD_G=['20307','1.05.03'];
+var EMPR_PAG_COD_G=['20307','1.05.03','10598'];
 
 function abrirDetalheFluxoCel(conta,ano,mes,anoMin){
   var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
