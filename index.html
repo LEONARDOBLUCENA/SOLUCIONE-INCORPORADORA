@@ -263,7 +263,7 @@ function processCSVText(txt){
   }).filter(r=>r.valor!==0||r.cc);
   DATA.csv=[...DATA.csv,...novos];
   setStatus('status-csv','+'+novos.length+' registros \u2014 total: '+DATA.csv.length+'.',true);
-  renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();autoSave();
+  renderCSVTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderFluxoReal();renderCaixaInicialCamposReal();autoSave();
 }
 function limparCSV(){document.getElementById('paste-csv').value='';DATA.csv=[];document.getElementById('body-csv').innerHTML='<tr><td colspan="6"><div class="empty-state"><p>Nenhum dado ainda</p></div></td></tr>';document.getElementById('count-csv').textContent='0 registros';const d=document.getElementById('diag-csv');if(d){d.style.display='none';d.innerHTML='';}setStatus('status-csv','','');renderDashboard();renderDtlh();autoSave();}
 
@@ -326,7 +326,7 @@ function processContasRecebidasText(txt){
   const removidos=antesCount-DATA.csv.length;
   DATA.csv=[...DATA.csv,...recebimentos];
   setStatus('crf-paste-status','Período '+minData.toLocaleDateString('pt-BR')+' a '+maxData.toLocaleDateString('pt-BR')+': +'+recebimentos.length+' lançamento(s) importado(s) ('+qtdDesconto+' de Desconto Concedido, negativo), '+removidos+' lançamento(s) antigo(s) do mesmo período removido(s), '+ignoradas+' linha(s) de Pagamento ignorada(s).',true);
-  renderContasRecebidas();renderFluxo();renderCaixaInicialCampos();autoSave();
+  renderContasRecebidas();renderFluxo();renderCaixaInicialCampos();renderFluxoReal();renderCaixaInicialCamposReal();autoSave();
 }
 
 // ---------- Sync Sienge (único botão — ordem: Contas Pagas, Contas a Receber, Contas a Pagar) ----------
@@ -499,6 +499,7 @@ async function executarSyncGlobalInterno(fontes,de,ate,statusEl,btn,barra){
   try{
     renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();
     renderFluxo();renderCaixaInicialCampos();
+    renderFluxoReal();renderCaixaInicialCamposReal(); // Fluxo de Caixa Real também atualiza na hora, igual ao Fluxo de Caixa
     renderDash();updateDtlhFilters();renderDtlh(); // atualiza Dashboard e Resumo Executivo na hora — sem precisar de F5
   }catch(errRender){
     erroAoAtualizarTelas=errRender;
@@ -766,13 +767,13 @@ function adicionarContaRecebida(){
   document.getElementById('cr-conta').value='';
   document.getElementById('cr-valor').value='';
   statusEl.style.color='#1B6B35';statusEl.textContent='Lançamento adicionado.';
-  renderContasRecebidas();renderFluxo();renderCaixaInicialCampos();autoSave();
+  renderContasRecebidas();renderFluxo();renderCaixaInicialCampos();renderFluxoReal();renderCaixaInicialCamposReal();autoSave();
 }
 
 function removerContaRecebida(idxReal){
   if(!confirm('Remover esse lançamento de Contas Recebidas?'))return;
   DATA.csv.splice(idxReal,1);
-  renderContasRecebidas();renderFluxo();renderCaixaInicialCampos();autoSave();
+  renderContasRecebidas();renderFluxo();renderCaixaInicialCampos();renderFluxoReal();renderCaixaInicialCamposReal();autoSave();
 }
 function clearCSVFilters(){['fcsv-ano','fcsv-mes','fcsv-cc','fcsv-conta'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});renderCSVTable();}
 function renderCSVTable(){
@@ -1974,7 +1975,7 @@ function setJbinStatus(s){
 function autoSave(){return ghubSave();}
 
 function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
-function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};DATA.previsto=p.data.previsto||DATA.previsto||{};_ultimoCsvCarregado=DATA.csv.length;migrarFontesAntigas();renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
+function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};DATA.previsto=p.data.previsto||DATA.previsto||{};_ultimoCsvCarregado=DATA.csv.length;migrarFontesAntigas();renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderFluxoReal();renderCaixaInicialCamposReal();renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 
 </script>
