@@ -1534,6 +1534,386 @@ function renderCaixaInicialCampos(){
       +'</div>';
   }).join('');
 }
+function renderFluxoReal(){
+  const obraSel=document.getElementById('fcr-obra')?.value||'';
+  const thead=document.getElementById('thead-fluxoreal'),tbody=document.getElementById('tbody-fluxoreal'),tfoot=document.getElementById('tfoot-fluxoreal');
+  if(!thead||!tbody||!tfoot)return;
+  {const obrasVistasFc=new Map();DATA.csv.map(r=>r.cc).filter(Boolean).forEach(o=>{const k=normCC(o);if(!obrasVistasFc.has(k))obrasVistasFc.set(k,o.trim());});fillSelect('fcr-obra',[...obrasVistasFc.values()].sort(),v=>v,v=>v);}
+  // porBens: baixa quitada com bens/permuta — não é saída/entrada real de caixa, nunca entra
+  // no Fluxo de Caixa (só no Dashboard, com subdivisão própria no KPI).
+  const dados=DATA.csv.filter(r=>(!obraSel||ccMatch(r.cc||'',obraSel))&&!r.porBens);
+
+  // Colunas dinâmicas: todas as combinações ano-mes presentes nos dados, ordenadas
+  const colSet=new Set();
+  dados.forEach(r=>{if(r.ano!=null&&r.mes!=null)colSet.add(r.ano*100+r.mes);});
+  const colKeys=[...colSet].sort().filter(k=>Math.floor(k/100)>=2026);// apenas 2026+
+  const colAno=colKeys.map(k=>Math.floor(k/100));
+  const colMes=colKeys.map(k=>k%100);
+  const NC=colKeys.length;
+  const SD='position:sticky;left:0;z-index:2;background:';
+
+  // Acumular por conta e coluna
+  const hojeFluxo=new Date();
+  const chaveAtualFluxo=hojeFluxo.getFullYear()*100+hojeFluxo.getMonth();
+  const contas={};
+  dados.forEach(r=>{
+    const c=r.conta||'(Sem conta)';
+    if(!contas[c])contas[c]={FAT:Array(NC).fill(0),DESC:Array(NC).fill(0),PAG:Array(NC).fill(0)};
+    const ci=colKeys.indexOf(r.ano*100+r.mes);
+    if(ci<0)return;
+    const ehMesPassado=(r.ano*100+r.mes)<chaveAtualFluxo;
+    if(r.tipo==='FATURAMENTO'){
+      if(ehMesPassado&&(r.complemento||'').toLowerCase().includes('a receber'))return;
+      contas[c].FAT[ci]+=r.valor;
+    }
+    else if(r.tipo==='DESCONTO')contas[c].DESC[ci]+=r.valor;
+    else if(r.tipo==='PAGAMENTO'){
+      const ehAPagar=(r.complemento||'').toLowerCase().includes('a pagar');
+      if(ehAPagar){
+        if(grupoDeConta(c)==='CUSTO_OBRA')return; // Custo de Obra nunca considera provisão — usa a linha "Previsto" manual pra isso
+        if(ehMesPassado)return; // outros grupos: só exclui em mês já passado
+      }
+      contas[c].PAG[ci]+=r.valor;
+    }
+  });
+  const nomes=Object.keys(contas);
+  if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';set('fcr-badge','—');const theadR=document.getElementById('thead-fcr-resumo'),tbodyR=document.getElementById('tbody-fcr-resumo');if(theadR)theadR.innerHTML='';if(tbodyR)tbodyR.innerHTML='';return;}
+
+  // Acumulado Anterior (tudo antes de 01/2026) por conta — apenas informativo, não entra no Saldo de Caixa nem no Caixa Inicial
+  const acumAnt={};
+  dados.forEach(r=>{
+    if(r.ano==null||r.mes==null)return;
+    if(r.ano>=2026)return;
+    const c=r.conta||'(Sem conta)';
+    if(!acumAnt[c])acumAnt[c]={FAT:0,DESC:0,PAG:0};
+    if(r.tipo==='FATURAMENTO'){
+      if((r.complemento||'').toLowerCase().includes('a receber'))return;
+      acumAnt[c].FAT+=r.valor;
+    }
+    else if(r.tipo==='DESCONTO')acumAnt[c].DESC+=r.valor;
+    else if(r.tipo==='PAGAMENTO'){
+      if((r.complemento||'').toLowerCase().includes('a pagar'))return;
+      acumAnt[c].PAG+=r.valor;
+    }
+  });
+  const acumFat=c=>acumAnt[c]?acumAnt[c].FAT-acumAnt[c].DESC:0;
+  const acumPag=c=>acumAnt[c]?acumAnt[c].PAG:0;
+
+  const thSD='text-align:left;padding:8px 12px;width:300px;'+SD+'#f5f5f5;top:0';
+  thead.innerHTML='<tr style="background:#f5f5f5">'
+    +'<th style="'+thSD+'">Conta</th>'
+    +'<th class="r" style="padding:6px 8px;width:90px;font-size:10px;background:#f5f5f5;position:sticky;top:0;color:#666">Acum.<br>Anterior</th>'
+    +colKeys.map((_,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</th>').join('')
+    +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
+
+  const f2=v=>v===0?'<span style="color:#ccc;font-size:10px">—</span>':(v<0?'<span style="color:#C0392B">'+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}));
+  const escOc=s=>String(s).replace(/'/g,"\\'").replace(/\n/g,' ');
+  // f2c: número clicável por conta (linha individual). f2g: número clicável por tipo/grupo (linhas de total).
+  const f2c=(v,conta,ano,mes,anoMin)=>{
+    if(v===0)return f2(v);
+    const a="'"+escOc(conta)+"',"+(ano!=null?ano:'null')+","+(mes!=null?mes:'null')+","+(anoMin!=null?anoMin:'null');
+    return '<span onclick="abrirDetalheFluxoCelReal('+a+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(v)+'</span>';
+  };
+  const f2g=(v,tipo,grupo,tituloBase,ano,mes,anoMin)=>{
+    if(v===0)return f2(v);
+    const a=(tipo?"'"+escOc(tipo)+"'":'null')+','+(grupo?"'"+escOc(grupo)+"'":'null')+",'"+escOc(tituloBase)+"',"+(ano!=null?ano:'null')+','+(mes!=null?mes:'null')+','+(anoMin!=null?anoMin:'null');
+    return '<span onclick="abrirDetalheFluxoTipoGrupoReal('+a+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(v)+'</span>';
+  };
+  const tdS=(bg)=>'style="'+SD+bg+';padding:5px 6px 5px 12px;font-size:11px"';
+  const tdSB=(bg)=>'style="'+SD+bg+';padding:5px 12px;font-size:11px;font-weight:700"';
+
+  let rows='';
+  const spacerRow='<tr class="fc-group-spacer" style="border:none"><td colspan="'+(NC+3)+'" style="padding:0;height:14px;border:none;background:transparent"></td></tr>';
+  const tFM=Array(NC).fill(0),tPM=Array(NC).fill(0);
+  const ULTIMAS_FAT=['1.05.03 - (-) Devolução de Empréstimos/Financiamentos','10198 - (-) Descontos Concedidos Incorporação'];
+  const fatN=nomes.filter(c=>contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)||acumFat(c)!==0).sort((a,b)=>{
+    const ia=ULTIMAS_FAT.indexOf(a),ib=ULTIMAS_FAT.indexOf(b);
+    if(ia===-1&&ib===-1)return a.localeCompare(b);
+    if(ia===-1)return -1;
+    if(ib===-1)return 1;
+    return ia-ib;
+  });
+  const pagN=nomes.filter(c=>contas[c].PAG.some(v=>v)||acumPag(c)!==0).sort();
+
+  const EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307','1.05.03','10598'];
+  const codigoDe=c=>(c||'').split(' - ')[0].trim();
+
+  let acumFatTot=0,acumFatVisivel=0;
+  const tFMVisivel=Array(NC).fill(0);
+  if(fatN.length){
+    rows+='<tr style="background:#D5F5E3"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#1B6B35;'+SD+'#D5F5E3">▶ ENTRADAS</td></tr>';
+    fatN.forEach((c,idx)=>{
+      const vals=contas[c].FAT.map((v,i)=>v-contas[c].DESC[i]);
+      const aa=acumFat(c);acumFatTot+=aa;
+      const tot=aa+vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>tFM[i]+=v);
+      if(EMPR_FAT_COD.includes(codigoDe(c)))return; // exibido no grupo Empréstimos — não conta no Total Entradas deste grupo (só no total geral tFM acima)
+      acumFatVisivel+=aa;
+      vals.forEach((v,i)=>tFMVisivel[i]+=v);
+      const zebra=idx%2===0?'#ffffff':'#f4faf5';
+      rows+='<tr style="border-left:3px solid #A9DFBF;border-bottom:1px solid #edf2ee">'
+        +'<td '+tdS(zebra)+'>'+c+'</td>'
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2c(aa,c,null,null,colKeys[0])+'</td>'
+        +vals.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2c(v,c,colAno[i],colMes[i])+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#eef6ef;font-size:10px">'+f2c(tot,c,null,null,null)+'</td></tr>';
+    });
+    rows+='<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Total Entradas</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(acumFatVisivel,'FATURAMENTO',null,'Total Entradas',null,null,colKeys[0])+'</td>'+tFMVisivel.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(v,'FATURAMENTO',null,'Total Entradas',colAno[i],colMes[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2g(acumFatVisivel+tFMVisivel.reduce((s,v)=>s+v,0),'FATURAMENTO',null,'Total Entradas',null,null,null)+'</td></tr>';
+  }
+  // Saldo em cascata: começa nas Entradas e vai descontando cada grupo de despesa, para mostrar o quanto cada um pesa no caixa
+  // Só considera os meses 2026+ (mesmo critério do Resultado do Período) — Acum. Anterior nunca entra em nenhum saldo
+  let saldoMensal=tFM.slice();
+  const linhaSaldo=()=>{
+    const saldoTot=saldoMensal.reduce((s,v)=>s+v,0);
+    return '<tr style="background:#f7f7f7"><td style="'+SD+'#f7f7f7;padding:5px 12px;font-size:11px;color:var(--text3);font-style:italic">Saldo</td>'
+      +'<td class="r" style="padding:4px 6px;font-size:10px;background:#f2f2f2;color:#bbb">—</td>'
+      +saldoMensal.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;color:'+(v>=0?'#1B6B35':'#C0392B')+'">'+f2(v)+'</td>').join('')
+      +'<td class="r" style="padding:4px 8px;font-weight:600;color:'+(saldoTot>=0?'#1B6B35':'#C0392B')+'">'+f2(saldoTot)+'</td></tr>';
+  };
+
+
+  // Previsto editável por obra — DATA.previsto[obra][colKey] = valor (calculado aqui para poder entrar no grupo Custo de Obra abaixo)
+  const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
+  const SEM_PREVISTO=['MONTER','SOLUCIONE IMOVEIS'];
+  const obrasVis=(obraSel?obras.filter(o=>ccMatch(o,obraSel)):obras).filter(o=>!SEM_PREVISTO.some(x=>o.toUpperCase().includes(x)));
+  if(!DATA.previsto)DATA.previsto={};
+  obrasVis.forEach(o=>{if(!DATA.previsto[o])DATA.previsto[o]={};});
+  const prevLiqMap={};
+  const prevRows=obrasVis.map(obra=>{
+    const pVals=colKeys.map(k=>parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0);
+    prevLiqMap[obra]=pVals;
+    const pTot=pVals.reduce((s,v)=>s+v,0);
+    return '<tr style="background:#FEF9E7"><td style="'+SD+'#FEF9E7;padding:4px 8px;font-size:11px;color:#B7950B;font-weight:600">Previsto — '+obra+'</td>'
+      +'<td class="r" style="padding:4px 6px;font-size:10px;background:#FEF9E7;color:#bbb">—</td>'
+      +pVals.map((v,i)=>'<td style="padding:2px 3px"><input type="number" value="'+(v||'')+'" placeholder="0"'
+        +' data-obra="'+encodeURIComponent(obra)+'" data-key="'+colKeys[i]+'"'
+        +' onchange="if(!DATA.previsto[decodeURIComponent(this.dataset.obra)])DATA.previsto[decodeURIComponent(this.dataset.obra)]={};'
+        +'DATA.previsto[decodeURIComponent(this.dataset.obra)][this.dataset.key]=parseFloat(this.value)||0;autoSave();"'
+        +' style="width:72px;border:1px solid #F0D9A0;background:#FFFDE7;padding:2px 4px;font-size:10px;text-align:right;font-family:DM Sans,sans-serif;color:#7D6608;outline:none"></td>').join('')
+      +'<td class="r" style="padding:4px 6px;font-size:10px;color:#B7950B;font-weight:700;background:#FDEBD0">'+f2(pTot)+'</td></tr>';
+  }).join('');
+  const prevTotalMes=colKeys.map((_,i)=>obrasVis.reduce((s,o)=>s+((prevLiqMap[o]&&prevLiqMap[o][i])||0),0));
+
+  // Sub-agrupamento das contas de Pagamento em 4 grupos fixos (+ fallback Outras Despesas, se houver conta não mapeada)
+  const gruposDef=[
+    {key:'CUSTO_OBRA',   titulo:'CUSTO DE OBRA',           hdrBg:'#FDEBD0',hdrText:'#9C640C',borda:'#F5CBA7',divisor:'#f5eee4',zebra:'#fdf6ec',totBg:'#fbe8d0',totLabelBg:'#F5CBA7',totLabel:'Total Custo de Obra'},
+    {key:'MARKETING',    titulo:'DESPESAS DE MARKETING',   hdrBg:'#E8DAEF',hdrText:'#6C3483',borda:'#D2B4DE',divisor:'#f2ecf5',zebra:'#f8f4fb',totBg:'#eee3f4',totLabelBg:'#D2B4DE',totLabel:'Total Despesas de Marketing'},
+    {key:'ADMIN',        titulo:'DESPESAS ADMINISTRATIVAS',hdrBg:'#D6EAF8',hdrText:'#1A5276',borda:'#AED6F1',divisor:'#eaf2f8',zebra:'#f3f9fd',totBg:'#dbeefb',totLabelBg:'#AED6F1',totLabel:'Total Despesas Administrativas'},
+    {key:'FINANCEIRAS',  titulo:'DESPESAS FINANCEIRAS',    hdrBg:'#FADBD8',hdrText:'#943126',borda:'#F1948A',divisor:'#f5e8e7',zebra:'#fdf5f4',totBg:'#fbeeed',totLabelBg:'#F1948A',totLabel:'Total Despesas Financeiras'},
+    {key:'OUTRAS',       titulo:'OUTRAS DESPESAS',         hdrBg:'#EAEDED',hdrText:'#424949',borda:'#CCD1D1',divisor:'#f0f1f1',zebra:'#f7f8f8',totBg:'#e8eaea',totLabelBg:'#CCD1D1',totLabel:'Total Outras Despesas'}
+  ];
+  const gruposResumoFin={};
+  gruposDef.forEach(g=>{
+    const lista=pagN.filter(c=>grupoDeConta(c)===g.key);
+    if(!lista.length)return;
+    let grpRows='<tr style="background:'+g.hdrBg+'"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:'+g.hdrText+';'+SD+g.hdrBg+'">▶ '+g.titulo+'</td></tr>';
+    const totGrupo=Array(NC).fill(0);
+    let acumGrupoTot=0;
+    lista.forEach((c,idx)=>{
+      const vals=contas[c].PAG;
+      const aa=acumPag(c);
+      const tot=aa+vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>{tPM[i]+=v;});
+      if(EMPR_PAG_COD.includes(codigoDe(c)))return; // exibido no grupo Empréstimos — não conta no subtotal deste grupo (só no total geral tPM acima)
+      acumGrupoTot+=aa;
+      vals.forEach((v,i)=>{totGrupo[i]+=v;});
+      const zebra=idx%2===0?'#ffffff':g.zebra;
+      grpRows+='<tr style="border-left:3px solid '+g.borda+';border-bottom:1px solid '+g.divisor+'">'
+        +'<td '+tdS(zebra)+'>'+c+'</td>'
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2c(aa,c,null,null,colKeys[0])+'</td>'
+        +vals.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2c(v,c,colAno[i],colMes[i])+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:'+g.totBg+';font-size:10px">'+f2c(tot,c,null,null,null)+'</td></tr>';
+    });
+    if(g.key==='CUSTO_OBRA'){
+      grpRows+=prevRows;
+      prevTotalMes.forEach((v,i)=>totGrupo[i]+=v);
+    }
+    const grpTotalGeral=acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0);
+    // Grupo "Outras Despesas" só aparece quando tem algum valor de verdade — a pedido do
+    // Leonardo (28/08/2026). Os outros 4 grupos continuam sempre visíveis (mesmo zerados),
+    // já que eles têm sentido fixo/estrutural pro Leonardo acompanhar; Outras Despesas é o
+    // grupo "sobra"/fallback, então só faz sentido mostrar quando realmente tiver lançamento.
+    if(g.key==='OUTRAS'&&grpTotalGeral===0&&acumGrupoTot===0&&totGrupo.every(v=>v===0))return;
+    grpRows+='<tr style="background:'+g.totLabelBg+';font-weight:700"><td '+tdSB(g.totLabelBg)+'>'+g.totLabel+'</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(acumGrupoTot,null,g.key,g.totLabel,null,null,colKeys[0])+'</td>'+totGrupo.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2g(v,null,g.key,g.totLabel,colAno[i],colMes[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2g(grpTotalGeral,null,g.key,g.totLabel,null,null,null)+'</td></tr>';
+    if(rows)rows+=spacerRow;
+    rows+=grpRows;
+    gruposResumoFin[g.key]={total:grpTotalGeral,acum:acumGrupoTot,mensal:totGrupo.slice(),label:g.totLabel,cor:g.hdrText};
+    saldoMensal=saldoMensal.map((v,i)=>v-totGrupo[i]);
+    rows+=linhaSaldo();
+  });
+
+  // Grupo Empréstimos (visual) — reúne 10501 + 1.05.03 (lado Entrada) e 20307 (lado Despesa)
+  // Os valores já foram somados normalmente em tFM/tPM/totGrupo acima; aqui é só uma exibição separada
+  const emprContasFat=nomes.filter(c=>EMPR_FAT_COD.includes(codigoDe(c))&&(contas[c].FAT.some(v=>v)||contas[c].DESC.some(v=>v)||acumFat(c)!==0));
+  const emprContasPag=nomes.filter(c=>EMPR_PAG_COD.includes(codigoDe(c))&&(contas[c].PAG.some(v=>v)||acumPag(c)!==0));
+  if(emprContasFat.length||emprContasPag.length){
+    if(rows)rows+=spacerRow;
+    rows+='<tr style="background:#FFE9CC"><td colspan="'+(NC+3)+'" style="padding:5px 12px;font-weight:700;font-size:11px;color:#B35C00;'+SD+'#FFE9CC">▶ EMPRÉSTIMOS</td></tr>';
+    const totEmprFat=Array(NC).fill(0),totEmprPag=Array(NC).fill(0);
+    let acumEmprFat=0,acumEmprPag=0,idxE=0;
+    emprContasFat.forEach(c=>{
+      const vals=contas[c].FAT.map((v,i)=>v-contas[c].DESC[i]);
+      const aa=acumFat(c);acumEmprFat+=aa;
+      const tot=aa+vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>totEmprFat[i]+=v);
+      const zebra=idxE%2===0?'#ffffff':'#fff6ec';idxE++;
+      rows+='<tr style="border-left:3px solid #FFCC80;border-bottom:1px solid #f5ebe0">'
+        +'<td '+tdS(zebra)+'>'+c+' <span style="font-size:9px;color:#B35C00;font-weight:600">· Entrada</span></td>'
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
+        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#fff3e0;font-size:10px">'+f2(tot)+'</td></tr>';
+    });
+    emprContasPag.forEach(c=>{
+      const vals=contas[c].PAG;
+      const aa=acumPag(c);acumEmprPag+=aa;
+      const tot=aa+vals.reduce((s,v)=>s+v,0);
+      vals.forEach((v,i)=>totEmprPag[i]+=v);
+      if(codigoDe(c)==='1.05.03')return; // já exibida como Entrada acima; não repete linha de Despesa
+      const zebra=idxE%2===0?'#ffffff':'#fff6ec';idxE++;
+      rows+='<tr style="border-left:3px solid #FFB74D;border-bottom:1px solid #f5ebe0">'
+        +'<td '+tdS(zebra)+'>'+c+' <span style="font-size:9px;color:#943126;font-weight:600">· Despesa</span></td>'
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
+        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#fff3e0;font-size:10px">'+f2(tot)+'</td></tr>';
+    });
+    if(emprContasFat.length)rows+='<tr style="background:#FFCC80;font-weight:700"><td '+tdSB('#FFCC80')+'>Total Entradas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprFat)+'</td>'+totEmprFat.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0))+'</td></tr>';
+    if(emprContasFat.length)gruposResumoFin['EMPRESTIMOS_ENTRADA']={total:acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0),acum:acumEmprFat,mensal:totEmprFat.slice()};
+    if(emprContasPag.length)rows+='<tr style="background:#F1948A;font-weight:700"><td '+tdSB('#F1948A')+'>Total Despesas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprPag)+'</td>'+totEmprPag.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0))+'</td></tr>';
+    if(emprContasPag.length)gruposResumoFin['EMPRESTIMOS']={total:acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0),acum:acumEmprPag,mensal:totEmprPag.slice(),label:'Despesas com Empréstimos',cor:'#943126'};
+    if(emprContasPag.length){
+      saldoMensal=saldoMensal.map((v,i)=>v-totEmprPag[i]);
+      rows+=linhaSaldo();
+    }
+  }
+  tbody.innerHTML=rows;
+
+  // Total Pagamentos + Previsto, e Resultado do Período recalculado com base nele
+  const pagPrevMes=tPM.map((v,i)=>v+prevTotalMes[i]);
+  const pagPrevTot=pagPrevMes.reduce((s,v)=>s+v,0);
+  const rv2=tFM.map((v,i)=>v-pagPrevMes[i]);
+  const rt2=rv2.reduce((s,v)=>s+v,0);
+
+  // Caixa Inicial + Saldo acumulado (descontando previsto)
+  const ci=obraSel?parseFloat(DATA.caixaInicial[obraSel]||0)||0:obras.reduce((s,o)=>s+(parseFloat(DATA.caixaInicial[o]||0)||0),0);
+  const saldo=[];let acc=ci;rv2.forEach((v,i)=>{acc+=v;saldo.push(acc);});
+  const ciMeses=rv2.map((_,i)=>i===0?ci:saldo[i-1]);
+  // As 4 linhas de rodapé (Total Pagamentos + Previsto, Resultado do Período, Caixa Inicial do
+  // Mês, Saldo de Caixa do Mês) foram ocultadas a pedido do Leonardo (28/08/2026) — os cálculos
+  // acima (rv2/rt2/ci/saldo) continuam ativos porque alimentam a Visão Executiva do Caixa logo
+  // acima da tabela (renderVisaoExecutivaCaixa), só a exibição dessas 4 linhas foi removida.
+  tfoot.innerHTML='';
+  set('fcr-badge',nomes.length+(nomes.length===1?' conta':' contas'));
+
+  // Resumo — Faturamento / Despesas (Pagamentos + Previsto) / Saldo de Caixa
+  const theadR=document.getElementById('thead-fcr-resumo'),tbodyR=document.getElementById('tbody-fcr-resumo');
+  if(theadR&&tbodyR){
+    const thSDr='text-align:left;padding:8px 12px;width:300px;'+SD+'#f5f5f5;top:0';
+    theadR.innerHTML='<tr style="background:#f5f5f5">'
+      +'<th style="'+thSDr+'"></th>'
+      +'<th class="r" style="padding:6px 8px;width:90px;font-size:10px;background:#f5f5f5;position:sticky;top:0;color:#666">Acum.<br>Anterior</th>'
+      +colKeys.map((k,i)=>'<th class="r" style="padding:6px 8px;width:80px;font-size:11px;position:sticky;top:0;background:#f5f5f5">'+MESES_ABR[colMes[i]]+'/'+colAno[i]
+        +(k>=chaveAtualFluxo?'<br><span style="font-size:8px;font-weight:700;color:#B7950B;letter-spacing:.04em" title="Mês ainda não fechado — inclui provisão (\'a pagar\'/\'a receber\') em aberto">PREVISTO</span>':'')
+        +'</th>').join('')
+      +'<th class="r" style="padding:6px 10px;width:90px;background:#ececec;position:sticky;top:0">Total</th></tr>';
+    const acumPagTotal=pagN.reduce((s,c)=>s+acumPag(c),0);
+    const tdAcumDashR='<td class="r" style="padding:5px 6px;font-size:11px;background:#1a5276;color:rgba(255,255,255,.4)">—</td>';
+    const rowsR=
+      '<tr style="background:#c8e6c9;font-weight:700"><td '+tdSB('#c8e6c9')+'>Entradas</td>'
+      +'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(acumFatTot)+'</td>'
+      +tFM.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
+      +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(acumFatTot+tFM.reduce((s,v)=>s+v,0))+'</td></tr>'
+      +'<tr style="background:#FADBD8;font-weight:700"><td '+tdSB('#FADBD8')+'>Despesas</td>'
+      +'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(acumPagTotal)+'</td>'
+      +pagPrevMes.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px">'+f2(v)+'</td>').join('')
+      +'<td class="r" style="padding:5px 8px;background:#f4f4f4">'+f2(acumPagTotal+pagPrevTot)+'</td></tr>'
+      +'<tr style="background:#1a5276;font-weight:700"><td style="'+SD+'#1a5276;padding:6px 12px;font-size:11px;color:#fff">Saldo de Caixa</td>'
+      +tdAcumDashR
+      +saldo.map(v=>'<td class="r" style="padding:5px 6px;font-size:11px;color:'+(v>=0?'#A9DFBF':'#F1948A')+'">'+f2(v)+'</td>').join('')
+      +'<td class="r" style="padding:5px 8px;color:'+(saldo[saldo.length-1]>=0?'#A9DFBF':'#F1948A')+'">'+f2(saldo[saldo.length-1])+'</td></tr>';
+    tbodyR.innerHTML=rowsR;
+  }
+
+  // Resumo Financeiro — visão executiva: Receitas (Entradas + Entrada Empréstimo) x Despesas por grupo x Saldo, com filtro "acumulado até"
+  const theadF=document.getElementById('thead-fcr-resumo-fin'),tbodyF=document.getElementById('tbody-fcr-resumo-fin'),selAte=document.getElementById('fcr-resumo-fin-ate');
+  if(theadF&&tbodyF&&selAte){
+    theadF.innerHTML='';
+    if(!selAte.dataset.filled||selAte.dataset.filled!==String(NC)){
+      const valorAtual=selAte.value;
+      selAte.innerHTML='<option value="">Todos os meses</option>'+colKeys.map((k,i)=>'<option value="'+k+'">'+MESES_ABR[colMes[i]]+'/'+colAno[i]+'</option>').join('');
+      selAte.value=colKeys.includes(parseInt(valorAtual))?valorAtual:'';
+      selAte.dataset.filled=String(NC);
+    }
+    const cutoffKey=selAte.value?parseInt(selAte.value):null;
+    const cutoffIdx=cutoffKey!=null?colKeys.indexOf(cutoffKey):NC-1;
+    const somaAte=(acum,mensal)=>acum+(mensal||[]).slice(0,cutoffIdx+1).reduce((s,v)=>s+v,0);
+
+    const totalEntradasFin=somaAte(acumFatTot,tFM);
+    const emprEntradaG=gruposResumoFin['EMPRESTIMOS_ENTRADA'];
+    const entradaEmprFin=emprEntradaG?somaAte(emprEntradaG.acum,emprEntradaG.mensal):0;
+    const entradasOperFin=totalEntradasFin-entradaEmprFin;
+    const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
+    let totalDespesasFin=0;
+    const EMPR_FAT_COD_RF=['10501','1.05.03'];
+    const linhaExec=(label,val,opts)=>{
+      opts=opts||{};
+      const conteudoVal=opts.onclick?'<span onclick="'+opts.onclick+'" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(val)+'</span>':f2(val);
+      return '<tr style="'+(opts.bg?'background:'+opts.bg+';':'')+(opts.borderTop?'border-top:'+opts.borderTop+';':'')+'border-bottom:1px solid var(--border)">'
+        +'<td style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'500')+';color:'+(opts.labelCor||'var(--text)')+'">'+(opts.indent?'<span style="padding-left:16px">':'')+label+(opts.indent?'</span>':'')+'</td>'
+        +'<td class="r" style="padding:'+(opts.pad||'7px 12px')+';font-size:'+(opts.fs||'12px')+';font-weight:'+(opts.fw||'600')+';color:'+(opts.valCor||opts.labelCor||'var(--text)')+'">'+conteudoVal+'</td></tr>';
+    };
+    const ocResumo=(tipo,grupo,titulo,codIncl,codExcl)=>{
+      const g=grupo?"'"+grupo+"'":'null';
+      const ci=codIncl?"["+codIncl.map(c=>"'"+c+"'").join(',')+"]":'null';
+      const ce=codExcl?"["+codExcl.map(c=>"'"+c+"'").join(',')+"]":'null';
+      return 'abrirDetalheResumoFinReal(\''+tipo+'\','+g+',\''+titulo+'\','+(cutoffKey!=null?cutoffKey:'null')+','+ci+','+ce+')';
+    };
+    let rowsF='<tr><td colspan="2" style="padding:14px 4px 4px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em">Receitas</td></tr>';
+    rowsF+=linhaExec('Entradas',entradasOperFin,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400',onclick:ocResumo('FATURAMENTO',null,'Entradas',null,EMPR_FAT_COD_RF)});
+    if(emprEntradaG)rowsF+=linhaExec('Entrada Empréstimo',entradaEmprFin,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400',onclick:ocResumo('',null,'Entrada Empréstimo',EMPR_FAT_COD_RF)});
+    rowsF+=linhaExec('Total de Entradas',totalEntradasFin,{borderTop:'1px solid var(--border)',fw:'600',pad:'8px 4px',fs:'13px',labelCor:'#1B6B35',valCor:'#1B6B35',onclick:ocResumo('FATURAMENTO',null,'Total de Entradas')});
+    rowsF+='<tr><td colspan="2" style="padding:16px 4px 4px;font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.07em">Despesas</td></tr>';
+    ordemGrupos.forEach(k=>{
+      const g=gruposResumoFin[k];
+      if(!g)return;
+      const valG=somaAte(g.acum,g.mensal);
+      totalDespesasFin+=valG;
+      rowsF+=linhaExec(g.label,valG,{labelCor:'var(--text)',valCor:'var(--text)',pad:'5px 4px',fs:'13px',fw:'400',onclick:ocResumo('PAGAMENTO',k,g.label)});
+    });
+    const totalReceitasFin=entradasOperFin+entradaEmprFin;
+    const saldoFin=totalReceitasFin-totalDespesasFin;
+    rowsF+=linhaExec('Total Despesas',totalDespesasFin,{borderTop:'1px solid var(--border)',fw:'600',pad:'8px 4px',fs:'13px',labelCor:'#C0392B',valCor:'#C0392B',onclick:ocResumo('PAGAMENTO',null,'Total Despesas')});
+    tbodyF.innerHTML=rowsF;
+  }
+
+  if(!window._fcrScrollWired){
+    const sA=document.getElementById('fcr-resumo-scroll'),sB=document.getElementById('fcr-fluxo-scroll');
+    if(sA&&sB){
+      let syncing=false;
+      sA.addEventListener('scroll',()=>{if(syncing)return;syncing=true;sB.scrollLeft=sA.scrollLeft;syncing=false;});
+      sB.addEventListener('scroll',()=>{if(syncing)return;syncing=true;sA.scrollLeft=sB.scrollLeft;syncing=false;});
+      window._fcrScrollWired=true;
+    }
+  }
+
+  renderCaixaInicialCamposReal();
+}
+function renderCaixaInicialCamposReal(){
+  const obras=[...new Set(DATA.csv.map(r=>r.cc).filter(Boolean))].sort();
+  const container=document.getElementById('fcr-caixa-campos');
+  if(!container)return;
+  if(!obras.length){container.innerHTML='<div style="color:var(--text3);font-size:12px">Carregue dados no CSV Analítico para ver os centros de custo.</div>';return;}
+  const obraSel=document.getElementById('fcr-obra')?.value||'';
+  container.innerHTML=obras.map(obra=>{
+    const val=DATA.caixaInicial[obra]||'';
+    const ativo=!obraSel||ccMatch(obraSel,obra);
+    return '<div style="display:flex;flex-direction:column;gap:6px;padding:12px 16px;border:2px solid '+(ativo?'var(--brand)':'var(--border)')+';border-radius:6px;background:'+(ativo?'var(--brand-light)':'var(--bg)')+';min-width:200px">'
+      +'<span style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:'+(ativo?'var(--brand)':'var(--text3)')+'">'+obra+'</span>'
+      +'<input type="number" value="'+val+'" placeholder="0,00" step="0.01"'
+      +' onchange="DATA.caixaInicial[decodeURIComponent(this.dataset.obra)]=parseFloat(this.value)||0;renderFluxoReal();autoSave()"'
+      +' data-obra="'+encodeURIComponent(obra)+'"'
+      +' style="border:1px solid '+(ativo?'var(--brand)':'var(--border)')+';background:#fff;padding:6px 10px;font-family:DM Sans,sans-serif;font-size:14px;font-weight:600;color:var(--text);outline:none;text-align:right;width:100%;box-sizing:border-box">'
+      +'</div>';
+  }).join('');
+}
 // ── GitHub Storage sync ─────────────────────────────────────────────────────
 function ghubPayload(){
   return JSON.stringify({csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),
@@ -2255,6 +2635,237 @@ function gerarApresentacaoFluxo(){
   }catch(e){alert('Erro ao gerar apresentação: '+e.message);return null;}
 }
 
+function gerarApresentacaoFluxoReal(){
+  var obraSel=document.getElementById('fcr-obra')?.value||'Todas as obras';
+  var hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  var fmtV=function(v){return 'R$ '+v.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});};
+
+  // Coletar dados do tfoot (Resultado, Caixa Inicial, Saldo de Caixa)
+  var tfoot=document.getElementById('tfoot-fluxoreal');
+  var thead=document.getElementById('thead-fluxoreal');
+  var tbody=document.getElementById('tbody-fluxoreal');
+  if(!tfoot||!thead||!tbody){alert('Carregue os dados do Fluxo de Caixa primeiro.');return null;}
+  try{
+
+  // Extrair colunas de meses do thead
+  var thCols=Array.from(thead.querySelectorAll('th')).map(function(th){return th.textContent.trim();});
+  // Extrair linhas do tbody
+  var tbRows=Array.from(tbody.querySelectorAll('tr')).map(function(tr){
+    return Array.from(tr.querySelectorAll('td')).map(function(td){
+      var inp=td.querySelector('input');
+      return inp?inp.value:td.textContent.trim();
+    });
+  });
+  // Extrair linhas do tfoot
+  var tfRows=Array.from(tfoot.querySelectorAll('tr')).map(function(tr){
+    return {
+      label:tr.querySelector('td')?.textContent.trim()||'',
+      vals:Array.from(tr.querySelectorAll('td')).slice(1).map(function(td){return td.textContent.trim();})
+    };
+  });
+
+  // Previsto por ano
+  var prevAnos={};
+  Object.keys(DATA.previsto||{}).forEach(function(obra){
+    if(!obraSel||obraSel==='Todas as obras'||ccMatch(obra,obraSel)){
+      Object.entries(DATA.previsto[obra]).forEach(function(kv){
+        var k=parseInt(kv[0]),v=parseFloat(kv[1])||0;
+        var ano=Math.floor(k/100);
+        prevAnos[ano]=(prevAnos[ano]||0)+v;
+      });
+    }
+  });
+
+  // Montar HTML
+  var NL=String.fromCharCode(10);
+  var css='*{margin:0;padding:0;box-sizing:border-box;font-family:\'Helvetica Neue\',Arial,sans-serif;}'
+    +'body{background:#fff;color:#1a1a1a;font-size:12px;}'
+    +'.slide{width:100%;padding:28px 40px;page-break-after:always;border-bottom:2px solid #eee;}'
+    +'.slide:last-child{page-break-after:auto;border-bottom:none;}'
+    +'.header{border-bottom:3px solid #1B6B35;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-end;}'
+    +'.title{font-size:20px;font-weight:700;color:#1B6B35;}'
+    +'.sub{font-size:11px;color:#888;margin-top:4px;}'
+    +'.date{font-size:11px;color:#aaa;}'
+    +'.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px;}'
+    +'.kpi{background:#f9f9f9;border-left:4px solid #1B6B35;padding:12px 16px;}'
+    +'.kpi.neg{border-left-color:#C0392B;}'
+    +'.kpi.blue{border-left-color:#1a5276;}'
+    +'.kpi-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#888;margin-bottom:6px;}'
+    +'.kpi-val{font-size:16px;font-weight:700;color:#1B6B35;}'
+    +'.kpi.neg .kpi-val{color:#C0392B;}.kpi.blue .kpi-val{color:#1a5276;}'
+    +'table{width:100%;border-collapse:collapse;font-size:10px;}'
+    +'th{background:#1B6B35;color:#fff;padding:6px 8px;text-align:right;white-space:nowrap;}'
+    +'th:first-child{text-align:left;}'
+    +'td{padding:5px 8px;border-bottom:1px solid #eee;text-align:right;white-space:nowrap;}'
+    +'td:first-child{text-align:left;font-weight:500;}'
+    +'tr:hover{background:#f5f5f5;}'
+    +'.sec-title{font-size:13px;font-weight:700;color:#1B6B35;margin:20px 0 10px;border-bottom:1px solid #e0e0e0;padding-bottom:6px;}'
+    +'.badge-pos{color:#1B6B35;font-weight:600;}.badge-neg{color:#C0392B;font-weight:600;}'
+    +'@media print{.slide{page-break-after:always;min-height:auto;}}';
+
+  // Slide 1: Resumo do Período
+  var resRow=tfRows.find(function(r){return r.label.includes('Resultado');});
+  var saldoRow=tfRows.find(function(r){return r.label.includes('Saldo');});
+  var ciRow=tfRows.find(function(r){return r.label.includes('Caixa Inicial');});
+  var totFat=0,totPag=0;
+  tbRows.forEach(function(r){
+    if(r.length<2)return;
+    // linhas de total têm valores
+    var last=r[r.length-1]||'';
+    var n=parseFloat(last.replace(/\./g,'').replace(',','.'))||0;
+  });
+  // Usar tfoot Resultado do Período - última coluna = total
+  var resVals=resRow?resRow.vals:[];
+  var resTotal=resVals.length?resVals[resVals.length-1]:'—';
+  var saldoFinal=saldoRow?saldoRow.vals[saldoRow.vals.length-1]:'—';
+  var ciInicial=ciRow?ciRow.vals[0]:'—';
+
+  // Calcular totais de faturamento e pagamento direto dos dados
+  var obraF=obraSel&&obraSel!=='Todas as obras'?obraSel:'';
+  var csvF=(DATA.csv||[]).filter(function(r){return !obraF||ccMatch(r.cc||'',obraF);});
+  var totFatV=csvF.filter(function(r){return r.tipo==='FATURAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var totDescV=csvF.filter(function(r){return r.tipo==='DESCONTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var totPagV=csvF.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var totResV=totFatV-totDescV-totPagV;
+
+  var slide1='<div class="slide">'
+    +'<div class="header"><div><div class="title">Fluxo de Caixa</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
+    ;  // KPIs removidos a pedido
+
+  slide1+='</div>';
+
+  // Slide 2: Detalhamento por Conta
+  var slide2='<div class="slide">'
+    +'<div class="header"><div><div class="title">Detalhamento por Conta</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
+    +'<table><tr>';
+  thCols.forEach(function(th,i){slide2+='<th'+(i===0?' style="min-width:200px"':'')+'>'+th+'</th>';});
+  slide2+='</tr>';
+  tbRows.forEach(function(r,i){
+    if(!r.length)return;
+    var isSec=r.length===1||(r[0]&&r[0].includes('▶'));
+    var isPrevRow=r[0]&&r[0].includes('Previsto —');
+    var isTotGrupo=r[0]&&r[0].indexOf('Total ')===0;
+    var bgRow=isSec?'background:#f0f7f0;font-weight:700;':
+              isPrevRow?'background:#FEF9E7;color:#B7950B;font-weight:600;':
+              isTotGrupo?'background:#f0f0f0;font-weight:700;':
+              i%2===0?'background:#fafafa;':'';
+    slide2+='<tr style="'+bgRow+'">';
+    r.forEach(function(c,ci){slide2+='<td>'+c+'</td>';});
+    slide2+='</tr>';
+  });
+  // Adicionar linhas do tfoot (Resultado, Previsto por obra, Caixa Inicial, Saldo)
+  var tfootEl=document.getElementById('tfoot-fluxoreal');
+  if(tfootEl){
+    Array.from(tfootEl.querySelectorAll('tr')).forEach(function(tr){
+      var cells=Array.from(tr.querySelectorAll('td'));
+      if(!cells.length)return;
+      var label=cells[0].textContent.trim();
+      var isPrev=label.includes('Previsto');
+      var isRes=label.includes('Resultado');
+      var isSaldo=label.includes('Saldo');
+      var isCaixa=label.includes('Caixa Inicial');
+      var isPagPrev=label.includes('Total Pagamentos + Previsto');
+      var bg=isPagPrev?'background:#922B21;color:#fff;font-weight:700':
+               isPrev?'background:#FEF9E7;color:#B7950B;font-weight:600':
+               isRes?'background:#f0f0f0;font-weight:700':
+               isSaldo?'background:#1a5276;color:#fff;font-weight:700':
+               isCaixa?'background:#EAF4FB;font-weight:600':'';
+      slide2+='<tr style="'+bg+'">';
+      cells.forEach(function(td){
+        var inp=td.querySelector('input');
+        var v=inp?inp.value:(td.textContent||'').trim();
+        slide2+='<td>'+v+'</td>';
+      });
+      slide2+='</tr>';
+    });
+  }
+  slide2+='</table></div>';
+
+  // Slide 3: Previsto por Ano
+  var slide3='<div class="slide">'
+    +'<div class="header"><div><div class="title">Previsto de Desembolso</div><div class="sub">'+obraSel+' — Resumo Anual</div></div><div class="date">'+hoje+'</div></div>'
+    +'<table><tr><th>Ano</th><th>Previsto Total</th></tr>';
+  Object.keys(prevAnos).sort().forEach(function(ano){
+    slide3+='<tr><td>'+ano+'</td><td>'+fmtV(prevAnos[ano])+'</td></tr>';
+  });
+  var totPrev=Object.values(prevAnos).reduce(function(s,v){return s+v;},0);
+  slide3+='<tr style="background:#f0f7f0;font-weight:700"><td>Total</td><td>'+fmtV(totPrev)+'</td></tr>';
+  slide3+='</table></div>';
+
+  // Slide 3: Evolução de Caixa Mensal (Previsto Desembolso, Previsto Recebimento, Saldo)
+  // Extrair previsto desembolso e recebimento por mês dos dados CSV + previsto
+  var obraF2=obraSel&&obraSel!=='Todas as obras'?obraSel:'';
+  // Filtrar CSV por obra — declarar ANTES de usar
+  var csvF2=(DATA.csv||[]).filter(function(r){return !obraF2||ccMatch(r.cc||'',obraF2);});
+  var mesesMap={};
+  // Previsto desembolso LIQUIDO: previsto bruto − realizado contas 2010304/2010401
+  var contasDesc=['2010304','2010401'];
+  Object.keys(DATA.previsto||{}).forEach(function(obra){
+    if(!obraF2||ccMatch(obra,obraF2)){
+      Object.entries(DATA.previsto[obra]).forEach(function(kv){
+        var k=String(kv[0]),v=parseFloat(kv[1])||0;
+        if(!v)return;
+        var ano=Math.floor(parseInt(k)/100),mes=parseInt(k)%100;
+        var realizado=csvF2.filter(function(r){
+          return r.tipo==='PAGAMENTO'&&r.ano===ano&&r.mes===mes
+            &&contasDesc.some(function(c){return r.conta&&r.conta.includes(c);});
+        }).reduce(function(s,r){return s+r.valor;},0);
+        var vLiq=Math.max(0,v-realizado);
+        if(!mesesMap[k])mesesMap[k]={desp:0,rec:0};
+        mesesMap[k].desp+=vLiq;
+      });
+    }
+  });
+  // Adicionar pagamentos realizados do CSV
+  csvF2.filter(function(r){return r.tipo==='PAGAMENTO';}).forEach(function(r){
+    if(r.ano==null||r.mes==null)return;
+    var k=r.ano*100+r.mes+'';
+    if(!mesesMap[k])mesesMap[k]={desp:0,rec:0};
+    mesesMap[k].desp+=r.valor;
+  });
+  // Previsto recebimento: FATURAMENTO "A RECEBER" por mês do CSV
+  csvF2.filter(function(r){return r.tipo==='FATURAMENTO'&&r.complemento&&r.complemento.toUpperCase().includes('A RECEBER');}).forEach(function(r){
+    if(r.ano==null||r.mes==null)return;
+    var k=r.ano*100+r.mes+'';
+    if(!mesesMap[k])mesesMap[k]={desp:0,rec:0};
+    mesesMap[k].rec+=r.valor;
+  });
+  // Filtrar apenas meses a partir do mes atual
+  var hojeObj=new Date();
+  var keyAtual=hojeObj.getFullYear()*100+hojeObj.getMonth();
+  var mesesOrdenados=Object.keys(mesesMap).sort().filter(function(k){return parseInt(k)>=keyAtual;});
+  var MESES_ABR=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  var slide3='<div class="slide">'
+    +'<div class="header"><div><div class="title">Evolução de Caixa Mensal</div><div class="sub">'+obraSel+'</div></div><div class="date">'+hoje+'</div></div>'
+    +'<table><tr><th>Mês/Ano</th><th>Prev. Desembolso</th><th>Prev. Recebimento</th><th>Saldo</th></tr>';
+  var acumSaldo=0;
+  mesesOrdenados.forEach(function(k){
+    var m=mesesMap[k];
+    var ano=Math.floor(parseInt(k)/100),mes=parseInt(k)%100;
+    var label=MESES_ABR[mes]+'/'+ano;
+    var saldo=m.rec-m.desp;acumSaldo+=saldo;
+    slide3+='<tr>'
+      +'<td>'+label+'</td>'
+      +'<td class="neg-c">'+fmtV(m.desp)+'</td>'
+      +'<td class="pos">'+fmtV(m.rec)+'</td>'
+      +'<td class="'+(saldo>=0?'pos':'neg-c')+'">'+fmtV(saldo)+'</td>'
+      +'</tr>';
+  });
+  var totDesp=mesesOrdenados.reduce(function(s,k){return s+(mesesMap[k].desp||0);},0);
+  var totRec=mesesOrdenados.reduce(function(s,k){return s+(mesesMap[k].rec||0);},0);
+  slide3+='<tr style="background:#f0f7f0;font-weight:700">'
+    +'<td>Total</td>'
+    +'<td class="neg-c">'+fmtV(totDesp)+'</td>'
+    +'<td class="pos">'+fmtV(totRec)+'</td>'
+    +'<td class="'+(totRec-totDesp>=0?'pos':'neg-c')+'">'+fmtV(totRec-totDesp)+'</td>'
+    +'</tr>';
+  slide3+='</table></div>';
+
+  // Ordem: Resumo → Detalhamento → Evolução
+  return '<html><head><meta charset="UTF-8"><title>Relatório Fluxo de Caixa</title><style>'+css+'</style></head><body>'+slide1+slide2+slide3+'</body></html>';
+  }catch(e){alert('Erro ao gerar apresentação: '+e.message);return null;}
+}
+
 function gerarApresentacaoExec(){
   var obraSel=document.getElementById('dt-obra')?.value||'Todas as obras';
   var hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
@@ -2599,6 +3210,99 @@ function abrirProjecaoFluxo(curtoPrazo){
     +'</div>';
 }
 
+function abrirProjecaoFluxoReal(curtoPrazo){
+  var prefixo=curtoPrazo?'fcr-cp-':'fcr-proj-';
+  var deStr=document.getElementById(prefixo+'de').value;
+  var ateStr=document.getElementById(prefixo+'ate').value;
+  if(!deStr||!ateStr){alert('Preencha Data Inicial e Data Final.');return;}
+  var de=new Date(deStr+'T00:00:00');
+  var ate=new Date(ateStr+'T23:59:59');
+  if(de>ate){alert('A Data Inicial precisa ser antes da Data Final.');return;}
+  var obraSel=document.getElementById('fcr-obra')?document.getElementById('fcr-obra').value:'';
+  var hoje=new Date();
+  var chaveAtual=hoje.getFullYear()*100+hoje.getMonth();
+  var linhas=(DATA.csv||[]).filter(function(r){
+    if(r.porBens)return false; // baixa "Por Bens" não é caixa real — nunca entra na projeção
+    if(!r.data)return false;
+    var t=(r.data instanceof Date?r.data:new Date(r.data)).getTime();
+    if(t<de.getTime()||t>ate.getTime())return false;
+    if(obraSel&&!ccMatch(r.cc||'',obraSel))return false;
+    var comp=(r.complemento||'').toLowerCase();
+    var ehAPagarOuAReceber=comp.includes('a pagar')||comp.includes('a receber');
+    if(ehAPagarOuAReceber){
+      // Previsão Curto Prazo: Custo de Obra usa exatamente o que está lançado em Contas a
+      // Pagar (sem essa exclusão) — não usa o Previsto manual. As outras fontes continuam
+      // seguindo a mesma regra do resto do Fluxo de Caixa (só exclui em mês já passado).
+      if(!curtoPrazo&&r.tipo==='PAGAMENTO'&&grupoDeConta(r.conta||'')==='CUSTO_OBRA')return false; // Custo de Obra nunca considera provisão (na projeção normal)
+      if(r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)<chaveAtual)return false; // outros: só exclui em mês passado
+    }
+    return true;
+  });
+  window._projecaoFluxoLinhas=linhas;
+  window._projecaoFluxoInfo={de:de,ate:ate,obraSel:obraSel,curtoPrazo:curtoPrazo};
+  var entradas=linhas.filter(function(r){return r.tipo==='FATURAMENTO';}).reduce(function(s,r){return s+r.valor;},0)
+    -linhas.filter(function(r){return r.tipo==='DESCONTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var saidas=linhas.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
+  // Saídas por grupo — mesma classificação (grupoDeConta) e mesmos rótulos usados no resto
+  // do Fluxo de Caixa, pra não inventar uma segunda taxonomia paralela.
+  var GRUPOS_SAIDA=[
+    {key:'CUSTO_OBRA',label:'Custo de Obra',cor:'#9C640C'},
+    {key:'MARKETING',label:'Despesas de Marketing',cor:'#6C3483'},
+    {key:'ADMIN',label:'Despesas Administrativas',cor:'#1A5276'},
+    {key:'FINANCEIRAS',label:'Despesas Financeiras',cor:'#943126'},
+    {key:'EMPRESTIMOS',label:'Empréstimos',cor:'#B35C00'},
+    {key:'OUTRAS',label:'Outras Despesas',cor:'#424949'}
+  ];
+  var EMPR_PAG_COD=['20307','1.05.03','10598'];
+  var codigoDe=function(c){return (c||'').split(' - ')[0].trim();};
+  var saidasPorGrupo={};
+  linhas.filter(function(r){return r.tipo==='PAGAMENTO';}).forEach(function(r){
+    var g=EMPR_PAG_COD.includes(codigoDe(r.conta))?'EMPRESTIMOS':grupoDeConta(r.conta||'');
+    saidasPorGrupo[g]=(saidasPorGrupo[g]||0)+r.valor;
+  });
+  // "Previsto Engenharia" — só existe na projeção normal (não no Curto Prazo, que já usa o
+  // lançamento real de Contas a Pagar em vez do Previsto manual) e quando a Obra é SPE
+  // Montagnes. Soma o mesmo DATA.previsto[obra][mês] que já alimenta a linha "Previsto" do
+  // grupo Custo de Obra na tabela grande do Fluxo de Caixa — não é um cálculo novo.
+  var mostrarPrevistoEng=!curtoPrazo&&obraSel&&normCC(obraSel)===normCC('SPE MONTAGNES');
+  var previstoEng=0;
+  if(mostrarPrevistoEng){
+    Object.keys(DATA.previsto||{}).forEach(function(obraKey){
+      if(!ccMatch(obraKey,obraSel))return;
+      Object.entries(DATA.previsto[obraKey]).forEach(function(kv){
+        var k=parseInt(kv[0]),v=parseFloat(kv[1])||0;
+        if(!v)return;
+        var anoK=Math.floor(k/100),mesK=k%100;
+        var inicioMes=new Date(anoK,mesK,1);
+        var fimMes=new Date(anoK,mesK+1,0,23,59,59);
+        if(fimMes>=de&&inicioMes<=ate)previstoEng+=v;
+      });
+    });
+  }
+  // Previsto Engenharia entra dentro de Custo de Obra (é provisão da mesma natureza) — assim
+  // o total de Saídas exibido bate exatamente com a soma dos grupos mostrados abaixo dele.
+  var saidasExibida=saidas+previstoEng;
+  if(mostrarPrevistoEng)saidasPorGrupo['CUSTO_OBRA']=(saidasPorGrupo['CUSTO_OBRA']||0)+previstoEng;
+  var saldo=entradas-saidas-previstoEng;
+  var fmtD=function(d){return d.toLocaleDateString('pt-BR');};
+  var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
+  el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:440px;width:90%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+(curtoPrazo?'Previsão Curto Prazo':'Previsão Longo Prazo')+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="font-size:13px;color:var(--text3)">'+fmtD(de)+' até '+fmtD(ate)+(obraSel?' — '+obraSel:' — Todas as obras')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:10px">'
+    +'<div onclick="abrirDetalheProjecao(\'entradas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#eaf6ec;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#1B6B35">Entradas</span><span style="font-size:15px;font-weight:700;color:#1B6B35">'+fmt(entradas)+'</span></div>'
+    +'<div onclick="abrirDetalheProjecao(\'saidas\')" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#fbeaea;border-radius:6px" title="Clique para ver os lançamentos"><span style="font-size:13px;font-weight:600;color:#C0392B">Saídas</span><span style="font-size:15px;font-weight:700;color:#C0392B">'+fmt(saidasExibida)+'</span></div>'
+    +GRUPOS_SAIDA.filter(function(g){return saidasPorGrupo[g.key];}).map(function(g){
+      var notaPrevisto=(g.key==='CUSTO_OBRA'&&mostrarPrevistoEng&&previstoEng)?'<div style="padding:2px 14px 2px 36px;font-size:11px;color:var(--text3)">inclui Previsto Engenharia: '+fmt(previstoEng)+'</div>':'';
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 14px 6px 24px"><span style="font-size:12px;color:'+g.cor+'">'+g.label+'</span><span style="font-size:12px;font-weight:600;color:'+g.cor+'">'+fmt(saidasPorGrupo[g.key])+'</span></div>'+notaPrevisto;
+    }).join('')
+    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:'+(saldo>=0?'#eaf6ec':'#fbeaea')+';border-radius:6px;border-top:2px solid '+(saldo>=0?'#1B6B35':'#C0392B')+'"><span style="font-size:14px;font-weight:700">Saldo</span><span style="font-size:18px;font-weight:800;color:'+(saldo>=0?'#1B6B35':'#C0392B')+'">'+fmt(saldo)+'</span></div>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no período. Meses já passados mostram só o que foi realizado; mês atual e futuros incluem provisão (a pagar/a receber)'+(curtoPrazo?', inclusive Custo de Obra — usa exatamente o lançado em Contas a Pagar, sem o Previsto manual.':'.')+'</div>'
+    +'</div>';
+}
+
 // ---------- Detalhe genérico (clique num número do Fluxo de Caixa / Resumo Financeiro) ----------
 function abrirDetalheFluxo(opts){
   opts=opts||{};
@@ -2693,6 +3397,27 @@ function abrirDetalheFluxoTipoGrupo(tipo,grupo,tituloBase,ano,mes,anoMin){
 }
 function abrirDetalheResumoFin(tipo,grupo,tituloBase,ateKey,codigosIncluir,codigosExcluir){
   var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
+  var titulo=tituloBase+(ateKey!=null?' — acumulado até '+MESES_ABR[ateKey%100]+'/'+Math.floor(ateKey/100):' — acumulado (todos os meses)');
+  abrirDetalheFluxo({tipo:tipo||null,grupo:grupo||null,ateKey:ateKey,codigosIncluir:codigosIncluir||null,codigosExcluir:codigosExcluir||null,obraSel:obraSel,titulo:titulo});
+}
+function abrirDetalheFluxoCelReal(conta,ano,mes,anoMin){
+  var obraSel=document.getElementById('fcr-obra')?document.getElementById('fcr-obra').value:'';
+  var titulo=conta;
+  if(ano!=null&&mes!=null)titulo+=' — '+MESES_ABR[mes]+'/'+ano;
+  else if(anoMin!=null)titulo+=' — Acumulado Anterior';
+  else titulo+=' — Total geral';
+  abrirDetalheFluxo({conta:conta,ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo});
+}
+function abrirDetalheFluxoTipoGrupoReal(tipo,grupo,tituloBase,ano,mes,anoMin){
+  var obraSel=document.getElementById('fcr-obra')?document.getElementById('fcr-obra').value:'';
+  var titulo=tituloBase;
+  if(ano!=null&&mes!=null)titulo+=' — '+MESES_ABR[mes]+'/'+ano;
+  else if(anoMin!=null)titulo+=' — Acumulado Anterior';
+  else titulo+=' — Total geral';
+  abrirDetalheFluxo({tipo:tipo||null,grupo:grupo||null,ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo});
+}
+function abrirDetalheResumoFinReal(tipo,grupo,tituloBase,ateKey,codigosIncluir,codigosExcluir){
+  var obraSel=document.getElementById('fcr-obra')?document.getElementById('fcr-obra').value:'';
   var titulo=tituloBase+(ateKey!=null?' — acumulado até '+MESES_ABR[ateKey%100]+'/'+Math.floor(ateKey/100):' — acumulado (todos os meses)');
   abrirDetalheFluxo({tipo:tipo||null,grupo:grupo||null,ateKey:ateKey,codigosIncluir:codigosIncluir||null,codigosExcluir:codigosExcluir||null,obraSel:obraSel,titulo:titulo});
 }
@@ -2909,6 +3634,19 @@ function exportarFluxo(){
   const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb,ws,'Fluxo de Caixa');
   XLSX.writeFile(wb,'Solucione_Fluxo_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
+}
+
+function exportarFluxoReal(){
+  if(!DATA.csv.length){alert('Nenhum dado.');return;}
+  const anoF=document.getElementById('fcr-ano')?.value||'';
+  const rows=[['Conta','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez','Total']];
+  const thead=document.getElementById('thead-fluxoreal');
+  const tbody=document.getElementById('tbody-fluxoreal');
+  const tfoot=document.getElementById('tfoot-fluxoreal');
+  [thead,tbody,tfoot].forEach(t=>{if(!t)return;Array.from(t.querySelectorAll('tr')).forEach(tr=>{const cells=Array.from(tr.querySelectorAll('th,td')).map(c=>c.innerText||c.textContent||'');if(cells.some(c=>c.trim()))rows.push(cells);});});
+  const wb=XLSX.utils.book_new(),ws=XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb,ws,'Fluxo de Caixa Real');
+  XLSX.writeFile(wb,'Solucione_Fluxo_Real_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
 }
 
 function exportarOrcamentoXLS(){
@@ -3156,6 +3894,7 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <div class="nav-section-label">Visão Geral</div>
     <button class="nav-tab" data-tab="dash" onclick="goTab(this);renderDash()">Dashboard</button>
     <button class="nav-tab active" data-tab="fluxo" onclick="goTab(this)">Fluxo de Caixa</button>
+    <button class="nav-tab" data-tab="fluxoreal" onclick="goTab(this);renderCaixaInicialCamposReal();renderFluxoReal()">Fluxo de Caixa Real</button>
     <button class="nav-tab" data-tab="dtlh" onclick="goTab(this);updateDtlhFilters();renderDtlh()">Resumo Executivo</button>
     <div class="nav-section-label">Contas</div>
     <button class="nav-tab" data-tab="contaspagar" onclick="goTab(this);renderContasAPagar()">Contas a Pagar</button>
@@ -3314,6 +4053,93 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
       <span class="tbl-badge">Preencha o saldo inicial de cada obra</span>
     </div>
     <div id="fc-caixa-campos" style="display:flex;flex-wrap:wrap;gap:20px;padding:16px 20px">
+      <div style="color:var(--text3);font-size:12px">Carregue dados no CSV Analítico para ver os centros de custo.</div>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="page-fluxoreal">
+  <div class="sec-title">Fluxo de Caixa Real</div>
+  <div class="sec-sub">Receitas e despesas por conta, abertas mês a mês</div>
+
+  <div class="filters-bar" style="margin-bottom:16px;flex-wrap:wrap;align-items:flex-end;gap:16px">
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <span class="filter-label">Obra</span>
+      <select class="filter-select" id="fcr-obra" onchange="renderCaixaInicialCamposReal();renderFluxoReal()" style="min-width:180px"><option value="">Todas as obras</option></select>
+    </div>
+    <div style="width:1px;align-self:stretch;background:var(--border)"></div>
+    <div style="margin-right:4px">
+      <div class="tbl-title" style="margin-bottom:2px;font-size:13px">Previsão Curto Prazo</div>
+      <span style="font-size:11px;color:var(--text3)">Custo de Obra usa o lançado em Contas a Pagar, não o Previsto manual</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:11px;font-weight:600;color:var(--text3)">Data Inicial</label>
+      <input type="date" id="fcr-cp-de" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px">
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <label style="font-size:11px;font-weight:600;color:var(--text3)">Data Final</label>
+      <input type="date" id="fcr-cp-ate" style="padding:7px;border:1px solid var(--border);border-radius:4px;font-family:'DM Sans',sans-serif;font-size:13px">
+    </div>
+    <button onclick="abrirProjecaoFluxoReal(true)" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 18px;cursor:pointer;border-radius:6px;font-weight:600">Buscar</button>
+  </div>
+
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);min-width:0" id="fcr-resumo-fin-card">
+    <div class="tbl-head" style="justify-content:flex-start">
+      <div>
+        <div class="tbl-title">Resumo Financeiro</div>
+        <span style="font-size:11px;color:var(--text3)">Visão executiva — Receitas x Despesas por grupo, acumulado até o mês selecionado</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:16px">
+        <span style="font-size:11px;color:var(--text3)">Acumulado até</span>
+        <select id="fcr-resumo-fin-ate" class="form-input" style="font-size:12px;padding:5px 10px;width:auto" onchange="renderFluxoReal()"></select>
+      </div>
+    </div>
+    <div style="padding:4px 16px 16px;font-size:12px">
+      <table id="tbl-fcr-resumo-fin" style="width:100%;border-collapse:collapse">
+        <thead id="thead-fcr-resumo-fin"></thead>
+        <tbody id="tbody-fcr-resumo-fin"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tbl-card" style="margin-bottom:16px" id="fcr-resumo-card">
+    <div class="tbl-head">
+      <div class="tbl-title">Resumo</div>
+    </div>
+    <div style="overflow-x:auto;font-size:12px" id="fcr-resumo-scroll">
+      <table id="tbl-fcr-resumo" style="width:100%;border-collapse:collapse;min-width:900px;table-layout:fixed">
+        <thead id="thead-fcr-resumo"></thead>
+        <tbody id="tbody-fcr-resumo"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tbl-card">
+    <div class="tbl-head">
+      <div class="tbl-title">Fluxo de Caixa por Conta</div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="tbl-badge" id="fcr-badge">—</span>
+        <button class="btn-export" onclick="exportarFluxoReal()" style="padding:5px 12px;font-size:11px">&#8595; Excel</button>
+        <button onclick="abrirPDF(gerarApresentacaoFluxoReal())" style="background:#1a5276;color:#fff;border:none;padding:5px 12px;font-size:11px;cursor:pointer;border-radius:3px">&#128196; Apresentação</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;overflow-y:auto;max-height:65vh;font-size:12px" id="fcr-fluxo-scroll">
+      <table id="tbl-fluxoreal" style="width:100%;border-collapse:collapse;min-width:900px;table-layout:fixed">
+        <thead id="thead-fluxoreal"></thead>
+        <tbody id="tbody-fluxoreal">
+          <tr><td colspan="14"><div class="empty-state"><p>Carregue dados no CSV Analítico para visualizar</p></div></td></tr>
+        </tbody>
+        <tfoot id="tfoot-fluxoreal"></tfoot>
+      </table>
+    </div>
+  </div>
+
+  <div class="tbl-card" style="margin-top:16px" id="fcr-caixa-card">
+    <div class="tbl-head">
+      <div class="tbl-title">Caixa Inicial por Centro de Custo</div>
+      <span class="tbl-badge">Preencha o saldo inicial de cada obra</span>
+    </div>
+    <div id="fcr-caixa-campos" style="display:flex;flex-wrap:wrap;gap:20px;padding:16px 20px">
       <div style="color:var(--text3);font-size:12px">Carregue dados no CSV Analítico para ver os centros de custo.</div>
     </div>
   </div>
