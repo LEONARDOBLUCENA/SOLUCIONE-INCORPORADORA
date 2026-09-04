@@ -3350,6 +3350,60 @@ function abrirDetalheFluxo(opts){
     +'</div></div>';
   filtrarDetalheFluxo();
 }
+// Fluxo de Caixa Real: mesmo detalhe genérico acima, mas nunca inclui provisão ("a pagar"/"a
+// receber") — o número que abriu o clique já é só o realizado, então o detalhe tem que bater
+// com ele. Usa o mesmo modal/filtro (filtrarDetalheFluxo) do detalhe original.
+function abrirDetalheFluxoReal(opts){
+  opts=opts||{};
+  var obraSel=opts.obraSel||'';
+  var linhas=(DATA.csv||[]).filter(function(r){
+    if(r.porBens)return false; // detalhe do Fluxo de Caixa — nunca inclui baixa "Por Bens"
+    var comp=(r.complemento||'').toLowerCase();
+    if(r.tipo==='FATURAMENTO'&&comp.includes('a receber'))return false; // Real: só realizado
+    if(r.tipo==='PAGAMENTO'&&comp.includes('a pagar'))return false; // Real: só realizado
+    if(opts.tipo&&r.tipo!==opts.tipo)return false;
+    if(opts.conta&&r.conta!==opts.conta)return false;
+    if(opts.grupo){
+      var g=EMPR_PAG_COD_G.includes((r.conta||'').split(' - ')[0].trim())?'EMPRESTIMOS':grupoDeConta(r.conta||'');
+      if(g!==opts.grupo)return false;
+    }
+    if(opts.anoMin!=null&&(r.ano==null||r.ano*100+r.mes>=opts.anoMin))return false; // "Acum. Anterior" — só antes do início da tabela
+    if(opts.ateKey!=null&&r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)>opts.ateKey)return false; // "Acumulado até" — usado no Resumo Financeiro
+    if(opts.codigosIncluir){
+      var cod=(r.conta||'').split(' - ')[0].trim();
+      if(!opts.codigosIncluir.includes(cod))return false;
+    }
+    if(opts.codigosExcluir){
+      var cod2=(r.conta||'').split(' - ')[0].trim();
+      if(opts.codigosExcluir.includes(cod2))return false;
+    }
+    if(opts.ano!=null&&r.ano!==opts.ano)return false;
+    if(opts.mes!=null&&r.mes!==opts.mes)return false;
+    if(obraSel&&!ccMatch(r.cc||'',obraSel))return false;
+    return true;
+  }).sort(function(a,b){
+    var ta=a.data?new Date(a.data).getTime():0,tb=b.data?new Date(b.data).getTime():0;
+    return ta-tb;
+  });
+  window._detalheFluxoLinhas=linhas;
+  window._detalheFluxoTitulo=opts.titulo||'Detalhe';
+  var anosDisp=[...new Set(linhas.map(function(r){return r.ano;}).filter(function(v){return v!=null;}))].sort();
+  var mesesDisp=[...new Set(linhas.map(function(r){return r.mes;}).filter(function(v){return v!=null;}))].sort(function(a,b){return a-b;});
+  var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
+  el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+(opts.titulo||'Detalhe')+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<span style="font-size:11px;font-weight:600;color:var(--text3)">Filtrar</span>'
+    +'<select id="detfluxo-ano" onchange="filtrarDetalheFluxo()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:4px"><option value="">Todos os anos</option>'+anosDisp.map(function(a){return '<option value="'+a+'">'+a+'</option>';}).join('')+'</select>'
+    +'<select id="detfluxo-mes" onchange="filtrarDetalheFluxo()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:4px"><option value="">Todos os meses</option>'+mesesDisp.map(function(m){return '<option value="'+m+'">'+MESES_ABR[m]+'</option>';}).join('')+'</select>'
+    +'</div>'
+    +'<div id="detfluxo-resumo" style="font-size:13px;color:var(--text3)"></div>'
+    +'<div style="overflow-y:auto;max-height:50vh;border:1px solid var(--border);border-radius:6px">'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Data</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Complemento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Obra</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Conta</th><th class="r" style="padding:6px 10px;font-size:11px;color:var(--text3)">Valor</th></tr></thead><tbody id="detfluxo-tbody"></tbody></table>'
+    +'</div></div>';
+  filtrarDetalheFluxo();
+}
 function filtrarDetalheFluxo(){
   var todas=window._detalheFluxoLinhas||[];
   var anoSel=document.getElementById('detfluxo-ano')?document.getElementById('detfluxo-ano').value:'';
@@ -3402,7 +3456,7 @@ function abrirDetalheFluxoCelReal(conta,ano,mes,anoMin){
   if(ano!=null&&mes!=null)titulo+=' — '+MESES_ABR[mes]+'/'+ano;
   else if(anoMin!=null)titulo+=' — Acumulado Anterior';
   else titulo+=' — Total geral';
-  abrirDetalheFluxo({conta:conta,ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo});
+  abrirDetalheFluxoReal({conta:conta,ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo});
 }
 function abrirDetalheFluxoTipoGrupoReal(tipo,grupo,tituloBase,ano,mes,anoMin){
   var obraSel=document.getElementById('fcr-obra')?document.getElementById('fcr-obra').value:'';
@@ -3410,12 +3464,12 @@ function abrirDetalheFluxoTipoGrupoReal(tipo,grupo,tituloBase,ano,mes,anoMin){
   if(ano!=null&&mes!=null)titulo+=' — '+MESES_ABR[mes]+'/'+ano;
   else if(anoMin!=null)titulo+=' — Acumulado Anterior';
   else titulo+=' — Total geral';
-  abrirDetalheFluxo({tipo:tipo||null,grupo:grupo||null,ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo});
+  abrirDetalheFluxoReal({tipo:tipo||null,grupo:grupo||null,ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo});
 }
 function abrirDetalheResumoFinReal(tipo,grupo,tituloBase,ateKey,codigosIncluir,codigosExcluir){
   var obraSel=document.getElementById('fcr-obra')?document.getElementById('fcr-obra').value:'';
   var titulo=tituloBase+(ateKey!=null?' — acumulado até '+MESES_ABR[ateKey%100]+'/'+Math.floor(ateKey/100):' — acumulado (todos os meses)');
-  abrirDetalheFluxo({tipo:tipo||null,grupo:grupo||null,ateKey:ateKey,codigosIncluir:codigosIncluir||null,codigosExcluir:codigosExcluir||null,obraSel:obraSel,titulo:titulo});
+  abrirDetalheFluxoReal({tipo:tipo||null,grupo:grupo||null,ateKey:ateKey,codigosIncluir:codigosIncluir||null,codigosExcluir:codigosExcluir||null,obraSel:obraSel,titulo:titulo});
 }
 
 function abrirDetalheProjecao(tipo){
