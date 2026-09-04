@@ -3202,6 +3202,11 @@ function abrirProjecaoFluxoReal(curtoPrazo){
     if(r.porBens)return false;
     if(obraSel&&!ccMatch(r.cc||'',obraSel))return false;
     if(!r.data)return false;
+    // Mesmo corte que o resto do Fluxo de Caixa (Real e original): tudo antes de 2026 é
+    // "Acumulado Anterior" e NÃO entra no Saldo de Caixa nem no Caixa Inicial — o Caixa
+    // Inicial já representa o saldo de partida, então somar 2025-/anteriores de novo aqui
+    // duplicaria valor.
+    if(r.ano==null||r.ano<2026)return false;
     var t=(r.data instanceof Date?r.data:new Date(r.data)).getTime();
     if(t>hoje.getTime())return false;
     var comp=(r.complemento||'').toLowerCase();
