@@ -3268,30 +3268,40 @@ function abrirResumoSocios(){
   });
   var saldoEmprRz=emprEntrRz-consorcRz-jurosRz,saldoEmprPv=emprEntrPv-consorcPv-jurosPv;
   var saldoGeralRz=saldoRz+saldoEmprRz,saldoGeralPv=saldoPv+saldoEmprPv;
+  // Entradas Totais / Saídas Totais: somam o bloco de Empréstimos nas respectivas totalizações
+  // operacionais — Entradas Totais = Entradas + Entrada por Empréstimo; Saídas Totais = TOTAL
+  // DESPESAS + Consórcios/Financiamento/Empréstimo + Juros por Empréstimos. Saldo Geral continua
+  // sendo Entradas Totais − Saídas Totais (matematicamente idêntico ao cálculo original de
+  // saldoGeralRz/saldoGeralPv acima).
+  var entrTotRz=entrRz+emprEntrRz,entrTotPv=entrPv+emprEntrPv;
+  var saidTotRz=totDespRz+consorcRz+jurosRz,saidTotPv=totDespPv+consorcPv+jurosPv;
   var linhaTbl=function(label,rz,pv,opts){
     opts=opts||{};
-    var bg=opts.bg||'#fff',cor=opts.cor||'#222',bold=opts.bold?'700':'400';
-    return '<tr><td style="padding:7px 12px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+'">'+label+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+'">'+fmt(rz)+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+'">'+fmt(pv)+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+'">'+fmt(rz+pv)+'</td></tr>';
+    var bold=opts.bold?'700':'400';
+    return '<tr><td style="padding:7px 12px;font-size:12px;color:#222;font-weight:'+bold+'">'+label+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;color:#222;font-weight:'+bold+'">'+fmt(rz)+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;color:#222;font-weight:'+bold+'">'+fmt(pv)+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;color:#222;font-weight:'+bold+'">'+fmt(rz+pv)+'</td></tr>';
   };
-  var espacador='<tr><td colspan="4" style="padding:2px;background:#fafafa"></td></tr>';
+  var espacador='<tr><td colspan="4" style="padding:6px"></td></tr>';
   var rows='';
-  rows+=linhaTbl('Entradas',entrRz,entrPv,{bg:'#c8e6c9',cor:'#1B6B35',bold:true});
-  rows+=linhaTbl('Custo de Obra',-custoObraRz,-custoObraPv,{bg:'#FDEBD0',cor:'#9C640C'});
-  rows+=linhaTbl('Custo de Marketing',-marketingRz,-marketingPv,{bg:'#E8DAEF',cor:'#6C3483'});
-  rows+=linhaTbl('Custo Administrativo',-adminRz,-adminPv,{bg:'#D6EAF8',cor:'#1A5276'});
-  rows+=linhaTbl('Despesas Financeiras',-financRz,-financPv,{bg:'#FADBD8',cor:'#943126'});
-  rows+=linhaTbl('TOTAL DESPESAS',-totDespRz,-totDespPv,{bg:'#f4c7c3',cor:'#7B241C',bold:true});
-  rows+=linhaTbl('SALDO',saldoRz,saldoPv,{bg:saldoRz+saldoPv>=0?'#1B6B35':'#943126',cor:'#fff',bold:true});
+  rows+=linhaTbl('Entradas',entrRz,entrPv,{bold:true});
   rows+=espacador;
-  rows+=linhaTbl('Entrada por Empréstimo',emprEntrRz,emprEntrPv,{bg:'#FFE9CC',cor:'#B35C00',bold:true});
-  rows+=linhaTbl('Consórcios/Financiamento/Empréstimo',-consorcRz,-consorcPv,{bg:'#FFE9CC',cor:'#B35C00'});
-  rows+=linhaTbl('Juros por Empréstimos',-jurosRz,-jurosPv,{bg:'#FFE9CC',cor:'#B35C00'});
-  rows+=linhaTbl('Saldo Empréstimos',saldoEmprRz,saldoEmprPv,{bg:saldoEmprRz+saldoEmprPv>=0?'#1B6B35':'#943126',cor:'#fff',bold:true});
+  rows+=linhaTbl('Custo de Obra',-custoObraRz,-custoObraPv,{});
+  rows+=linhaTbl('Custo de Marketing',-marketingRz,-marketingPv,{});
+  rows+=linhaTbl('Custo Administrativo',-adminRz,-adminPv,{});
+  rows+=linhaTbl('Despesas Financeiras',-financRz,-financPv,{});
+  rows+=linhaTbl('TOTAL DESPESAS',-totDespRz,-totDespPv,{bold:true});
+  rows+=linhaTbl('SALDO',saldoRz,saldoPv,{bold:true});
   rows+=espacador;
-  rows+=linhaTbl('Saldo Geral',saldoGeralRz,saldoGeralPv,{bg:saldoGeralRz+saldoGeralPv>=0?'#1B6B35':'#7B241C',cor:'#fff',bold:true});
+  rows+=linhaTbl('Entrada por Empréstimo',emprEntrRz,emprEntrPv,{bold:true});
+  rows+=linhaTbl('Consórcios/Financiamento/Empréstimo',-consorcRz,-consorcPv,{});
+  rows+=linhaTbl('Juros por Empréstimos',-jurosRz,-jurosPv,{});
+  rows+=linhaTbl('Saldo Empréstimos',saldoEmprRz,saldoEmprPv,{bold:true});
+  rows+=espacador;
+  rows+=linhaTbl('Entradas Totais',entrTotRz,entrTotPv,{bold:true});
+  rows+=linhaTbl('Saídas Totais',-saidTotRz,-saidTotPv,{bold:true});
+  rows+=linhaTbl('Saldo Geral',saldoGeralRz,saldoGeralPv,{bold:true});
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
   el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:90%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
