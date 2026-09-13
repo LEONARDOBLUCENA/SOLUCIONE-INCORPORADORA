@@ -3183,13 +3183,21 @@ function abrirProjecaoFluxo(curtoPrazo){
     +'</div>';
 }
 
-// Resumo de Sócios — visão executiva única (aba "Fluxo de Caixa"): mesma estrutura de
-// categorias do Resumo Financeiro (Receita + grupos de despesa via grupoDeConta), mas em vez
-// de coluna por mês, 3 colunas: Realizado (já efetivado em caixa), Provisionado (ainda em
-// aberto — "a pagar"/"a receber", igual à convenção usada no resto do BI) e Total (soma).
-// Considera todo o histórico (sem filtro de período), respeitando a Obra selecionada no topo
-// da aba. Não existe em "Fluxo de Caixa Real" (essa aba é só 100% realizado, não faz sentido
-// separar provisão lá).
+// Resumo de Sócios — visão executiva única (aba "Fluxo de Caixa"), em 3 colunas: Realizado
+// (já efetivado em caixa), Provisionado (ainda em aberto — "a pagar"/"a receber", igual à
+// convenção usada no resto do BI) e Total (soma). Considera todo o histórico (sem filtro de
+// período), respeitando a Obra selecionada no topo da aba. Estrutura definida com o Leonardo
+// em 13/09/2026:
+//   Entradas
+//   Custo de Obra / Custo de Marketing / Custo Administrativo / Despesas Financeiras
+//   TOTAL DESPESAS
+//   SALDO
+//   Entrada por Empréstimo
+//   Consórcios/Financiamento/Empréstimo
+//   Juros por Empréstimos
+//   Saldo Empréstimos
+//   Saldo Geral
+// Não existe em "Fluxo de Caixa Real" (aba 100% realizado, não há o que separar de provisão).
 function abrirResumoSocios(){
   var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
   var EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307','1.05.03','10598'];
@@ -3206,48 +3214,84 @@ function abrirResumoSocios(){
     if(r.tipo==='FATURAMENTO')return comp.includes('a receber');
     return false;
   };
-  // Receita: Faturamento − Desconto Concedido, separado por Realizado/Provisionado
+  // Entradas (Receita operacional): Faturamento − Desconto Concedido, excluindo as contas de
+  // Entrada por Empréstimo (10501/1.05.03 — mostradas em linha separada mais abaixo), separado
+  // por Realizado/Provisionado.
   var entrRz=0,entrPv=0;
   linhas.forEach(function(r){
+    if(EMPR_FAT_COD.includes(codigoDe(r.conta)))return; // é Entrada por Empréstimo, não Receita operacional
     if(r.tipo==='FATURAMENTO'){if(isProvisao(r))entrPv+=r.valor;else entrRz+=r.valor;}
     else if(r.tipo==='DESCONTO'){if(isProvisao(r))entrPv-=r.valor;else entrRz-=r.valor;}
   });
-  // Despesas por grupo (mesma classificação usada no resto do Fluxo de Caixa), separadas por
-  // Realizado/Provisionado
-  var GRUPOS_SAIDA=[
-    {key:'CUSTO_OBRA',label:'Custo de Obra',hdrBg:'#FDEBD0',cor:'#9C640C'},
-    {key:'MARKETING',label:'Despesas de Marketing',hdrBg:'#E8DAEF',cor:'#6C3483'},
-    {key:'ADMIN',label:'Despesas Administrativas',hdrBg:'#D6EAF8',cor:'#1A5276'},
-    {key:'FINANCEIRAS',label:'Despesas Financeiras',hdrBg:'#FADBD8',cor:'#943126'},
-    {key:'EMPRESTIMOS',label:'Empréstimos',hdrBg:'#FFE9CC',cor:'#B35C00'},
-    {key:'OUTRAS',label:'Outras Despesas',hdrBg:'#EAEDED',cor:'#424949'}
-  ];
+  // Despesas por grupo (mesma classificação usada no resto do Fluxo de Caixa: grupoDeConta +
+  // EMPR_PAG_COD tratado à parte), separadas por Realizado/Provisionado.
   var gRz={},gPv={};
   linhas.forEach(function(r){
     if(r.tipo!=='PAGAMENTO')return;
-    var g=EMPR_PAG_COD.includes(codigoDe(r.conta))?'EMPRESTIMOS':grupoDeConta(r.conta||'');
+    var cod=codigoDe(r.conta);
+    var g=EMPR_PAG_COD.includes(cod)?'EMPRESTIMOS':grupoDeConta(r.conta||'');
     if(isProvisao(r))gPv[g]=(gPv[g]||0)+r.valor;else gRz[g]=(gRz[g]||0)+r.valor;
   });
-  var despRz=Object.values(gRz).reduce(function(s,v){return s+v;},0);
-  var despPv=Object.values(gPv).reduce(function(s,v){return s+v;},0);
-  var saldoRz=entrRz-despRz,saldoPv=entrPv-despPv;
+  // Custo de Obra: nunca considera "a pagar" (mesma regra usada em todo o BI — ver renderFluxo);
+  // Provisionado = soma do "Previsto" manual cadastrado por obra/mês (DATA.previsto), não o
+  // lançado em Contas a Pagar. gRz['CUSTO_OBRA'] já está correto (isProvisao já exclui "a pagar"
+  // do lado Realizado); só o Provisionado precisa ser recalculado.
+  var custoObraRz=gRz['CUSTO_OBRA']||0;
+  var custoObraPv=0;
+  Object.keys(DATA.previsto||{}).forEach(function(obraKey){
+    if(obraSel&&!ccMatch(obraKey,obraSel))return;
+    Object.values(DATA.previsto[obraKey]||{}).forEach(function(v){custoObraPv+=parseFloat(v)||0;});
+  });
+  var marketingRz=gRz['MARKETING']||0,marketingPv=gPv['MARKETING']||0;
+  var adminRz=gRz['ADMIN']||0,adminPv=gPv['ADMIN']||0;
+  var financRz=gRz['FINANCEIRAS']||0,financPv=gPv['FINANCEIRAS']||0;
+  var totDespRz=custoObraRz+marketingRz+adminRz+financRz;
+  var totDespPv=custoObraPv+marketingPv+adminPv+financPv;
+  var saldoRz=entrRz-totDespRz,saldoPv=entrPv-totDespPv;
+  // Bloco Empréstimos: Entrada por Empréstimo (10501+1.05.03, lado Faturamento), Consórcios/
+  // Financiamento/Empréstimo (conta 20307 — nome idêntico ao do Sienge), Juros por Empréstimos
+  // (conta 10598). A conta 1.05.03 do lado Pagamento ("(-) Devolução de Empréstimos/Financiamentos")
+  // é imaterial nos dados atuais e é somada dentro de Consórcios/Financiamento/Empréstimo, para
+  // não perder o valor — igual ao total já calculado em gRz/gPv['EMPRESTIMOS'] acima.
+  var emprEntrRz=0,emprEntrPv=0;
+  linhas.forEach(function(r){
+    if(!EMPR_FAT_COD.includes(codigoDe(r.conta)))return;
+    if(r.tipo==='FATURAMENTO'){if(isProvisao(r))emprEntrPv+=r.valor;else emprEntrRz+=r.valor;}
+    else if(r.tipo==='DESCONTO'){if(isProvisao(r))emprEntrPv-=r.valor;else emprEntrRz-=r.valor;}
+  });
+  var jurosRz=0,jurosPv=0,consorcRz=0,consorcPv=0;
+  linhas.forEach(function(r){
+    if(r.tipo!=='PAGAMENTO')return;
+    var cod=codigoDe(r.conta);
+    if(cod==='10598'){if(isProvisao(r))jurosPv+=r.valor;else jurosRz+=r.valor;}
+    else if(cod==='20307'||cod==='1.05.03'){if(isProvisao(r))consorcPv+=r.valor;else consorcRz+=r.valor;}
+  });
+  var saldoEmprRz=emprEntrRz-consorcRz-jurosRz,saldoEmprPv=emprEntrPv-consorcPv-jurosPv;
+  var saldoGeralRz=saldoRz+saldoEmprRz,saldoGeralPv=saldoPv+saldoEmprPv;
   var linhaTbl=function(label,rz,pv,opts){
     opts=opts||{};
     var bg=opts.bg||'#fff',cor=opts.cor||'#222',bold=opts.bold?'700':'400';
-    var onclick=opts.onclick?' onclick="'+opts.onclick+'" style="cursor:pointer"':'';
-    return '<tr'+onclick+'><td style="padding:7px 12px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+'">'+label+'</td>'
+    return '<tr><td style="padding:7px 12px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+'">'+label+'</td>'
       +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+'">'+fmt(rz)+'</td>'
       +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+'">'+fmt(pv)+'</td>'
       +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+'">'+fmt(rz+pv)+'</td></tr>';
   };
+  var espacador='<tr><td colspan="4" style="padding:2px;background:#fafafa"></td></tr>';
   var rows='';
-  rows+=linhaTbl('Receita',entrRz,entrPv,{bg:'#c8e6c9',cor:'#1B6B35',bold:true});
-  GRUPOS_SAIDA.forEach(function(g){
-    var rz=gRz[g.key]||0,pv=gPv[g.key]||0;
-    if(!rz&&!pv)return; // grupo sem lançamento não aparece
-    rows+=linhaTbl(g.label,-rz,-pv,{bg:g.hdrBg,cor:g.cor,bold:true});
-  });
-  rows+=linhaTbl('Saldo',saldoRz,saldoPv,{bg:saldoRz+saldoPv>=0?'#1B6B35':'#943126',cor:'#fff',bold:true});
+  rows+=linhaTbl('Entradas',entrRz,entrPv,{bg:'#c8e6c9',cor:'#1B6B35',bold:true});
+  rows+=linhaTbl('Custo de Obra',-custoObraRz,-custoObraPv,{bg:'#FDEBD0',cor:'#9C640C'});
+  rows+=linhaTbl('Custo de Marketing',-marketingRz,-marketingPv,{bg:'#E8DAEF',cor:'#6C3483'});
+  rows+=linhaTbl('Custo Administrativo',-adminRz,-adminPv,{bg:'#D6EAF8',cor:'#1A5276'});
+  rows+=linhaTbl('Despesas Financeiras',-financRz,-financPv,{bg:'#FADBD8',cor:'#943126'});
+  rows+=linhaTbl('TOTAL DESPESAS',-totDespRz,-totDespPv,{bg:'#f4c7c3',cor:'#7B241C',bold:true});
+  rows+=linhaTbl('SALDO',saldoRz,saldoPv,{bg:saldoRz+saldoPv>=0?'#1B6B35':'#943126',cor:'#fff',bold:true});
+  rows+=espacador;
+  rows+=linhaTbl('Entrada por Empréstimo',emprEntrRz,emprEntrPv,{bg:'#FFE9CC',cor:'#B35C00',bold:true});
+  rows+=linhaTbl('Consórcios/Financiamento/Empréstimo',-consorcRz,-consorcPv,{bg:'#FFE9CC',cor:'#B35C00'});
+  rows+=linhaTbl('Juros por Empréstimos',-jurosRz,-jurosPv,{bg:'#FFE9CC',cor:'#B35C00'});
+  rows+=linhaTbl('Saldo Empréstimos',saldoEmprRz,saldoEmprPv,{bg:saldoEmprRz+saldoEmprPv>=0?'#1B6B35':'#943126',cor:'#fff',bold:true});
+  rows+=espacador;
+  rows+=linhaTbl('Saldo Geral',saldoGeralRz,saldoGeralPv,{bg:saldoGeralRz+saldoGeralPv>=0?'#1B6B35':'#7B241C',cor:'#fff',bold:true});
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
   el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:90%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
@@ -3259,7 +3303,7 @@ function abrirResumoSocios(){
     +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Provisionado</th>'
     +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Total</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table></div>'
-    +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no total. Realizado = já efetivado em caixa; Provisionado = ainda em aberto (\'a pagar\'/\'a receber\'); despesas exibidas como valor positivo (saída).</div>'
+    +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no total. Realizado = já efetivado em caixa; Provisionado = ainda em aberto (\'a pagar\'/\'a receber\', exceto Custo de Obra, que usa o Previsto cadastrado); despesas exibidas como valor positivo (saída).</div>'
     +'</div>';
 }
 
