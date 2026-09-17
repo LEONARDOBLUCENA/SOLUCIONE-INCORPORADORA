@@ -3471,6 +3471,7 @@ function abrirDetalheFluxo(opts){
   var obraSel=opts.obraSel||'';
   var linhas=(DATA.csv||[]).filter(function(r){
     if(r.porBens)return false; // detalhe do Fluxo de Caixa — nunca inclui baixa "Por Bens"
+    if(r.tipo==='PAGAMENTO'&&grupoDeConta(r.conta||'')==='CUSTO_OBRA'&&(r.complemento||'').toLowerCase().includes('a pagar'))return false; // Custo de Obra nunca considera provisão — mesma regra usada em renderFluxo/abrirProjecaoFluxo/abrirResumoSocios
     if(opts.tipo){
       var tiposOk=Array.isArray(opts.tipo)?opts.tipo:[opts.tipo];
       if(!tiposOk.includes(r.tipo))return false;
