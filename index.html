@@ -24,11 +24,13 @@ const GRUPO_CONTA={
   '2900102':'CUSTO_OBRA','2900202':'CUSTO_OBRA','2900302':'CUSTO_OBRA','2900402':'CUSTO_OBRA','2010103':'CUSTO_OBRA','2010104':'CUSTO_OBRA',
   // DESPESAS DE MARKETING
   '20613':'MARKETING','20615':'MARKETING',
+  // CUSTO COMERCIAL
+  '20601':'COMERCIAL',
   // DESPESAS ADMINISTRATIVAS
   '2020102':'ADMIN','2020104':'ADMIN','2020105':'ADMIN','2020111':'ADMIN','2020202':'ADMIN','2020207':'ADMIN','2020209':'ADMIN','2020210':'ADMIN',
   '2020211':'ADMIN','2020212':'ADMIN','2020216':'ADMIN','2020219':'ADMIN','2020220':'ADMIN','2020221':'ADMIN','2020224':'ADMIN',
-  '2020225':'ADMIN','2020222':'ADMIN','2020299':'ADMIN','20503':'ADMIN','20601':'ADMIN','2020107':'ADMIN','2020213':'ADMIN',
-  '2020106':'ADMIN','2020206':'ADMIN',
+  '2020225':'ADMIN','2020222':'ADMIN','2020299':'ADMIN','20503':'ADMIN','2020107':'ADMIN','2020213':'ADMIN',
+  '2020106':'ADMIN','2020206':'ADMIN','20612':'ADMIN',
   // DESPESAS FINANCEIRAS (inclui tributárias sobre faturamento)
   '20301':'FINANCEIRAS','20303':'FINANCEIRAS','20305':'FINANCEIRAS','20307':'FINANCEIRAS','20401':'FINANCEIRAS','20402':'FINANCEIRAS',
   '20403':'FINANCEIRAS','20407':'FINANCEIRAS','20409':'FINANCEIRAS','20410':'FINANCEIRAS','20411':'FINANCEIRAS','20412':'FINANCEIRAS',
@@ -1136,6 +1138,12 @@ function renderFluxo(){
     const a=(tipo?"'"+escOc(tipo)+"'":'null')+','+(grupo?"'"+escOc(grupo)+"'":'null')+",'"+escOc(tituloBase)+"',"+(ano!=null?ano:'null')+','+(mes!=null?mes:'null')+','+(anoMin!=null?anoMin:'null');
     return '<span onclick="abrirDetalheFluxoTipoGrupo('+a+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(v)+'</span>';
   };
+  // f2e: número clicável para o grupo Empréstimos (total de entrada ou despesa) — abre abrirDetalheFluxoEmprestimos
+  const f2e=(v,lado,tituloBase,ano,mes,anoMin)=>{
+    if(v===0)return f2(v);
+    const a="'"+escOc(lado)+"','"+escOc(tituloBase)+"',"+(ano!=null?ano:'null')+','+(mes!=null?mes:'null')+','+(anoMin!=null?anoMin:'null');
+    return '<span onclick="abrirDetalheFluxoEmprestimos('+a+')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px">'+f2(v)+'</span>';
+  };
   const tdS=(bg)=>'style="'+SD+bg+';padding:5px 6px 5px 12px;font-size:11px"';
   const tdSB=(bg)=>'style="'+SD+bg+';padding:5px 12px;font-size:11px;font-weight:700"';
 
@@ -1214,6 +1222,7 @@ function renderFluxo(){
   const gruposDef=[
     {key:'CUSTO_OBRA',   titulo:'CUSTO DE OBRA',           hdrBg:'#FDEBD0',hdrText:'#9C640C',borda:'#F5CBA7',divisor:'#f5eee4',zebra:'#fdf6ec',totBg:'#fbe8d0',totLabelBg:'#F5CBA7',totLabel:'Total Custo de Obra'},
     {key:'MARKETING',    titulo:'DESPESAS DE MARKETING',   hdrBg:'#E8DAEF',hdrText:'#6C3483',borda:'#D2B4DE',divisor:'#f2ecf5',zebra:'#f8f4fb',totBg:'#eee3f4',totLabelBg:'#D2B4DE',totLabel:'Total Despesas de Marketing'},
+    {key:'COMERCIAL',    titulo:'CUSTO COMERCIAL',         hdrBg:'#D1F2EB',hdrText:'#0E6655',borda:'#A3E4D7',divisor:'#e8f6f3',zebra:'#f4fdfb',totBg:'#c9f0e4',totLabelBg:'#A3E4D7',totLabel:'Total Custo Comercial'},
     {key:'ADMIN',        titulo:'DESPESAS ADMINISTRATIVAS',hdrBg:'#D6EAF8',hdrText:'#1A5276',borda:'#AED6F1',divisor:'#eaf2f8',zebra:'#f3f9fd',totBg:'#dbeefb',totLabelBg:'#AED6F1',totLabel:'Total Despesas Administrativas'},
     {key:'FINANCEIRAS',  titulo:'DESPESAS FINANCEIRAS',    hdrBg:'#FADBD8',hdrText:'#943126',borda:'#F1948A',divisor:'#f5e8e7',zebra:'#fdf5f4',totBg:'#fbeeed',totLabelBg:'#F1948A',totLabel:'Total Despesas Financeiras'},
     {key:'OUTRAS',       titulo:'OUTRAS DESPESAS',         hdrBg:'#EAEDED',hdrText:'#424949',borda:'#CCD1D1',divisor:'#f0f1f1',zebra:'#f7f8f8',totBg:'#e8eaea',totLabelBg:'#CCD1D1',totLabel:'Total Outras Despesas'}
@@ -1275,9 +1284,9 @@ function renderFluxo(){
       const zebra=idxE%2===0?'#ffffff':'#fff6ec';idxE++;
       rows+='<tr style="border-left:3px solid #FFCC80;border-bottom:1px solid #f5ebe0">'
         +'<td '+tdS(zebra)+'>'+c+' <span style="font-size:9px;color:#B35C00;font-weight:600">· Entrada</span></td>'
-        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
-        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
-        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#fff3e0;font-size:10px">'+f2(tot)+'</td></tr>';
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2c(aa,c,null,null,colKeys[0])+'</td>'
+        +vals.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2c(v,c,colAno[i],colMes[i])+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#fff3e0;font-size:10px">'+f2c(tot,c,null,null,null)+'</td></tr>';
     });
     emprContasPag.forEach(c=>{
       const vals=contas[c].PAG;
@@ -1288,13 +1297,13 @@ function renderFluxo(){
       const zebra=idxE%2===0?'#ffffff':'#fff6ec';idxE++;
       rows+='<tr style="border-left:3px solid #FFB74D;border-bottom:1px solid #f5ebe0">'
         +'<td '+tdS(zebra)+'>'+c+' <span style="font-size:9px;color:#943126;font-weight:600">· Despesa</span></td>'
-        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2(aa)+'</td>'
-        +vals.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2(v)+'</td>').join('')
-        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#fff3e0;font-size:10px">'+f2(tot)+'</td></tr>';
+        +'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+';color:#777">'+f2c(aa,c,null,null,colKeys[0])+'</td>'
+        +vals.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px;background:'+zebra+'">'+f2c(v,c,colAno[i],colMes[i])+'</td>').join('')
+        +'<td class="r" style="padding:4px 8px;font-weight:600;background:#fff3e0;font-size:10px">'+f2c(tot,c,null,null,null)+'</td></tr>';
     });
-    if(emprContasFat.length)rows+='<tr style="background:#FFCC80;font-weight:700"><td '+tdSB('#FFCC80')+'>Total Entradas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprFat)+'</td>'+totEmprFat.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0))+'</td></tr>';
+    if(emprContasFat.length)rows+='<tr style="background:#FFCC80;font-weight:700"><td '+tdSB('#FFCC80')+'>Total Entradas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2e(acumEmprFat,'entrada','Total Entradas (Empréstimos)',null,null,colKeys[0])+'</td>'+totEmprFat.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2e(v,'entrada','Total Entradas (Empréstimos)',colAno[i],colMes[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2e(acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0),'entrada','Total Entradas (Empréstimos)',null,null,null)+'</td></tr>';
     if(emprContasFat.length)gruposResumoFin['EMPRESTIMOS_ENTRADA']={total:acumEmprFat+totEmprFat.reduce((s,v)=>s+v,0),acum:acumEmprFat,mensal:totEmprFat.slice()};
-    if(emprContasPag.length)rows+='<tr style="background:#F1948A;font-weight:700"><td '+tdSB('#F1948A')+'>Total Despesas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(acumEmprPag)+'</td>'+totEmprPag.map(v=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2(v)+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2(acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0))+'</td></tr>';
+    if(emprContasPag.length)rows+='<tr style="background:#F1948A;font-weight:700"><td '+tdSB('#F1948A')+'>Total Despesas (Empréstimos)</td>'+'<td class="r" style="padding:4px 6px;font-size:10px">'+f2e(acumEmprPag,'despesa','Total Despesas (Empréstimos)',null,null,colKeys[0])+'</td>'+totEmprPag.map((v,i)=>'<td class="r" style="padding:4px 6px;font-size:10px">'+f2e(v,'despesa','Total Despesas (Empréstimos)',colAno[i],colMes[i])+'</td>').join('')+'<td class="r" style="padding:4px 8px;background:#f4f4f4">'+f2e(acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0),'despesa','Total Despesas (Empréstimos)',null,null,null)+'</td></tr>';
     if(emprContasPag.length)gruposResumoFin['EMPRESTIMOS']={total:acumEmprPag+totEmprPag.reduce((s,v)=>s+v,0),acum:acumEmprPag,mensal:totEmprPag.slice(),label:'Despesas com Empréstimos',cor:'#943126'};
     if(emprContasPag.length){
       saldoMensal=saldoMensal.map((v,i)=>v-totEmprPag[i]);
@@ -1368,7 +1377,7 @@ function renderFluxo(){
     const emprEntradaG=gruposResumoFin['EMPRESTIMOS_ENTRADA'];
     const entradaEmprFin=emprEntradaG?somaAte(emprEntradaG.acum,emprEntradaG.mensal):0;
     const entradasOperFin=totalEntradasFin-entradaEmprFin;
-    const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
+    const ordemGrupos=['CUSTO_OBRA','MARKETING','COMERCIAL','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
     const EMPR_FAT_COD_RF=['10501','1.05.03'];
     const linhaExec=(label,val,opts)=>{
@@ -1677,6 +1686,7 @@ function renderFluxoReal(){
   const gruposDef=[
     {key:'CUSTO_OBRA',   titulo:'CUSTO DE OBRA',           hdrBg:'#FDEBD0',hdrText:'#9C640C',borda:'#F5CBA7',divisor:'#f5eee4',zebra:'#fdf6ec',totBg:'#fbe8d0',totLabelBg:'#F5CBA7',totLabel:'Total Custo de Obra'},
     {key:'MARKETING',    titulo:'DESPESAS DE MARKETING',   hdrBg:'#E8DAEF',hdrText:'#6C3483',borda:'#D2B4DE',divisor:'#f2ecf5',zebra:'#f8f4fb',totBg:'#eee3f4',totLabelBg:'#D2B4DE',totLabel:'Total Despesas de Marketing'},
+    {key:'COMERCIAL',    titulo:'CUSTO COMERCIAL',         hdrBg:'#D1F2EB',hdrText:'#0E6655',borda:'#A3E4D7',divisor:'#e8f6f3',zebra:'#f4fdfb',totBg:'#c9f0e4',totLabelBg:'#A3E4D7',totLabel:'Total Custo Comercial'},
     {key:'ADMIN',        titulo:'DESPESAS ADMINISTRATIVAS',hdrBg:'#D6EAF8',hdrText:'#1A5276',borda:'#AED6F1',divisor:'#eaf2f8',zebra:'#f3f9fd',totBg:'#dbeefb',totLabelBg:'#AED6F1',totLabel:'Total Despesas Administrativas'},
     {key:'FINANCEIRAS',  titulo:'DESPESAS FINANCEIRAS',    hdrBg:'#FADBD8',hdrText:'#943126',borda:'#F1948A',divisor:'#f5e8e7',zebra:'#fdf5f4',totBg:'#fbeeed',totLabelBg:'#F1948A',totLabel:'Total Despesas Financeiras'},
     {key:'OUTRAS',       titulo:'OUTRAS DESPESAS',         hdrBg:'#EAEDED',hdrText:'#424949',borda:'#CCD1D1',divisor:'#f0f1f1',zebra:'#f7f8f8',totBg:'#e8eaea',totLabelBg:'#CCD1D1',totLabel:'Total Outras Despesas'}
@@ -1823,7 +1833,7 @@ function renderFluxoReal(){
     const emprEntradaG=gruposResumoFin['EMPRESTIMOS_ENTRADA'];
     const entradaEmprFin=emprEntradaG?somaAte(emprEntradaG.acum,emprEntradaG.mensal):0;
     const entradasOperFin=totalEntradasFin-entradaEmprFin;
-    const ordemGrupos=['CUSTO_OBRA','MARKETING','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
+    const ordemGrupos=['CUSTO_OBRA','MARKETING','COMERCIAL','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
     const EMPR_FAT_COD_RF=['10501','1.05.03'];
     const linhaExec=(label,val,opts)=>{
@@ -3128,6 +3138,7 @@ function abrirProjecaoFluxo(curtoPrazo){
   var GRUPOS_SAIDA=[
     {key:'CUSTO_OBRA',label:'Custo de Obra',cor:'#9C640C'},
     {key:'MARKETING',label:'Despesas de Marketing',cor:'#6C3483'},
+    {key:'COMERCIAL',label:'Custo Comercial',cor:'#0E6655'},
     {key:'ADMIN',label:'Despesas Administrativas',cor:'#1A5276'},
     {key:'FINANCEIRAS',label:'Despesas Financeiras',cor:'#943126'},
     {key:'EMPRESTIMOS',label:'Empréstimos',cor:'#B35C00'},
@@ -3243,10 +3254,11 @@ function abrirResumoSocios(){
     Object.values(DATA.previsto[obraKey]||{}).forEach(function(v){custoObraPv+=parseFloat(v)||0;});
   });
   var marketingRz=gRz['MARKETING']||0,marketingPv=gPv['MARKETING']||0;
+  var comercialRz=gRz['COMERCIAL']||0,comercialPv=gPv['COMERCIAL']||0;
   var adminRz=gRz['ADMIN']||0,adminPv=gPv['ADMIN']||0;
   var financRz=gRz['FINANCEIRAS']||0,financPv=gPv['FINANCEIRAS']||0;
-  var totDespRz=custoObraRz+marketingRz+adminRz+financRz;
-  var totDespPv=custoObraPv+marketingPv+adminPv+financPv;
+  var totDespRz=custoObraRz+marketingRz+comercialRz+adminRz+financRz;
+  var totDespPv=custoObraPv+marketingPv+comercialPv+adminPv+financPv;
   var saldoRz=entrRz-totDespRz,saldoPv=entrPv-totDespPv;
   // Bloco Empréstimos: Entrada por Empréstimo (10501+1.05.03, lado Faturamento), Consórcios/
   // Financiamento/Empréstimo (conta 20307 — nome idêntico ao do Sienge), Juros por Empréstimos
@@ -3289,10 +3301,10 @@ function abrirResumoSocios(){
     var bg=opts.bg||'transparent';
     var cor=opts.cor||'#222';
     var borda=opts.borda?'border-top:2px solid '+opts.borda+';':'';
-    return '<tr><td style="padding:7px 12px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+';'+borda+'">'+label+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+';'+borda+'">'+fmt(rz)+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+';'+borda+'">'+fmt(pv)+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+';'+borda+'">'+fmt(rz+pv)+'</td></tr>';
+    return '<tr><td style="padding:7px 12px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+label+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+fmt(rz)+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+fmt(pv)+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+cor+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+fmt(rz+pv)+'</td></tr>';
   };
   var espacador='<tr><td colspan="4" style="padding:6px"></td></tr>';
   var rows='';
@@ -3300,6 +3312,7 @@ function abrirResumoSocios(){
   rows+=espacador;
   rows+=linhaTbl('Custo de Obra',-custoObraRz,-custoObraPv,{});
   rows+=linhaTbl('Custo de Marketing',-marketingRz,-marketingPv,{});
+  rows+=linhaTbl('Custo Comercial',-comercialRz,-comercialPv,{});
   rows+=linhaTbl('Custo Administrativo',-adminRz,-adminPv,{});
   rows+=linhaTbl('Despesas Financeiras',-financRz,-financPv,{});
   rows+=linhaTbl('TOTAL DESPESAS',-totDespRz,-totDespPv,{bold:true,bg:VERMELHO_BG});
@@ -3316,7 +3329,7 @@ function abrirResumoSocios(){
   rows+=linhaTbl('Saldo Geral',saldoGeralRz,saldoGeralPv,{bold:true,bg:CINZA_BG,cor:(saldoGeralRz+saldoGeralPv)>=0?VERDE_FONTE:VERMELHO_FONTE,borda:'#999'});
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:90%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:760px;width:94%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
     +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Resumo de Sócios</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
     +'<div style="font-size:13px;color:var(--text3)">'+(obraSel?obraSel:'Todas as obras')+' — histórico completo</div>'
     +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
@@ -3391,6 +3404,7 @@ function abrirProjecaoFluxoReal(curtoPrazo){
   var GRUPOS_SAIDA=[
     {key:'CUSTO_OBRA',label:'Custo de Obra',cor:'#9C640C'},
     {key:'MARKETING',label:'Despesas de Marketing',cor:'#6C3483'},
+    {key:'COMERCIAL',label:'Custo Comercial',cor:'#0E6655'},
     {key:'ADMIN',label:'Despesas Administrativas',cor:'#1A5276'},
     {key:'FINANCEIRAS',label:'Despesas Financeiras',cor:'#943126'},
     {key:'EMPRESTIMOS',label:'Empréstimos',cor:'#B35C00'},
@@ -3457,7 +3471,10 @@ function abrirDetalheFluxo(opts){
   var obraSel=opts.obraSel||'';
   var linhas=(DATA.csv||[]).filter(function(r){
     if(r.porBens)return false; // detalhe do Fluxo de Caixa — nunca inclui baixa "Por Bens"
-    if(opts.tipo&&r.tipo!==opts.tipo)return false;
+    if(opts.tipo){
+      var tiposOk=Array.isArray(opts.tipo)?opts.tipo:[opts.tipo];
+      if(!tiposOk.includes(r.tipo))return false;
+    }
     if(opts.conta&&r.conta!==opts.conta)return false;
     if(opts.grupo){
       var g=EMPR_PAG_COD_G.includes((r.conta||'').split(' - ')[0].trim())?'EMPRESTIMOS':grupoDeConta(r.conta||'');
@@ -3580,6 +3597,7 @@ function filtrarDetalheFluxo(){
   }).join(''):'<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text3);font-size:12px">Nenhum lançamento</td></tr>';
 }
 var EMPR_PAG_COD_G=['20307','1.05.03','10598'];
+var EMPR_FAT_COD_G=['10501','1.05.03'];
 
 function abrirDetalheFluxoCel(conta,ano,mes,anoMin){
   var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
@@ -3588,6 +3606,17 @@ function abrirDetalheFluxoCel(conta,ano,mes,anoMin){
   else if(anoMin!=null)titulo+=' — Acumulado Anterior';
   else titulo+=' — Total geral';
   abrirDetalheFluxo({conta:conta,ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo});
+}
+function abrirDetalheFluxoEmprestimos(lado,tituloBase,ano,mes,anoMin){
+  var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
+  var titulo=tituloBase;
+  if(ano!=null&&mes!=null)titulo+=' — '+MESES_ABR[mes]+'/'+ano;
+  else if(anoMin!=null)titulo+=' — Acumulado Anterior';
+  else titulo+=' — Total geral';
+  var opts={ano:ano,mes:mes,anoMin:anoMin,obraSel:obraSel,titulo:titulo,
+    codigosIncluir:lado==='entrada'?EMPR_FAT_COD_G:EMPR_PAG_COD_G};
+  opts.tipo=lado==='entrada'?['FATURAMENTO','DESCONTO']:'PAGAMENTO';
+  abrirDetalheFluxo(opts);
 }
 function abrirDetalheFluxoTipoGrupo(tipo,grupo,tituloBase,ano,mes,anoMin){
   var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
