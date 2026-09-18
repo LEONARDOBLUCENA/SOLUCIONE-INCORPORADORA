@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script>
 
-const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previsao:[],dtmPct:{},dtmUnid:{},dtmOrc:{}};
+const DATA={csv:[],estoque:[],orcamento:[],orcamentoMensal:{},caixaInicial:{},previsto:{},previstoBaseline:{},previsao:[],dtmPct:{},dtmUnid:{},dtmOrc:{}};
 const GHUB={token:['ghp_DMtc','LFDDPZIq7QGo','GgJvmTc1TbfSMf0H9mw1'].join(''),repo:'LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA',file:'data.json',raw:'https://raw.githubusercontent.com/LEONARDOBLUCENA/SOLUCIONE-INCORPORADORA/main/data.json'};
 let _ghubSaving=false,_ghubDirty=false,_ghubSha=null,_ultimoCsvCarregado=0;
 const CHARTS={};
@@ -1202,6 +1202,47 @@ function renderFluxo(){
   const obrasVis=(obraSel?obras.filter(o=>ccMatch(o,obraSel)):obras).filter(o=>!SEM_PREVISTO.some(x=>o.toUpperCase().includes(x)));
   if(!DATA.previsto)DATA.previsto={};
   obrasVis.forEach(o=>{if(!DATA.previsto[o])DATA.previsto[o]={};});
+  // Desconto automático do Realizado no Previsto — mês atual e futuros (pedido do Leonardo,
+  // 18/09/2026): sempre que já existir Realizado de Custo de Obra lançado num mês (não "a pagar",
+  // mesma regra de sempre), abate do valor de Previsto daquele mês/obra, senão o Total do mês
+  // contaria o gasto duas vezes (Previsto cheio + Realizado já pago). A caixinha de Previsto
+  // passa a mostrar/gravar o valor líquido (Previsto − Realizado, nunca negativo).
+  // DATA.previstoBaseline[obra][key] guarda quanto de Realizado já foi abatido até agora, pra
+  // nunca descontar o mesmo valor duas vezes em renders seguidos — só a diferença (delta) desde
+  // a última vez é que é abatida do valor atual da caixinha.
+  if(!DATA.previstoBaseline)DATA.previstoBaseline={};
+  let _previstoAjustado=false;
+  // Uma única passada por "dados" pra somar Realizado de Custo de Obra por obra+mês (em vez de
+  // refiltrar "dados" pra cada combinação obra×mês, que ficaria lento com muitas colunas).
+  const _realizadoObraMes={};
+  dados.forEach(r=>{
+    if(r.tipo!=='PAGAMENTO')return;
+    if(r.ano==null||r.mes==null)return;
+    const k=r.ano*100+r.mes;
+    if(k<chaveAtualFluxo)return; // só mês atual e futuros
+    if(grupoDeConta(r.conta||'')!=='CUSTO_OBRA')return;
+    if((r.complemento||'').toLowerCase().includes('a pagar'))return;
+    const obraKey=normCC(r.cc||'');
+    if(!_realizadoObraMes[obraKey])_realizadoObraMes[obraKey]={};
+    _realizadoObraMes[obraKey][k]=(_realizadoObraMes[obraKey][k]||0)+r.valor;
+  });
+  obrasVis.forEach(obra=>{
+    if(!DATA.previstoBaseline[obra])DATA.previstoBaseline[obra]={};
+    const realizadoMeses=_realizadoObraMes[normCC(obra)]||{};
+    colKeys.forEach(k=>{
+      if(k<chaveAtualFluxo)return; // só mês atual e futuros
+      const realizadoDoMes=realizadoMeses[k]||0;
+      const baseline=parseFloat(DATA.previstoBaseline[obra][String(k)]||DATA.previstoBaseline[obra][k]||0)||0;
+      const delta=realizadoDoMes-baseline;
+      if(Math.abs(delta)<0.005)return; // nada novo desde a última vez — não mexe
+      const atual=parseFloat(DATA.previsto[obra][String(k)]||DATA.previsto[obra][k]||0)||0;
+      const novo=Math.max(0,atual-delta);
+      DATA.previsto[obra][String(k)]=novo;
+      DATA.previstoBaseline[obra][String(k)]=realizadoDoMes;
+      _previstoAjustado=true;
+    });
+  });
+  if(_previstoAjustado)autoSave();
   const prevLiqMap={};
   const prevRows=obrasVis.map(obra=>{
     const pVals=colKeys.map(k=>parseFloat(DATA.previsto[obra]?.[String(k)]||DATA.previsto[obra]?.[k]||0)||0);
@@ -1901,7 +1942,7 @@ function renderCaixaInicialCamposReal(){
 function ghubPayload(){
   return JSON.stringify({csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),
     estoque:DATA.estoque,orcamento:DATA.orcamento,
-    orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto||{}});
+    orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto||{},previstoBaseline:DATA.previstoBaseline||{}});
 }
 async function ghubSave(){
   if(_ghubSaving){_ghubDirty=true;return false;}
@@ -1961,7 +2002,7 @@ async function jbinLoad(){
     DATA.estoque=d.estoque||[];
     DATA.orcamento=d.orcamento||[];
     DATA.orcamentoMensal=d.orcamentoMensal||{};
-    DATA.caixaInicial=d.caixaInicial||{};DATA.previsto=d.previsto||{};
+    DATA.caixaInicial=d.caixaInicial||{};DATA.previsto=d.previsto||{};DATA.previstoBaseline=d.previstoBaseline||{};
     // Buscar SHA para saves futuros
     fetch('https://api.github.com/repos/'+GHUB.repo+'/contents/'+GHUB.file,
       {headers:{'Authorization':'token '+GHUB.token,'User-Agent':'solucione-bi'}})
@@ -1984,8 +2025,8 @@ function setJbinStatus(s){
 }
 function autoSave(){return ghubSave();}
 
-function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
-function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};DATA.previsto=p.data.previsto||DATA.previsto||{};_ultimoCsvCarregado=DATA.csv.length;migrarFontesAntigas();renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderFluxoReal();renderCaixaInicialCamposReal();renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
+function backupJSON(){const payload={version:2,exportedAt:new Date().toISOString(),data:{csv:DATA.csv.map(r=>({...r,data:r.data?r.data.toISOString():null})),estoque:DATA.estoque,orcamento:DATA.orcamento,orcamentoMensal:DATA.orcamentoMensal,caixaInicial:DATA.caixaInicial,previsto:DATA.previsto,previstoBaseline:DATA.previstoBaseline}};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='SolucioneBI_Backup_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.json';a.click();URL.revokeObjectURL(a.href);}
+function restoreJSON(input){const file=input.files[0];if(!file)return;const reader=new FileReader();reader.onload=e=>{try{const p=JSON.parse(e.target.result);if(!p||!p.data)throw new Error('Formato inv\u00e1lido');DATA.csv=(p.data.csv||[]).map(r=>({...r,data:r.data?new Date(r.data):null}));DATA.estoque=p.data.estoque||[];DATA.orcamento=p.data.orcamento||[];DATA.orcamentoMensal=p.data.orcamentoMensal||{};DATA.caixaInicial=p.data.caixaInicial||{};DATA.previsto=p.data.previsto||DATA.previsto||{};DATA.previstoBaseline=p.data.previstoBaseline||DATA.previstoBaseline||{};_ultimoCsvCarregado=DATA.csv.length;migrarFontesAntigas();renderCSVTable();renderEstoqueTable();renderOrcamentoTable();updateDtlhFilters();renderDtlh();renderFluxo();renderCaixaInicialCampos();renderFluxoReal();renderCaixaInicialCamposReal();renderContasAPagar();renderContasPagas();renderContasAReceber();renderContasRecebidas();autoSave();alert('Restaurado! '+DATA.csv.length+' registros CSV. Sincronizando com a nuvem...');}catch(err){alert('Erro: '+err.message);}};reader.readAsText(file);input.value='';}
 
 
 </script>
