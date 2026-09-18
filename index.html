@@ -656,6 +656,13 @@ function migrarFontesAntigas(){
 }
 
 // ---------- Aba Contas Pagas (Saídas) — vem do Sync Sienge ----------
+// Corte da edição manual de conta (pedido do Leonardo, 18/09/2026): só lançamentos com data
+// ANTERIOR a 31/12/2025 podem ter a conta editada nesta aba — período recente/futuro segue
+// vindo só do Sienge, sem edição manual, pra não mascarar erro real de classificação no Sienge.
+const CONTAS_PAGAS_EDITAVEL_ANTES_DE=new Date(2025,11,31).getTime(); // 31/12/2025 00:00 (exclusive)
+function listaContasDistintas(){
+  return [...new Set((DATA.csv||[]).map(r=>r.conta).filter(Boolean))].sort();
+}
 function renderContasPagas(){
   popularFiltrosAba('contas-pagas','cpg');
   const linhas=filtrarLinhasAba('contas-pagas','cpg').sort((a,b)=>{
@@ -671,13 +678,42 @@ function renderContasPagas(){
     corpo.innerHTML='<tr><td colspan="5"><div class="empty-state"><p>Nenhum dado ainda — clique em "Sync Sienge" para trazer do Sienge</p></div></td></tr>';
     return;
   }
-  corpo.innerHTML=linhas.map(r=>'<tr>'
-    +'<td>'+fmtDataAba(r.data)+'</td>'
-    +'<td>'+(r.complemento||'')+'</td>'
-    +'<td>'+(r.cc||'')+'</td>'
-    +'<td>'+(r.conta||'')+'</td>'
-    +'<td class="r">'+fmt(r.valor)+'</td>'
-    +'</tr>').join('');
+  const escOc=s=>String(s).replace(/'/g,"\\'").replace(/\n/g,' ');
+  const contasOpts=listaContasDistintas();
+  corpo.innerHTML=linhas.map(r=>{
+    const idxReal=DATA.csv.indexOf(r);
+    const t=r.data?(r.data instanceof Date?r.data:new Date(r.data)).getTime():null;
+    const editavel=t!=null&&!isNaN(t)&&t<CONTAS_PAGAS_EDITAVEL_ANTES_DE;
+    const contaAtual=r.conta||'';
+    const celConta=editavel
+      ?'<select onchange="editarContaContasPagas('+idxReal+',this.value,this)" style="font-size:11px;padding:3px 4px;max-width:240px;border:1px solid var(--border);border-radius:4px">'
+        +(contasOpts.includes(contaAtual)?'':'<option value="'+escOc(contaAtual)+'" selected>'+contaAtual+' (atual)</option>')
+        +contasOpts.map(c=>'<option value="'+escOc(c)+'"'+(c===contaAtual?' selected':'')+'>'+c+'</option>').join('')
+        +'</select>'
+      :contaAtual;
+    return '<tr>'
+      +'<td>'+fmtDataAba(r.data)+'</td>'
+      +'<td>'+(r.complemento||'')+'</td>'
+      +'<td>'+(r.cc||'')+'</td>'
+      +'<td>'+celConta+'</td>'
+      +'<td class="r">'+fmt(r.valor)+'</td>'
+      +'</tr>';
+  }).join('');
+}
+// Edição manual de conta em Contas Pagas — só habilitada pra lançamentos anteriores a 31/12/2025
+// (ver CONTAS_PAGAS_EDITAVEL_ANTES_DE). Pede confirmação (mostra de/para) antes de gravar, e
+// reverte o <select> visualmente se o usuário cancelar.
+function editarContaContasPagas(idxReal,novaConta,selectEl){
+  const r=DATA.csv[idxReal];
+  if(!r)return;
+  const contaAntiga=r.conta||'';
+  if(novaConta===contaAntiga)return;
+  if(!confirm('Alterar a conta deste lançamento:\n\n'+(r.complemento||'')+' — '+fmt(r.valor)+'\n\nDe: "'+contaAntiga+'"\nPara: "'+novaConta+'"\n\nConfirma?')){
+    if(selectEl)selectEl.value=contaAntiga;
+    return;
+  }
+  r.conta=novaConta;
+  renderContasPagas();renderFluxo();renderCaixaInicialCampos();renderFluxoReal();renderCaixaInicialCamposReal();renderDash();updateDtlhFilters();renderDtlh();autoSave();
 }
 
 // ---------- Aba Contas a Receber (provisão) — vem do Sync Sienge ----------
