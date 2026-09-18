@@ -3399,6 +3399,10 @@ function abrirResumoSocios(dataEntrega){
   // (Realizado, Provisionado e Total avaliados cada um pelo seu próprio sinal), em vez de uma
   // única cor pra linha inteira baseada na soma — antes, uma coluna positiva podia aparecer em
   // vermelho só porque a outra coluna era bem mais negativa (e vice-versa).
+  // Clique-para-detalhe (pedido do Leonardo, 18/09/2026): quando a linha tem opts.cat, cada
+  // célula (Realizado/Provisionado/Total) vira um span clicável que abre abrirDetalheResumoSocios
+  // com a mesma categoria e a coluna clicada — mesmo padrão "clique no número, vê o que compõe"
+  // usado no resto do BI (abrirDetalheFluxo).
   var linhaTbl=function(label,rz,pv,opts){
     opts=opts||{};
     var bold=opts.bold?'700':'400';
@@ -3411,35 +3415,72 @@ function abrirResumoSocios(dataEntrega){
       corTot=(rz+pv)>=0?VERDE_FONTE:VERMELHO_FONTE;
     }
     var borda=opts.borda?'border-top:2px solid '+opts.borda+';':'';
+    var cell=function(valor,cor,coluna){
+      var txt=fmt(valor);
+      if(!opts.cat)return txt;
+      return '<span onclick="abrirDetalheResumoSocios(\''+opts.cat+'\',\''+coluna+'\',\''+label.replace(/'/g,"\\'")+'\')" style="cursor:pointer;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:2px" title="Clique para ver o que compõe">'+txt+'</span>';
+    };
     return '<tr><td style="padding:7px 12px;font-size:12px;background:'+bg+';color:'+corLabel+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+label+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corRz+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+fmt(rz)+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corPv+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+fmt(pv)+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corTot+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+fmt(rz+pv)+'</td></tr>';
+      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corRz+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(rz,corRz,'rz')+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corPv+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(pv,corPv,'pv')+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corTot+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(rz+pv,corTot,'total')+'</td></tr>';
   };
   var espacador='<tr><td colspan="4" style="padding:6px"></td></tr>';
   var rows='';
-  rows+=linhaTbl('Entradas',entrRz,entrPv,{bold:true,bg:VERDE_BG});
+  rows+=linhaTbl('Entradas',entrRz,entrPv,{bold:true,bg:VERDE_BG,cat:'ENTRADAS'});
   rows+=espacador;
-  rows+=linhaTbl('Custo de Obra',-custoObraRz,-custoObraPv,{});
-  rows+=linhaTbl('Custo de Marketing',-marketingRz,-marketingPv,{});
-  rows+=linhaTbl('Custo Comercial',-comercialRz,-comercialPv,{});
-  rows+=linhaTbl('Custo Administrativo',-adminRz,-adminPv,{});
-  rows+=linhaTbl('Despesas Financeiras',-financRz,-financPv,{});
-  rows+=linhaTbl('TOTAL DESPESAS',-totDespRz,-totDespPv,{bold:true,bg:VERMELHO_BG});
-  rows+=linhaTbl('SALDO',saldoRz,saldoPv,{bold:true,bg:CINZA_BG,corAuto:true});
+  rows+=linhaTbl('Custo de Obra',-custoObraRz,-custoObraPv,{cat:'CUSTO_OBRA'});
+  rows+=linhaTbl('Custo de Marketing',-marketingRz,-marketingPv,{cat:'MARKETING'});
+  rows+=linhaTbl('Custo Comercial',-comercialRz,-comercialPv,{cat:'COMERCIAL'});
+  rows+=linhaTbl('Custo Administrativo',-adminRz,-adminPv,{cat:'ADMIN'});
+  rows+=linhaTbl('Despesas Financeiras',-financRz,-financPv,{cat:'FINANCEIRAS'});
+  rows+=linhaTbl('TOTAL DESPESAS',-totDespRz,-totDespPv,{bold:true,bg:VERMELHO_BG,cat:'TOTAL_DESPESAS'});
+  // "SALDO" renomeado para "Saldo Empreendimento" (pedido do Leonardo, 18/09/2026) — deixa claro
+  // que essa linha é só o resultado operacional do empreendimento, sem o bloco de Empréstimos
+  // (que tem sua própria linha "Saldo Empréstimos" logo abaixo).
+  rows+=linhaTbl('Saldo Empreendimento',saldoRz,saldoPv,{bold:true,bg:CINZA_BG,corAuto:true,cat:'SALDO'});
   rows+=espacador;
-  rows+=linhaTbl('Entrada por Empréstimo',emprEntrRz,emprEntrPv,{bold:true,bg:VERDE_BG});
-  rows+=linhaTbl('Consórcios/Financiamento/Empréstimo',-consorcRz,-consorcPv,{});
-  rows+=linhaTbl('Juros por Empréstimos',-jurosRz,-jurosPv,{});
-  rows+=linhaTbl('Total Saída Empréstimo',-totSaidaEmprRz,-totSaidaEmprPv,{bold:true,bg:VERMELHO_BG});
-  rows+=linhaTbl('Saldo Empréstimos',saldoEmprRz,saldoEmprPv,{bold:true,bg:CINZA_BG,corAuto:true});
+  rows+=linhaTbl('Entrada por Empréstimo',emprEntrRz,emprEntrPv,{bold:true,bg:VERDE_BG,cat:'EMPR_ENTRADA'});
+  rows+=linhaTbl('Consórcios/Financiamento/Empréstimo',-consorcRz,-consorcPv,{cat:'CONSORCIO'});
+  rows+=linhaTbl('Juros por Empréstimos',-jurosRz,-jurosPv,{cat:'JUROS'});
+  rows+=linhaTbl('Total Saída Empréstimo',-totSaidaEmprRz,-totSaidaEmprPv,{bold:true,bg:VERMELHO_BG,cat:'TOTAL_SAIDA_EMPR'});
+  rows+=linhaTbl('Saldo Empréstimos',saldoEmprRz,saldoEmprPv,{bold:true,bg:CINZA_BG,corAuto:true,cat:'SALDO_EMPR'});
   rows+=espacador;
-  rows+=linhaTbl('Entradas Totais',entrTotRz,entrTotPv,{bold:true,bg:VERDE_BG});
-  rows+=linhaTbl('Saídas Totais',-saidTotRz,-saidTotPv,{bold:true,bg:VERMELHO_BG});
-  rows+=linhaTbl('Saldo Geral',saldoGeralRz,saldoGeralPv,{bold:true,bg:CINZA_BG,corAuto:true,borda:'#999'});
+  rows+=linhaTbl('Entradas Totais',entrTotRz,entrTotPv,{bold:true,bg:VERDE_BG,cat:'ENTRADAS_TOTAIS'});
+  rows+=linhaTbl('Saídas Totais',-saidTotRz,-saidTotPv,{bold:true,bg:VERMELHO_BG,cat:'SAIDAS_TOTAIS'});
+  rows+=linhaTbl('Saldo Geral',saldoGeralRz,saldoGeralPv,{bold:true,bg:CINZA_BG,corAuto:true,borda:'#999',cat:'SALDO_GERAL'});
+  // Análise (pedido do Leonardo, 18/09/2026): compara o caixa realmente disponível hoje (aba
+  // "Fluxo de Caixa Real", 100% realizado — nunca considera provisão) contra o Saldo Geral
+  // Provisionado deste modal, pra dizer se falta ou sobra caixa pra cobrir o que ainda está em
+  // aberto. Recalcula a MESMA lógica de "Saldo de Caixa Atual" já usada em
+  // abrirProjecaoFluxoReal()/renderFluxoReal() (não reaproveita variável global porque nenhuma é
+  // exposta fora daquelas funções — ver comentário lá) — não altera nem lê nada da aba Fluxo de
+  // Caixa Real, só repete o cálculo com os mesmos dados/regras, escopado pela obra selecionada
+  // aqui no Resumo de Sócios (Leonardo confirmou: caixa atual deve ser da obra selecionada, não
+  // consolidado).
+  var hojeAnalise=new Date();
+  var obrasTodasReal=[...new Set((DATA.csv||[]).map(function(r){return r.cc;}).filter(Boolean))];
+  var ciAtualReal=obraSel?(parseFloat(DATA.caixaInicial[obraSel]||0)||0):obrasTodasReal.reduce(function(s,o){return s+(parseFloat(DATA.caixaInicial[o]||0)||0);},0);
+  var realizadoAteHojeReal=(DATA.csv||[]).filter(function(r){
+    if(r.porBens)return false;
+    if(obraSel&&!ccMatch(r.cc||'',obraSel))return false;
+    if(!r.data)return false;
+    if(r.ano==null||r.ano<2026)return false; // Caixa Inicial já representa o saldo de partida
+    var t=(r.data instanceof Date?r.data:new Date(r.data)).getTime();
+    if(t>hojeAnalise.getTime())return false;
+    var comp=(r.complemento||'').toLowerCase();
+    if(comp.includes('a pagar')||comp.includes('a receber'))return false;
+    return true;
+  });
+  var entradasRealAtual=realizadoAteHojeReal.filter(function(r){return r.tipo==='FATURAMENTO';}).reduce(function(s,r){return s+r.valor;},0)
+    -realizadoAteHojeReal.filter(function(r){return r.tipo==='DESCONTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var saidasRealAtual=realizadoAteHojeReal.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
+  var caixaAtualReal=ciAtualReal+entradasRealAtual-saidasRealAtual;
+  var diffCaixa=caixaAtualReal+saldoGeralPv;
+  var analiseTxt='Caso todos os nossos lançamentos estejam atualizados, ou seja, devidamente baixados até a presente data, nosso caixa atual é de '+fmt(caixaAtualReal)+', conforme demonstrado na aba Fluxo de Caixa Real. Considerando o Saldo Geral Provisionado de '+fmt(saldoGeralPv)+', discriminado acima, temos '+(diffCaixa<0?'uma necessidade':'um excedente')+' de caixa de '+fmt(Math.abs(diffCaixa))+'.';
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:760px;width:94%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:760px;width:94%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif;max-height:90vh;overflow-y:auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Resumo de Sócios</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
     +'<div style="font-size:13px;color:var(--text3)">'+(obraSel?obraSel:'Todas as obras')+(chaveCorte!=null?' — até '+String(mesDE+1).padStart(2,'0')+'/'+anoDE:' — histórico completo')+'</div>'
@@ -3454,8 +3495,146 @@ function abrirResumoSocios(dataEntrega){
     +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Provisionado</th>'
     +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Total</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table></div>'
+    +'<div style="padding:12px 14px;background:'+(diffCaixa<0?VERMELHO_BG:VERDE_BG)+';border-radius:6px;border-left:3px solid '+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'
+    +'<div style="font-size:12px;font-weight:700;color:#222;margin-bottom:4px">Análise:</div>'
+    +'<div style="font-size:12px;color:#333;line-height:1.5">'+analiseTxt+'</div>'
+    +'</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no total. Realizado = já efetivado em caixa; Provisionado = ainda em aberto (\'a pagar\'/\'a receber\', exceto Custo de Obra, que usa o Previsto cadastrado); despesas exibidas como valor positivo (saída).'+(chaveCorte!=null?' Filtro "Data da Entrega" ativo: considera lançamentos até '+String(mesDE+1).padStart(2,'0')+'/'+anoDE+' (inclusive).':'')+'</div>'
     +'</div>';
+}
+
+// Detalhe dos números do Resumo de Sócios (pedido do Leonardo, 18/09/2026): clicar em qualquer
+// valor da tabela abre a lista do que o compõe, reaproveitando o mesmo modal/filtro genérico do
+// resto do BI (filtrarDetalheFluxo, #detfluxo-*). Recalcula obraSel/chaveCorte exatamente como
+// abrirResumoSocios() (lê o mesmo <select id="fc-obra"> e o mesmo window._rsDataEntrega) — não há
+// estado global do último resumo aberto, então isso garante que o detalhe sempre bate com o que
+// está na tela. `cat` é uma das 13 categorias de linha do Resumo (ENTRADAS, CUSTO_OBRA,
+// MARKETING, COMERCIAL, ADMIN, FINANCEIRAS, TOTAL_DESPESAS, SALDO, EMPR_ENTRADA, CONSORCIO,
+// JUROS, TOTAL_SAIDA_EMPR, SALDO_EMPR, ENTRADAS_TOTAIS, SAIDAS_TOTAIS, SALDO_GERAL); `coluna` é
+// 'rz' (Realizado), 'pv' (Provisionado) ou 'total'. Categorias agregadas (TOTAL_DESPESAS, SALDO,
+// TOTAL_SAIDA_EMPR, SALDO_EMPR, ENTRADAS_TOTAIS, SAIDAS_TOTAIS, SALDO_GERAL) combinam as listas
+// das categorias que as compõem — despesas/saídas entram com valor negado só para a SOMA exibida
+// bater com o número da linha (fmt() sempre mostra valor absoluto por lançamento, então isso não
+// muda o que aparece em cada linha da lista, só o total).
+// Custo de Obra Provisionado nunca vem de lançamento (mesma regra do resto do BI — usa o Previsto
+// manual cadastrado por obra/mês), então nesse caso a "lista" é sintética: um item por mês do
+// DATA.previsto, no lugar de um lançamento real do CSV.
+function abrirDetalheResumoSocios(cat,coluna,label){
+  var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
+  var dataEntrega=window._rsDataEntrega||'';
+  var chaveCorte=null,mesDE=null,anoDE=null;
+  if(dataEntrega){
+    var partesDE=dataEntrega.split('-');
+    anoDE=parseInt(partesDE[0]);mesDE=parseInt(partesDE[1])-1;
+    if(anoDE&&mesDE!=null&&!isNaN(mesDE))chaveCorte=anoDE*100+mesDE;
+  }
+  var EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307','1.05.03','10598'];
+  var codigoDe=function(c){return (c||'').split(' - ')[0].trim();};
+  var base=(DATA.csv||[]).filter(function(r){
+    if(r.porBens)return false;
+    if(obraSel&&!ccMatch(r.cc||'',obraSel))return false;
+    if(chaveCorte!=null&&r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)>chaveCorte)return false;
+    return true;
+  });
+  var isProvisao=function(r){
+    var comp=(r.complemento||'').toLowerCase();
+    if(r.tipo==='PAGAMENTO')return comp.includes('a pagar');
+    if(r.tipo==='FATURAMENTO')return comp.includes('a receber');
+    return false;
+  };
+  var matchCol=function(r){return coluna==='total'?true:(coluna==='rz'?!isProvisao(r):isProvisao(r));};
+  var GRUPOS_SIMPLES=['MARKETING','COMERCIAL','ADMIN','FINANCEIRAS'];
+  var itemsFor=function(c,col){
+    var out=[];
+    if(c==='ENTRADAS'){
+      base.forEach(function(r){
+        if(EMPR_FAT_COD.includes(codigoDe(r.conta)))return;
+        if(r.tipo==='FATURAMENTO'&&(col==='total'?true:(col==='rz'?!isProvisao(r):isProvisao(r))))out.push(r);
+        else if(r.tipo==='DESCONTO'&&(col==='total'?true:(col==='rz'?!isProvisao(r):isProvisao(r))))out.push(Object.assign({},r,{valor:-r.valor}));
+      });
+    } else if(c==='CUSTO_OBRA'||GRUPOS_SIMPLES.includes(c)){
+      base.forEach(function(r){
+        if(r.tipo!=='PAGAMENTO')return;
+        var cod=codigoDe(r.conta);
+        var g=EMPR_PAG_COD.includes(cod)?'EMPRESTIMOS':grupoDeConta(r.conta||'');
+        if(g!==c)return;
+        if(c==='CUSTO_OBRA'){
+          if(col==='pv')return; // Provisionado de Custo de Obra nunca vem de lançamento — ver bloco abaixo
+          if(isProvisao(r))return; // Custo de Obra nunca considera "a pagar" como realizado
+          out.push(r);
+        } else {
+          if(col==='total'?true:(col==='rz'?!isProvisao(r):isProvisao(r)))out.push(r);
+        }
+      });
+      if(c==='CUSTO_OBRA'&&(col==='pv'||col==='total')){
+        Object.keys(DATA.previsto||{}).forEach(function(obraKey){
+          if(obraSel&&!ccMatch(obraKey,obraSel))return;
+          Object.entries(DATA.previsto[obraKey]||{}).forEach(function(kv){
+            var k=parseInt(kv[0]),v=parseFloat(kv[1])||0;
+            if(!v)return;
+            if(chaveCorte!=null&&k>chaveCorte)return;
+            var anoK=Math.floor(k/100),mesK=k%100;
+            out.push({data:new Date(anoK,mesK,1),complemento:'Previsto de Obra (Provisionado)',cc:obraKey,conta:'(Previsto Engenharia)',valor:v,ano:anoK,mes:mesK,tipo:'PAGAMENTO'});
+          });
+        });
+      }
+    } else if(c==='TOTAL_DESPESAS'){
+      ['CUSTO_OBRA'].concat(GRUPOS_SIMPLES).forEach(function(g){out=out.concat(itemsFor(g,col));});
+    } else if(c==='SALDO'){
+      out=itemsFor('ENTRADAS',col).concat(itemsFor('TOTAL_DESPESAS',col).map(function(r){return Object.assign({},r,{valor:-r.valor});}));
+    } else if(c==='EMPR_ENTRADA'){
+      base.forEach(function(r){
+        if(!EMPR_FAT_COD.includes(codigoDe(r.conta)))return;
+        if(r.tipo==='FATURAMENTO'&&(col==='total'?true:(col==='rz'?!isProvisao(r):isProvisao(r))))out.push(r);
+        else if(r.tipo==='DESCONTO'&&(col==='total'?true:(col==='rz'?!isProvisao(r):isProvisao(r))))out.push(Object.assign({},r,{valor:-r.valor}));
+      });
+    } else if(c==='CONSORCIO'){
+      base.forEach(function(r){
+        if(r.tipo!=='PAGAMENTO')return;
+        var cod=codigoDe(r.conta);
+        if((cod==='20307'||cod==='1.05.03')&&(col==='total'?true:(col==='rz'?!isProvisao(r):isProvisao(r))))out.push(r);
+      });
+    } else if(c==='JUROS'){
+      base.forEach(function(r){
+        if(r.tipo!=='PAGAMENTO')return;
+        if(codigoDe(r.conta)==='10598'&&(col==='total'?true:(col==='rz'?!isProvisao(r):isProvisao(r))))out.push(r);
+      });
+    } else if(c==='TOTAL_SAIDA_EMPR'){
+      out=itemsFor('CONSORCIO',col).concat(itemsFor('JUROS',col));
+    } else if(c==='SALDO_EMPR'){
+      out=itemsFor('EMPR_ENTRADA',col).concat(itemsFor('TOTAL_SAIDA_EMPR',col).map(function(r){return Object.assign({},r,{valor:-r.valor});}));
+    } else if(c==='ENTRADAS_TOTAIS'){
+      out=itemsFor('ENTRADAS',col).concat(itemsFor('EMPR_ENTRADA',col));
+    } else if(c==='SAIDAS_TOTAIS'){
+      out=itemsFor('TOTAL_DESPESAS',col).concat(itemsFor('TOTAL_SAIDA_EMPR',col));
+    } else if(c==='SALDO_GERAL'){
+      out=itemsFor('SALDO',col).concat(itemsFor('SALDO_EMPR',col));
+    }
+    return out;
+  };
+  var linhas=itemsFor(cat,coluna).sort(function(a,b){
+    var ta=a.data?new Date(a.data).getTime():0,tb=b.data?new Date(b.data).getTime():0;
+    return ta-tb;
+  });
+  window._detalheFluxoLinhas=linhas;
+  var colLabel=coluna==='rz'?'Realizado':(coluna==='pv'?'Provisionado':'Total');
+  window._detalheFluxoTitulo=(label||'Detalhe')+' — '+colLabel;
+  var anosDisp=[...new Set(linhas.map(function(r){return r.ano;}).filter(function(v){return v!=null;}))].sort();
+  var mesesDisp=[...new Set(linhas.map(function(r){return r.mes;}).filter(function(v){return v!=null;}))].sort(function(a,b){return a-b;});
+  var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
+  el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:640px;width:92%;max-height:80vh;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">'+(label||'Detalhe')+' — '+colLabel+'</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<span style="font-size:11px;font-weight:600;color:var(--text3)">Filtrar</span>'
+    +'<select id="detfluxo-ano" onchange="filtrarDetalheFluxo()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:4px"><option value="">Todos os anos</option>'+anosDisp.map(function(a){return '<option value="'+a+'">'+a+'</option>';}).join('')+'</select>'
+    +'<select id="detfluxo-mes" onchange="filtrarDetalheFluxo()" style="font-size:12px;padding:5px 8px;border:1px solid var(--border);border-radius:4px"><option value="">Todos os meses</option>'+mesesDisp.map(function(m){return '<option value="'+m+'">'+MESES_ABR[m]+'</option>';}).join('')+'</select>'
+    +'</div>'
+    +'<div id="detfluxo-resumo" style="font-size:13px;color:var(--text3)"></div>'
+    +'<div style="overflow-y:auto;max-height:50vh;border:1px solid var(--border);border-radius:6px">'
+    +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Data</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Complemento</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Obra</th><th style="text-align:left;padding:6px 10px;font-size:11px;color:var(--text3)">Conta</th><th class="r" style="padding:6px 10px;font-size:11px;color:var(--text3)">Valor</th></tr></thead><tbody id="detfluxo-tbody"></tbody></table>'
+    +'</div></div>';
+  filtrarDetalheFluxo();
 }
 
 function abrirProjecaoFluxoReal(curtoPrazo){
