@@ -3477,7 +3477,6 @@ function abrirResumoSocios(dataEntrega){
   var saidasRealAtual=realizadoAteHojeReal.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
   var caixaAtualReal=ciAtualReal+entradasRealAtual-saidasRealAtual;
   var diffCaixa=caixaAtualReal+saldoGeralPv;
-  var analiseTxt='Caso todos os nossos lançamentos estejam atualizados, ou seja, devidamente baixados até a presente data, nosso caixa atual é de '+fmt(caixaAtualReal)+', conforme demonstrado na aba Fluxo de Caixa Real. Considerando o Saldo Geral Provisionado de '+fmt(saldoGeralPv)+', discriminado acima, temos '+(diffCaixa<0?'uma necessidade':'um excedente')+' de caixa de '+fmt(Math.abs(diffCaixa))+'.';
   var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
   el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
   el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:760px;width:94%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif;max-height:90vh;overflow-y:auto">'
@@ -3495,9 +3494,15 @@ function abrirResumoSocios(dataEntrega){
     +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Provisionado</th>'
     +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Total</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table></div>'
-    +'<div style="padding:12px 14px;background:'+(diffCaixa<0?VERMELHO_BG:VERDE_BG)+';border-radius:6px;border-left:3px solid '+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'
-    +'<div style="font-size:12px;font-weight:700;color:#222;margin-bottom:4px">Análise:</div>'
-    +'<div style="font-size:12px;color:#333;line-height:1.5">'+analiseTxt+'</div>'
+    // Tabelinha de conferência de caixa (pedido do Leonardo, 18/09/2026, substituindo o bloco de
+    // texto "Análise" anterior): Caixa Provisionado (= Saldo Geral Provisionado, já calculado
+    // acima) x Caixa Atual (mesma lógica/dados da aba Fluxo de Caixa Real, ver bloco de cálculo
+    // logo antes deste innerHTML) x resultado da soma — necessidade (vermelho) ou excedente
+    // (verde) de caixa.
+    +'<div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;background:#f5f5f5"><span style="font-size:12px;color:#333">Caixa Provisionado</span><span style="font-size:13px;font-weight:600;color:#333">'+fmt(saldoGeralPv)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px"><span style="font-size:12px;color:#333">Caixa Atual (Fluxo de Caixa Real)</span><span style="font-size:13px;font-weight:600;color:#333">'+fmt(caixaAtualReal)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:'+(diffCaixa<0?VERMELHO_BG:VERDE_BG)+';border-top:2px solid '+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'"><span style="font-size:13px;font-weight:700;color:'+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'+(diffCaixa<0?'Necessidade de Caixa':'Excedente de Caixa')+'</span><span style="font-size:14px;font-weight:800;color:'+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'+fmt(diffCaixa)+'</span></div>'
     +'</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no total. Realizado = já efetivado em caixa; Provisionado = ainda em aberto (\'a pagar\'/\'a receber\', exceto Custo de Obra, que usa o Previsto cadastrado); despesas exibidas como valor positivo (saída).'+(chaveCorte!=null?' Filtro "Data da Entrega" ativo: considera lançamentos até '+String(mesDE+1).padStart(2,'0')+'/'+anoDE+' (inclusive).':'')+'</div>'
     +'</div>';
