@@ -314,7 +314,10 @@ function processContasRecebidasText(txt){
     // Tarifa de cobrança cobrada na baixa do recebimento ("Pag. tarifa bancária cobrança - Cliente"):
     // é saída real de caixa, mas no Sienge fica no título a RECEBER — não vem em Contas Pagas.
     // Entra como PAGAMENTO positivo (despesa). Ex.: SPE MONTAGNES 07/10 e 15/10/2026.
-    const ehTarifa=!ehReembolso&&cu.includes('TARIFA')&&!cu.includes('RECEBIMENTO');
+    // Só a tarifa de COBRANÇA do título ("Pag. tarifa bancária cobrança - Cliente"). Outras tarifas
+    // ("Pagamento - tarifa bancaria pj", cesta etc.) já vêm em Contas Pagas e duplicariam.
+    const cuSemAcento=cu.normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const ehTarifa=!ehReembolso&&cuSemAcento.includes('TARIFA')&&cuSemAcento.includes('COBRANCA')&&!cu.includes('RECEBIMENTO');
     if(ehReembolso){tipo='PAGAMENTO';}
     if(conta.includes('10501')){tipo='FATURAMENTO';}
     if(conta.includes('20301')||conta.includes('20307')||conta.includes('2010305')){tipo='PAGAMENTO';}
@@ -328,10 +331,15 @@ function processContasRecebidasText(txt){
   if(!datasValidas.length){setStatus('crf-paste-status','Nenhuma data válida encontrada nas linhas coladas.',false);return;}
   const minData=new Date(Math.min.apply(null,datasValidas.map(d=>d.getTime())));
   const maxData=new Date(Math.max.apply(null,datasValidas.map(d=>d.getTime())));
-  // Tarifa que já existe idêntica vinda de outra fonte (ex.: CSV Analítico antigo) não entra de novo.
-  const chaveTar=r=>[r.data?new Date(r.data).toISOString().slice(0,10):'',(r.cc||'').trim().toUpperCase(),Math.round(Math.abs(r.valor)*100),(r.complemento||'').trim().toUpperCase()].join('|');
-  const tarExist=new Set(DATA.csv.filter(r=>r.fonte!=='contas-recebidas'&&r.tipo==='PAGAMENTO').map(chaveTar));
-  const recebimentos=todas.filter(r=>(r.tipo==='FATURAMENTO'||r.ehReembolso||(r.ehTarifa&&!tarExist.has(chaveTar(r))))&&r.data&&r.valor!==0).map(r=>({
+  // Tarifa que já existe vinda de outra fonte (Contas Pagas às vezes traz a mesma tarifa como
+  // "Pagamento - Pagamento"; CSV Analítico antigo também) não entra de novo. Compara por data + CC +
+  // valor + código da conta (o complemento muda de uma fonte pra outra) e respeita a quantidade:
+  // se Contas Pagas já tem 1 tarifa de 6,30 no dia e o relatório tem 2, entra só 1.
+  const chaveTar=r=>[r.data?new Date(r.data).toISOString().slice(0,10):'',(r.cc||'').trim().toUpperCase(),Math.round(Math.abs(r.valor)*100),String(r.conta||'').trim().split(/\s/)[0]].join('|');
+  const tarSaldo=new Map();
+  DATA.csv.forEach(r=>{if(r.fonte!=='contas-recebidas'&&r.tipo==='PAGAMENTO'){const k=chaveTar(r);tarSaldo.set(k,(tarSaldo.get(k)||0)+1);}});
+  const tarifaNova=r=>{const k=chaveTar(r),n=tarSaldo.get(k)||0;if(n>0){tarSaldo.set(k,n-1);return false;}return true;};
+  const recebimentos=todas.filter(r=>(r.tipo==='FATURAMENTO'||r.ehReembolso||(r.ehTarifa&&tarifaNova(r)))&&r.data&&r.valor!==0).map(r=>({
     data:r.data,complemento:r.complemento,valor:r.valor,cc:r.cc,conta:r.conta,tipo:(r.ehReembolso||r.ehTarifa)?'PAGAMENTO':'FATURAMENTO',
     mes:r.data.getMonth(),ano:r.data.getFullYear(),fonte:'contas-recebidas'
   }));
