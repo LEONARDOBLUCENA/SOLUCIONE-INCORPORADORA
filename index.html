@@ -302,30 +302,22 @@ function processContasRecebidasText(txt){
     // entrada — sem o desconto concedido o Fluxo de Caixa não bate com o total baixado.
     // Desconto Obtido continua fora daqui (é redutor de despesa, não de receita).
     let tipo=(cu.includes('RECEBIMENTO')||cu.includes('A RECEBER')||ehDescontoConcedido)?'FATURAMENTO':'PAGAMENTO';
-    // Reembolso recebido em conta redutora de despesa (2020299/2010498/2020199/20499): é dinheiro
-    // que ENTROU no banco, mas no BI é tratado como PAGAMENTO negativo (reduz a despesa), igual ao
-    // processCSVText. Antes era descartado aqui — e como no Sienge ele é um título de Contas a
-    // Receber, não vinha em Contas Pagas também, então sumia do Fluxo de Caixa (ex.: GASOTEC
-    // R$ 1.691,70 em 19/10/2026, SPE MONTAGNES).
-    const ehReembolso=(conta.includes('2020299')||conta.includes('2010498')||conta.includes('2020199')||conta.includes('20499'));
-    if(ehReembolso){tipo='PAGAMENTO';}
+    if(conta.includes('2020299')||conta.includes('2010498')||conta.includes('2020199')||conta.includes('20499')){tipo='PAGAMENTO';}
     if(conta.includes('10501')){tipo='FATURAMENTO';}
     if(conta.includes('20301')||conta.includes('20307')||conta.includes('2010305')){tipo='PAGAMENTO';}
     // Desconto Concedido entra negativo (reduz a receita) — não é caixa a mais entrando.
-    // Reembolso entra negativo como PAGAMENTO (reduz a despesa = entrada de caixa).
-    const valor=((tipo==='FATURAMENTO'&&ehDescontoConcedido)||ehReembolso)?-valorAbs:valorAbs;
-    return{data,complemento,valor,cc,conta,tipo,ehDescontoConcedido,ehReembolso};
+    const valor=(tipo==='FATURAMENTO'&&ehDescontoConcedido)?-valorAbs:valorAbs;
+    return{data,complemento,valor,cc,conta,tipo,ehDescontoConcedido};
   });
   const datasValidas=todas.map(r=>r.data).filter(Boolean);
   if(!datasValidas.length){setStatus('crf-paste-status','Nenhuma data válida encontrada nas linhas coladas.',false);return;}
   const minData=new Date(Math.min.apply(null,datasValidas.map(d=>d.getTime())));
   const maxData=new Date(Math.max.apply(null,datasValidas.map(d=>d.getTime())));
-  const recebimentos=todas.filter(r=>(r.tipo==='FATURAMENTO'||r.ehReembolso)&&r.data&&r.valor!==0).map(r=>({
-    data:r.data,complemento:r.complemento,valor:r.valor,cc:r.cc,conta:r.conta,tipo:r.ehReembolso?'PAGAMENTO':'FATURAMENTO',
+  const recebimentos=todas.filter(r=>r.tipo==='FATURAMENTO'&&r.data&&r.valor!==0).map(r=>({
+    data:r.data,complemento:r.complemento,valor:r.valor,cc:r.cc,conta:r.conta,tipo:'FATURAMENTO',
     mes:r.data.getMonth(),ano:r.data.getFullYear(),fonte:'contas-recebidas'
   }));
-  const qtdDesconto=recebimentos.filter(r=>r.tipo==='FATURAMENTO'&&r.valor<0).length;
-  const qtdReembolso=recebimentos.filter(r=>r.tipo==='PAGAMENTO').length;
+  const qtdDesconto=recebimentos.filter(r=>r.valor<0).length;
   const ignoradas=todas.length-recebimentos.length;
   if(!recebimentos.length){
     const confirmou=confirm('Nenhuma linha de Recebimento/Desconto Concedido encontrada no texto colado (só Pagamento, ou período sem recebimento).\n\nMesmo assim, isso vai REMOVER os lançamentos de Contas Recebidas já existentes entre '+minData.toLocaleDateString('pt-BR')+' e '+maxData.toLocaleDateString('pt-BR')+' (porque não veio nenhum dado novo pra substituir). Quer continuar?');
@@ -335,7 +327,7 @@ function processContasRecebidasText(txt){
   DATA.csv=DATA.csv.filter(r=>!(r.fonte==='contas-recebidas'&&r.data&&r.data>=minData&&r.data<=maxData));
   const removidos=antesCount-DATA.csv.length;
   DATA.csv=[...DATA.csv,...recebimentos];
-  setStatus('crf-paste-status','Período '+minData.toLocaleDateString('pt-BR')+' a '+maxData.toLocaleDateString('pt-BR')+': +'+recebimentos.length+' lançamento(s) importado(s) ('+qtdDesconto+' de Desconto Concedido, negativo; '+qtdReembolso+' de Reembolso, redutor de despesa), '+removidos+' lançamento(s) antigo(s) do mesmo período removido(s), '+ignoradas+' linha(s) de Pagamento ignorada(s).',true);
+  setStatus('crf-paste-status','Período '+minData.toLocaleDateString('pt-BR')+' a '+maxData.toLocaleDateString('pt-BR')+': +'+recebimentos.length+' lançamento(s) importado(s) ('+qtdDesconto+' de Desconto Concedido, negativo), '+removidos+' lançamento(s) antigo(s) do mesmo período removido(s), '+ignoradas+' linha(s) de Pagamento ignorada(s).',true);
   renderContasRecebidas();renderFluxo();renderCaixaInicialCampos();renderFluxoReal();renderCaixaInicialCamposReal();autoSave();
 }
 
@@ -764,9 +756,7 @@ function renderContasRecebidas(){
     const ta=a.data?new Date(a.data).getTime():0, tb=b.data?new Date(b.data).getTime():0;
     return tb-ta;
   });
-  // Reembolso (PAGAMENTO negativo) é entrada de caixa: na aba aparece positivo, só na exibição.
-  const valorEntrada=r=>r.tipo==='PAGAMENTO'?-r.valor:r.valor;
-  renderResumoLancamentos('resumo-contasrecebidas',linhas.map(r=>r.tipo==='PAGAMENTO'?{...r,valor:valorEntrada(r)}:r),{rotuloContraparte:'Cliente'});
+  renderResumoLancamentos('resumo-contasrecebidas',linhas,{rotuloContraparte:'Cliente'});
   const corpo=document.getElementById('body-contasrecebidas');
   const contador=document.getElementById('count-contasrecebidas');
   if(!corpo)return;
@@ -781,8 +771,8 @@ function renderContasRecebidas(){
       +'<td>'+fmtDataAba(r.data)+'</td>'
       +'<td>'+(r.complemento||'')+'</td>'
       +'<td>'+(r.cc||'')+'</td>'
-      +'<td>'+(r.conta||'')+(r.tipo==='PAGAMENTO'?' <span style="font-size:9px;color:#B35C00;font-weight:600">· reembolso</span>':'')+'</td>'
-      +'<td class="r">'+fmt(valorEntrada(r))+'</td>'
+      +'<td>'+(r.conta||'')+'</td>'
+      +'<td class="r">'+fmt(r.valor)+'</td>'
       +'<td><button onclick="removerContaRecebida('+idxReal+')" style="background:none;border:1px solid var(--border);color:#C0392B;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px">Remover</button></td>'
       +'</tr>';
   }).join('');
