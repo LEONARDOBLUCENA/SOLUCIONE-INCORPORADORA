@@ -1085,6 +1085,9 @@ function setFcIncluirAtraso(v){
 
 // ---------- Visão Executiva do Caixa — reaproveita o saldo mensal já calculado no renderFluxo ----------
 function renderVisaoExecutivaCaixa(colKeys,colAno,colMes,saldo,ci){
+  // Série de saldo mensal guardada para o Resumo de Sócios achar o mês de maior necessidade
+  // (mesma cascata do gráfico — mesma obra, mesmo checkbox de atraso).
+  window._fcSaldoSerie={colKeys:colKeys.slice(),saldo:saldo.slice(),obra:document.getElementById('fc-obra')?.value||''};
   const kpisEl=document.getElementById('fc-visao-exec-kpis');
   if(!kpisEl)return;
   if(!colKeys.length){kpisEl.innerHTML='<div style="grid-column:1/-1;color:var(--text3);font-size:12px">Sem dados suficientes pra projetar.</div>';const cv=document.getElementById('fc-visao-exec-chart');if(cv&&CHARTS['visaoCaixa']){CHARTS['visaoCaixa'].destroy();CHARTS['visaoCaixa']=null;}return;}
@@ -3555,6 +3558,29 @@ function abrirResumoSocios(dataEntrega){
   var saidasRealAtual=realizadoAteHojeReal.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
   var caixaAtualReal=ciAtualReal+entradasRealAtual-saidasRealAtual;
   var diffCaixa=caixaAtualReal+saldoGeralPv;
+  // Maior necessidade no período (pedido do Leonardo, 09/11/2026): o saldo no fim do período pode
+  // esconder um mês intermediário mais apertado. Usa a mesma cascata mensal do gráfico da Visão
+  // Executiva (window._fcSaldoSerie), do mês atual até a Data da Entrega (ou até o fim, se vazia).
+  var linhaPicoHtml='';
+  (function(){
+    var ser=window._fcSaldoSerie;
+    if(!ser||!ser.colKeys||!ser.colKeys.length)return;
+    if((ser.obra||'')!==(obraSel||''))return; // série é de outra obra — não mistura
+    var hj=new Date(),chHj=hj.getFullYear()*100+hj.getMonth();
+    var idxMin=-1;
+    ser.colKeys.forEach(function(k,i){
+      if(k<chHj)return;
+      if(chaveCorte!=null&&k>chaveCorte)return;
+      if(idxMin<0||ser.saldo[i]<ser.saldo[idxMin])idxMin=i;
+    });
+    if(idxMin<0)return;
+    var vMin=ser.saldo[idxMin],kMin=ser.colKeys[idxMin];
+    var mesTxt=MESES_ABR[kMin%100]+'/'+Math.floor(kMin/100);
+    var neg=vMin<0;
+    linhaPicoHtml='<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:'+(neg?'#F6D5D1':VERDE_BG)+';border-top:1px solid '+(neg?VERMELHO_FONTE:VERDE_FONTE)+'">'
+      +'<span style="font-size:13px;font-weight:700;color:'+(neg?VERMELHO_FONTE:VERDE_FONTE)+'">'+(neg?'Maior Necessidade no Período':'Menor Saldo no Período')+' <span style="font-weight:400;font-size:11px">— '+mesTxt+' (pior mês do gráfico)</span></span>'
+      +'<span style="font-size:14px;font-weight:800;color:'+(neg?VERMELHO_FONTE:VERDE_FONTE)+'">'+fmt(vMin)+'</span></div>';
+  })();
   var _rsHtml='<div style="background:#fff;border-radius:10px;padding:24px;max-width:760px;width:94%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif;max-height:90vh;overflow-y:auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Resumo de Sócios</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
@@ -3578,7 +3604,8 @@ function abrirResumoSocios(dataEntrega){
     +'<div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px;background:#f5f5f5"><span style="font-size:12px;color:#333">Caixa Provisionado</span><span style="font-size:13px;font-weight:600;color:#333">'+fmt(saldoGeralPv)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px"><span style="font-size:12px;color:#333">Caixa Atual (Fluxo de Caixa Real)</span><span style="font-size:13px;font-weight:600;color:#333">'+fmt(caixaAtualReal)+'</span></div>'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:'+(diffCaixa<0?VERMELHO_BG:VERDE_BG)+';border-top:2px solid '+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'"><span style="font-size:13px;font-weight:700;color:'+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'+(diffCaixa<0?'Necessidade de Caixa':'Excedente de Caixa')+'</span><span style="font-size:14px;font-weight:800;color:'+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'+fmt(diffCaixa)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:'+(diffCaixa<0?VERMELHO_BG:VERDE_BG)+';border-top:2px solid '+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'"><span style="font-size:13px;font-weight:700;color:'+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'+(diffCaixa<0?'Necessidade de Caixa':'Excedente de Caixa')+' <span style="font-weight:400;font-size:11px">— no fim do período'+(chaveCorte!=null?' ('+String(mesDE+1).padStart(2,'0')+'/'+anoDE+')':'')+'</span></span><span style="font-size:14px;font-weight:800;color:'+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'+fmt(diffCaixa)+'</span></div>'
+    +linhaPicoHtml
     +'</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+(incluirAtrasoRS?'A receber/a pagar em atraso: <b>incluídos</b>':'A receber/a pagar em atraso: <b>fora</b>')+' (segue o checkbox da Visão Executiva do Caixa).</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no total. Realizado = já efetivado em caixa; Provisionado = ainda em aberto (\'a pagar\'/\'a receber\', exceto Custo de Obra, que usa o Previsto cadastrado); despesas exibidas como valor positivo (saída).'+(chaveCorte!=null?' Filtro "Data da Entrega" ativo: considera lançamentos até '+String(mesDE+1).padStart(2,'0')+'/'+anoDE+' (inclusive).':'')+'</div>'
@@ -4610,8 +4637,10 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:stretch">
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);min-width:0" id="fc-resumo-fin-card">
+  <div style="display:grid;grid-template-columns:1fr;gap:16px;align-items:stretch">
+  <!-- Resumo Financeiro oculto (pedido do Leonardo, 09/11/2026): duplicava o Resumo de Sócios.
+       Continua no HTML (display:none) porque o renderFluxo ainda preenche essa tabela. -->
+  <div class="tbl-card" style="display:none;margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);min-width:0" id="fc-resumo-fin-card">
     <div class="tbl-head" style="justify-content:flex-start">
       <div>
         <div class="tbl-title">Resumo Financeiro</div>
