@@ -3555,9 +3555,7 @@ function abrirResumoSocios(dataEntrega){
   var saidasRealAtual=realizadoAteHojeReal.filter(function(r){return r.tipo==='PAGAMENTO';}).reduce(function(s,r){return s+r.valor;},0);
   var caixaAtualReal=ciAtualReal+entradasRealAtual-saidasRealAtual;
   var diffCaixa=caixaAtualReal+saldoGeralPv;
-  var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
-  el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
-  el.innerHTML='<div style="background:#fff;border-radius:10px;padding:24px;max-width:760px;width:94%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif;max-height:90vh;overflow-y:auto">'
+  var _rsHtml='<div style="background:#fff;border-radius:10px;padding:24px;max-width:760px;width:94%;display:flex;flex-direction:column;gap:14px;font-family:\'DM Sans\',sans-serif;max-height:90vh;overflow-y:auto">'
     +'<div style="display:flex;justify-content:space-between;align-items:center"><span style="font-weight:700;font-size:16px;font-family:\'Playfair Display\',serif">Resumo de Sócios</span><button onclick="fecharSyncSienge()" style="background:none;border:none;font-size:18px;cursor:pointer;line-height:1">×</button></div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">'
     +'<div style="font-size:13px;color:var(--text3)">'+(obraSel?obraSel:'Todas as obras')+(chaveCorte!=null?' — até '+String(mesDE+1).padStart(2,'0')+'/'+anoDE:' — histórico completo')+'</div>'
@@ -3585,7 +3583,33 @@ function abrirResumoSocios(dataEntrega){
     +'<div style="font-size:11px;color:var(--text3)">'+(incluirAtrasoRS?'A receber/a pagar em atraso: <b>incluídos</b>':'A receber/a pagar em atraso: <b>fora</b>')+' (segue o checkbox da Visão Executiva do Caixa).</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no total. Realizado = já efetivado em caixa; Provisionado = ainda em aberto (\'a pagar\'/\'a receber\', exceto Custo de Obra, que usa o Previsto cadastrado); despesas exibidas como valor positivo (saída).'+(chaveCorte!=null?' Filtro "Data da Entrega" ativo: considera lançamentos até '+String(mesDE+1).padStart(2,'0')+'/'+anoDE+' (inclusive).':'')+'</div>'
     +'</div>';
+  // Resumo de Sócios fixo na página (pedido do Leonardo, 09/11/2026): quando existe o container
+  // #fc-resumo-socios-inline (aba Fluxo de Caixa, no lugar do antigo card de Movimentações),
+  // renderiza ali mesmo, sem modal. O filtro "Data da Entrega" é só deste bloco — não mexe no
+  // resto da página. A obra segue o filtro "Obra" do topo da aba; os vencidos seguem o checkbox
+  // da Visão Executiva (para bater com o gráfico).
+  var inl=document.getElementById('fc-resumo-socios-inline');
+  if(inl){
+    inl.innerHTML=_rsHtml;
+    var box=inl.firstElementChild;
+    if(box){box.style.maxWidth='none';box.style.width='100%';box.style.maxHeight='none';box.style.padding='16px 20px';box.style.borderRadius='0';box.style.boxSizing='border-box';}
+    var xBtn=inl.querySelector('button[onclick="fecharSyncSienge()"]');if(xBtn)xBtn.remove();
+    return;
+  }
+  var el=document.getElementById('sienge-sync-modal')||(function(){var e=document.createElement('div');e.id='sienge-sync-modal';document.body.appendChild(e);return e;})();
+  el.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center';
+  el.innerHTML=_rsHtml;
 }
+// Sempre que o Fluxo de Caixa redesenha (troca de obra, sync, checkbox de atraso, etc.), o
+// Resumo de Sócios fixo na página redesenha junto, mantendo a Data da Entrega escolhida nele.
+(function(){
+  if(typeof renderFluxo!=='function')return;
+  var _renderFluxoOrig=renderFluxo;
+  renderFluxo=function(){
+    try{return _renderFluxoOrig.apply(this,arguments);}
+    finally{try{if(document.getElementById('fc-resumo-socios-inline'))abrirResumoSocios();}catch(e){console.error('Resumo de Sócios:',e);}}
+  };
+})();
 
 // Detalhe dos números do Resumo de Sócios (pedido do Leonardo, 18/09/2026): clicar em qualquer
 // valor da tabela abre a lista do que o compõe, reaproveitando o mesmo modal/filtro genérico do
@@ -3614,10 +3638,18 @@ function abrirDetalheResumoSocios(cat,coluna,label){
   }
   var EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307','1.05.03','10598'];
   var codigoDe=function(c){return (c||'').split(' - ')[0].trim();};
+  var incluirAtrasoDet=fcIncluirAtraso();
+  var hojeDet=new Date(),chaveAtualDet=hojeDet.getFullYear()*100+hojeDet.getMonth();
   var base=(DATA.csv||[]).filter(function(r){
     if(r.porBens)return false;
     if(obraSel&&!ccMatch(r.cc||'',obraSel))return false;
     if(chaveCorte!=null&&r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)>chaveCorte)return false;
+    // Vencidos seguem o checkbox da Visão Executiva — mesma regra do Resumo de Sócios.
+    if(!incluirAtrasoDet&&r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)<chaveAtualDet){
+      var compDet=(r.complemento||'').toLowerCase();
+      if(r.tipo==='FATURAMENTO'&&compDet.includes('a receber'))return false;
+      if(r.tipo==='PAGAMENTO'&&compDet.includes('a pagar'))return false;
+    }
     return true;
   });
   var isProvisao=function(r){
@@ -4552,12 +4584,6 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
     <button onclick="abrirProjecaoFluxo()" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 18px;cursor:pointer;border-radius:6px;font-weight:600">Buscar</button>
 
-    <div style="width:1px;align-self:stretch;background:var(--border)"></div>
-    <div style="margin-right:4px">
-      <div class="tbl-title" style="margin-bottom:2px;font-size:13px">Resumo de Sócios</div>
-      <span style="font-size:11px;color:var(--text3)">Receitas e despesas por grupo — Realizado x Provisionado x Total</span>
-    </div>
-    <button onclick="abrirResumoSocios()" style="background:#1B6B35;border:none;color:#fff;font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 18px;cursor:pointer;border-radius:6px;font-weight:600">Ver Resumo</button>
   </div>
 
   <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px" id="fc-visao-exec-card">
@@ -4604,28 +4630,8 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
   </div>
 
-  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);min-width:0" id="fc-relacionados-card">
-    <div class="tbl-head">
-      <div>
-        <div class="tbl-title">Movimentações — Osmar e Relacionados</div>
-        <span style="font-size:11px;color:var(--text3)">Vertical Participações, Osmar Paulo Dias Filho, Mauricio Rodrigues e lançamentos ligados a essas partes</span>
-      </div>
-    </div>
-    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;padding:4px 16px 16px">
-      <div style="overflow-x:auto;font-size:12px;flex:1 1 320px;min-width:280px">
-        <table id="tbl-fc-relacionados" style="width:100%;border-collapse:collapse">
-          <thead id="thead-fc-relacionados"></thead>
-          <tbody id="tbody-fc-relacionados"></tbody>
-        </table>
-      </div>
-      <div style="overflow-x:auto;font-size:12px;border-left:1px solid var(--border);padding-left:24px;flex:0 0 auto">
-        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Acumulado por Parte</div>
-        <table id="tbl-fc-relacionados-acum" style="border-collapse:collapse;min-width:260px">
-          <thead id="thead-fc-relacionados-acum"></thead>
-          <tbody id="tbody-fc-relacionados-acum"></tbody>
-        </table>
-      </div>
-    </div>
+  <div class="tbl-card" style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);min-width:0;padding:0" id="fc-resumo-socios-card">
+    <div id="fc-resumo-socios-inline"><div style="padding:16px 20px;font-size:12px;color:var(--text3)">Carregando Resumo de Sócios…</div></div>
   </div>
   </div>
 
@@ -4668,6 +4674,30 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     </div>
     <div id="fc-caixa-campos" style="display:flex;flex-wrap:wrap;gap:20px;padding:16px 20px">
       <div style="color:var(--text3);font-size:12px">Carregue dados no CSV Analítico para ver os centros de custo.</div>
+    </div>
+  </div>
+
+  <div class="tbl-card" style="margin-top:16px;border:1px solid var(--border);border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.06);min-width:0" id="fc-relacionados-card">
+    <div class="tbl-head">
+      <div>
+        <div class="tbl-title">Movimentações — Osmar e Relacionados</div>
+        <span style="font-size:11px;color:var(--text3)">Vertical Participações, Osmar Paulo Dias Filho, Mauricio Rodrigues e lançamentos ligados a essas partes</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;padding:4px 16px 16px">
+      <div style="overflow-x:auto;font-size:12px;flex:1 1 320px;min-width:280px">
+        <table id="tbl-fc-relacionados" style="width:100%;border-collapse:collapse">
+          <thead id="thead-fc-relacionados"></thead>
+          <tbody id="tbody-fc-relacionados"></tbody>
+        </table>
+      </div>
+      <div style="overflow-x:auto;font-size:12px;border-left:1px solid var(--border);padding-left:24px;flex:0 0 auto">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Acumulado por Parte</div>
+        <table id="tbl-fc-relacionados-acum" style="border-collapse:collapse;min-width:260px">
+          <thead id="thead-fc-relacionados-acum"></thead>
+          <tbody id="tbody-fc-relacionados-acum"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 </div>
