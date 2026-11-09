@@ -1065,6 +1065,24 @@ function renderCharts(csv){
   destroyChart('ch-cc-fat');if(fat.length){const ccs=[...new Set(fat.map(r=>r.cc).filter(Boolean))];CHARTS['ch-cc-fat']=new Chart(document.getElementById('ch-cc-fat'),{type:'bar',data:{labels:ccs,datasets:[{label:'Total Recebido',data:ccs.map(c=>fat.filter(r=>r.cc===c).reduce((s,r)=>s+r.valor,0)),backgroundColor:PAL,borderRadius:2}]},options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false}},scales:{x:yFmt}}});}
   destroyChart('ch-resultado-caixa');if(csv.length){const rd=lbl.map(l=>{const f=fat.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),d=dsc.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0),p=pag.filter(r=>r.ano===l.ano&&r.mes===l.mes).reduce((s,r)=>s+r.valor,0);return(f-d)-p;});CHARTS['ch-resultado-caixa']=new Chart(document.getElementById('ch-resultado-caixa'),{type:'bar',data:{labels:ln,datasets:[{label:'Resultado',data:rd,backgroundColor:rd.map(v=>v>=0?'#1A7A3C':'#C0392B'),borderRadius:2}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{ticks:{callback:v=>'R$'+v.toLocaleString('pt-BR')}}}}});}
 }
+// ---------- Incluir a receber / a pagar em atraso (pedido do Leonardo, 09/11/2026) ----------
+// Checkbox na Visão Executiva do Caixa. Desligado (padrão) = regra de sempre: provisão de mês já
+// passado ("a receber"/"a pagar" vencido) fica fora do Fluxo de Caixa. Ligado = esses vencidos
+// entram no MÊS ATUAL (ainda são esperados, só atrasaram). Custo de Obra "a pagar" continua fora
+// nos dois casos (usa o Previsto). O Resumo de Sócios segue a mesma chave, pra os dois baterem.
+// Preferência por navegador (localStorage), não vai pro data.json.
+function fcIncluirAtraso(){
+  if(window._fcIncluirAtraso===undefined){
+    try{window._fcIncluirAtraso=localStorage.getItem('fcIncluirAtraso')==='1';}catch(e){window._fcIncluirAtraso=false;}
+  }
+  return !!window._fcIncluirAtraso;
+}
+function setFcIncluirAtraso(v){
+  window._fcIncluirAtraso=!!v;
+  try{localStorage.setItem('fcIncluirAtraso',v?'1':'0');}catch(e){}
+  renderFluxo();
+}
+
 // ---------- Visão Executiva do Caixa — reaproveita o saldo mensal já calculado no renderFluxo ----------
 function renderVisaoExecutivaCaixa(colKeys,colAno,colMes,saldo,ci){
   const kpisEl=document.getElementById('fc-visao-exec-kpis');
@@ -1080,6 +1098,15 @@ function renderVisaoExecutivaCaixa(colKeys,colAno,colMes,saldo,ci){
     +'<div style="font-family:\'Playfair Display\',serif;font-size:18px;font-weight:700;color:'+(ruim?'#C0392B':'var(--text)')+'">'+valor+'</div>'
     +(sub?'<div style="font-size:10px;color:'+(ruim?'#C0392B':'var(--text3)')+';margin-top:3px">'+sub+'</div>':'')
   +'</div>';
+  {const cb=document.getElementById('fc-incluir-atraso');if(cb)cb.checked=fcIncluirAtraso();
+   const av=document.getElementById('fc-atraso-aviso');const inf=window._fcAtrasoInfo;
+   if(av){
+     if(inf&&inf.incluir&&(inf.rec||inf.pag)){
+       const mk=inf.mes;const mesTxt=mk!=null?MESES_ABR[mk%100]+'/'+Math.floor(mk/100):'mês atual';
+       av.innerHTML='Incluído em '+mesTxt+': <b style="color:#1B6B35">+'+fmtM(inf.rec)+'</b> a receber e <b style="color:#C0392B">−'+fmtM(inf.pag)+'</b> a pagar em atraso';
+     }else if(inf&&inf.incluir){av.textContent='Nenhum a receber ou a pagar em atraso.';}
+     else av.textContent='';
+   }}
   kpisEl.innerHTML=
     kpiCard('Saldo Inicial do Período',fmtM(ci),null,ci<0)
     +kpiCard('Saldo Final Projetado',fmtM(saldoFinal),saldoFinal<0?'caixa negativo':null,saldoFinal<0)
@@ -1140,6 +1167,11 @@ function renderFluxo(){
   // Acumular por conta e coluna
   const hojeFluxo=new Date();
   const chaveAtualFluxo=hojeFluxo.getFullYear()*100+hojeFluxo.getMonth();
+  const incluirAtraso=fcIncluirAtraso();
+  // Coluna onde os vencidos entram quando o checkbox está ligado: o mês atual (ou o 1º mês
+  // futuro com coluna, se o mês atual não tiver nenhum lançamento).
+  const idxMesAtual=colKeys.findIndex(k=>k>=chaveAtualFluxo);
+  let atrasoRec=0,atrasoPag=0;
   const contas={};
   dados.forEach(r=>{
     const c=r.conta||'(Sem conta)';
@@ -1148,7 +1180,10 @@ function renderFluxo(){
     if(ci<0)return;
     const ehMesPassado=(r.ano*100+r.mes)<chaveAtualFluxo;
     if(r.tipo==='FATURAMENTO'){
-      if(ehMesPassado&&(r.complemento||'').toLowerCase().includes('a receber'))return;
+      if(ehMesPassado&&(r.complemento||'').toLowerCase().includes('a receber')){
+        if(!incluirAtraso||idxMesAtual<0)return;
+        contas[c].FAT[idxMesAtual]+=r.valor;atrasoRec+=r.valor;return;
+      }
       contas[c].FAT[ci]+=r.valor;
     }
     else if(r.tipo==='DESCONTO')contas[c].DESC[ci]+=r.valor;
@@ -1156,11 +1191,15 @@ function renderFluxo(){
       const ehAPagar=(r.complemento||'').toLowerCase().includes('a pagar');
       if(ehAPagar){
         if(grupoDeConta(c)==='CUSTO_OBRA')return; // Custo de Obra nunca considera provisão — usa a linha "Previsto" manual pra isso
-        if(ehMesPassado)return; // outros grupos: só exclui em mês já passado
+        if(ehMesPassado){ // outros grupos: mês já passado só entra com o checkbox ligado, no mês atual
+          if(!incluirAtraso||idxMesAtual<0)return;
+          contas[c].PAG[idxMesAtual]+=r.valor;atrasoPag+=r.valor;return;
+        }
       }
       contas[c].PAG[ci]+=r.valor;
     }
   });
+  window._fcAtrasoInfo={incluir:incluirAtraso,rec:atrasoRec,pag:atrasoPag,mes:idxMesAtual>=0?colKeys[idxMesAtual]:null};
   const nomes=Object.keys(contas);
   if(!nomes.length){thead.innerHTML='';tfoot.innerHTML='';tbody.innerHTML='<tr><td colspan="3"><div class="empty-state"><p>Nenhum dado para o período</p></div></td></tr>';set('fc-badge','—');const theadR=document.getElementById('thead-fc-resumo'),tbodyR=document.getElementById('tbody-fc-resumo');if(theadR)theadR.innerHTML='';if(tbodyR)tbodyR.innerHTML='';return;}
 
@@ -3338,10 +3377,19 @@ function abrirResumoSocios(dataEntrega){
   }
   var EMPR_FAT_COD=['10501','1.05.03'],EMPR_PAG_COD=['20307','1.05.03','10598'];
   var codigoDe=function(c){return (c||'').split(' - ')[0].trim();};
+  // Vencidos (provisão de mês já passado) seguem o checkbox "Incluir a receber e a pagar em
+  // atraso" da Visão Executiva — assim o Resumo bate com o gráfico do Fluxo de Caixa.
+  var incluirAtrasoRS=fcIncluirAtraso();
+  var hojeRS=new Date(),chaveAtualRS=hojeRS.getFullYear()*100+hojeRS.getMonth();
   var linhas=(DATA.csv||[]).filter(function(r){
     if(r.porBens)return false; // baixa "Por Bens" não é caixa real
     if(obraSel&&!ccMatch(r.cc||'',obraSel))return false;
     if(chaveCorte!=null&&r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)>chaveCorte)return false;
+    if(!incluirAtrasoRS&&r.ano!=null&&r.mes!=null&&(r.ano*100+r.mes)<chaveAtualRS){
+      var compRS=(r.complemento||'').toLowerCase();
+      if(r.tipo==='FATURAMENTO'&&compRS.includes('a receber'))return false;
+      if(r.tipo==='PAGAMENTO'&&compRS.includes('a pagar'))return false;
+    }
     return true;
   });
   window._resumoSociosLinhas=linhas;
@@ -3534,6 +3582,7 @@ function abrirResumoSocios(dataEntrega){
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 14px"><span style="font-size:12px;color:#333">Caixa Atual (Fluxo de Caixa Real)</span><span style="font-size:13px;font-weight:600;color:#333">'+fmt(caixaAtualReal)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:'+(diffCaixa<0?VERMELHO_BG:VERDE_BG)+';border-top:2px solid '+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'"><span style="font-size:13px;font-weight:700;color:'+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'+(diffCaixa<0?'Necessidade de Caixa':'Excedente de Caixa')+'</span><span style="font-size:14px;font-weight:800;color:'+(diffCaixa<0?VERMELHO_FONTE:VERDE_FONTE)+'">'+fmt(diffCaixa)+'</span></div>'
     +'</div>'
+    +'<div style="font-size:11px;color:var(--text3)">'+(incluirAtrasoRS?'A receber/a pagar em atraso: <b>incluídos</b>':'A receber/a pagar em atraso: <b>fora</b>')+' (segue o checkbox da Visão Executiva do Caixa).</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no total. Realizado = já efetivado em caixa; Provisionado = ainda em aberto (\'a pagar\'/\'a receber\', exceto Custo de Obra, que usa o Previsto cadastrado); despesas exibidas como valor positivo (saída).'+(chaveCorte!=null?' Filtro "Data da Entrega" ativo: considera lançamentos até '+String(mesDE+1).padStart(2,'0')+'/'+anoDE+' (inclusive).':'')+'</div>'
     +'</div>';
 }
@@ -4512,8 +4561,19 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
   </div>
 
   <div class="tbl-card" style="margin-bottom:16px;padding:16px 20px" id="fc-visao-exec-card">
-    <div class="tbl-title" style="margin-bottom:2px">Visão Executiva do Caixa</div>
-    <span style="font-size:11px;color:var(--text3)">Saldo de caixa projetado mês a mês (cascata a partir do Caixa Inicial) — obra selecionada acima</span>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
+      <div>
+        <div class="tbl-title" style="margin-bottom:2px">Visão Executiva do Caixa</div>
+        <span style="font-size:11px;color:var(--text3)">Saldo de caixa projetado mês a mês (cascata a partir do Caixa Inicial) — obra selecionada acima</span>
+      </div>
+      <div style="text-align:right">
+        <label style="font-size:12px;color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap">
+          <input type="checkbox" id="fc-incluir-atraso" onchange="setFcIncluirAtraso(this.checked)" style="cursor:pointer">
+          Incluir a receber e a pagar em atraso
+        </label>
+        <div id="fc-atraso-aviso" style="font-size:10px;color:var(--text3);margin-top:3px"></div>
+      </div>
+    </div>
     <div id="fc-visao-exec-kpis" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:14px"></div>
     <div style="overflow-x:auto;margin-top:16px" id="fc-visao-exec-chart-scroll">
       <div style="height:180px" id="fc-visao-exec-chart-wrap"><canvas id="fc-visao-exec-chart"></canvas></div>
