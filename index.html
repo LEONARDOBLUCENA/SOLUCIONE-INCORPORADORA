@@ -31,10 +31,14 @@ const GRUPO_CONTA={
   '2020211':'ADMIN','2020212':'ADMIN','2020216':'ADMIN','2020219':'ADMIN','2020220':'ADMIN','2020221':'ADMIN','2020224':'ADMIN',
   '2020225':'ADMIN','2020222':'ADMIN','2020299':'ADMIN','20503':'ADMIN','2020107':'ADMIN','2020213':'ADMIN',
   '2020106':'ADMIN','2020206':'ADMIN','20612':'ADMIN','2020112':'ADMIN',
-  // DESPESAS FINANCEIRAS (inclui tributárias sobre faturamento)
-  '20301':'FINANCEIRAS','20303':'FINANCEIRAS','20305':'FINANCEIRAS','20307':'FINANCEIRAS','20401':'FINANCEIRAS','20402':'FINANCEIRAS',
-  '20403':'FINANCEIRAS','20407':'FINANCEIRAS','20409':'FINANCEIRAS','20410':'FINANCEIRAS','20411':'FINANCEIRAS','20412':'FINANCEIRAS',
-  '1.05.03':'FINANCEIRAS','20499':'FINANCEIRAS'
+  // DESPESAS FINANCEIRAS
+  '20301':'FINANCEIRAS','20303':'FINANCEIRAS','20305':'FINANCEIRAS','20307':'FINANCEIRAS',
+  '1.05.03':'FINANCEIRAS','20499':'FINANCEIRAS',
+  // IMPOSTOS (sobre faturamento/receita) — separados de Despesas Financeiras (pedido do Leonardo, 10/11/2026)
+  '20401':'IMPOSTOS','20402':'IMPOSTOS','20403':'IMPOSTOS','20407':'IMPOSTOS','20409':'IMPOSTOS','20410':'IMPOSTOS','20411':'IMPOSTOS',
+  // RET / Imposto de Afetação — tratado à parte no Resumo de Sócios (linha "Imposto Afetação",
+  // que soma esse valor realizado/provisionado + a projeção de 4% sobre o Estoque disponível)
+  '20412':'RET_AFETACAO'
 };
 function grupoDeConta(c){
   const cod=(c||'').split(' - ')[0].trim();
@@ -3343,13 +3347,17 @@ function abrirProjecaoFluxo(curtoPrazo){
     +'</div>';
 }
 
-// Resumo de Sócios — visão executiva única (aba "Fluxo de Caixa"), em 3 colunas: Realizado
+// Resumo de Sócios — visão executiva única (aba "Fluxo de Caixa"), em 4 colunas: Realizado
 // (já efetivado em caixa), Provisionado (ainda em aberto — "a pagar"/"a receber", igual à
-// convenção usada no resto do BI) e Total (soma). Considera todo o histórico (sem filtro de
-// período), respeitando a Obra selecionada no topo da aba. Estrutura definida com o Leonardo
-// em 13/09/2026:
+// convenção usada no resto do BI), Estoque (projeção caso as unidades disponíveis sejam vendidas —
+// só existe em Entradas/Custo Comercial/Imposto Afetação e nos totalizadores que os somam) e Total
+// (Realizado+Provisionado+Estoque — pedido do Leonardo, 10/11/2026). Considera todo o histórico
+// (sem filtro de período), respeitando a Obra selecionada no topo da aba. Estrutura definida com o
+// Leonardo em 13/09/2026, com a coluna Estoque e as linhas Impostos/Imposto Afetação adicionadas
+// em 10/11/2026:
 //   Entradas
-//   Custo de Obra / Custo de Marketing / Custo Administrativo / Despesas Financeiras
+//   Custo de Obra / Custo de Marketing / Custo Comercial / Custo Administrativo /
+//   Despesas Financeiras / Impostos / Imposto Afetação
 //   TOTAL DESPESAS
 //   SALDO
 //   Entrada por Empréstimo
@@ -3438,9 +3446,23 @@ function abrirResumoSocios(dataEntrega){
   var comercialRz=gRz['COMERCIAL']||0,comercialPv=gPv['COMERCIAL']||0;
   var adminRz=gRz['ADMIN']||0,adminPv=gPv['ADMIN']||0;
   var financRz=gRz['FINANCEIRAS']||0,financPv=gPv['FINANCEIRAS']||0;
-  var totDespRz=custoObraRz+marketingRz+comercialRz+adminRz+financRz;
-  var totDespPv=custoObraPv+marketingPv+comercialPv+adminPv+financPv;
+  // Impostos (sobre faturamento/receita — contas 20401/20402/20403/20407/20409/20410/20411),
+  // separados de Despesas Financeiras (pedido do Leonardo, 10/11/2026). "Imposto Afetação" (conta
+  // 20412 — RET) também sai de Despesas Financeiras e vira linha própria mais abaixo, somada à
+  // projeção de 4% sobre o Estoque.
+  var impostosRz=gRz['IMPOSTOS']||0,impostosPv=gPv['IMPOSTOS']||0;
+  var retRz=gRz['RET_AFETACAO']||0,retPv=gPv['RET_AFETACAO']||0;
+  // Estoque (pedido do Leonardo, 10/11/2026): projeção do que entra/sai se o estoque disponível
+  // (unidades ainda não vendidas) for vendido — Entradas = valor total do estoque; Comercial = 8%;
+  // Imposto Afetação = 4%. Segue a Obra selecionada no topo da aba, igual ao resto do Resumo.
+  var estoqueObraRS=(DATA.estoque||[]).filter(function(u){return !obraSel||ccMatch(u.obra||'',obraSel);});
+  var estoqueTotal=estoqueObraRS.reduce(function(s,u){return s+(parseFloat(u.venda)||0);},0);
+  var estComercial=estoqueTotal*0.08,estImpostoAfet=estoqueTotal*0.04;
+  var totDespRz=custoObraRz+marketingRz+comercialRz+adminRz+financRz+impostosRz+retRz;
+  var totDespPv=custoObraPv+marketingPv+comercialPv+adminPv+financPv+impostosPv+retPv;
+  var totDespEstoque=estComercial+estImpostoAfet;
   var saldoRz=entrRz-totDespRz,saldoPv=entrPv-totDespPv;
+  var saldoEstoque=estoqueTotal-totDespEstoque;
   // Bloco Empréstimos: Entrada por Empréstimo (10501+1.05.03, lado Faturamento), Consórcios/
   // Financiamento/Empréstimo (conta 20307 — nome idêntico ao do Sienge), Juros por Empréstimos
   // (conta 10598). A conta 1.05.03 do lado Pagamento ("(-) Devolução de Empréstimos/Financiamentos")
@@ -3484,16 +3506,26 @@ function abrirResumoSocios(dataEntrega){
   // célula (Realizado/Provisionado/Total) vira um span clicável que abre abrirDetalheResumoSocios
   // com a mesma categoria e a coluna clicada — mesmo padrão "clique no número, vê o que compõe"
   // usado no resto do BI (abrirDetalheFluxo).
+  // Coluna "Estoque" (pedido do Leonardo, 10/11/2026): projeção do que ainda vai entrar/sair se o
+  // estoque disponível de unidades for vendido. Só é passada (opts.estoque) nas linhas Entradas,
+  // Custo Comercial, Imposto Afetação, e nos totalizadores que as somam (TOTAL DESPESAS, Saldo
+  // Empreendimento, Entradas/Saídas Totais, Saldo Geral); nas demais linhas não se aplica e a
+  // célula mostra "—". Quando opts.estoque existe, o Total passa a ser Realizado+Provisionado+
+  // Estoque (cenário completo: já aconteceu + em aberto + projeção do estoque restante).
   var linhaTbl=function(label,rz,pv,opts){
     opts=opts||{};
     var bold=opts.bold?'700':'400';
     var bg=opts.bg||'transparent';
     var corLabel=opts.cor||'#222';
-    var corRz=corLabel,corPv=corLabel,corTot=corLabel;
+    var temEstoque=opts.estoque!=null;
+    var est=temEstoque?opts.estoque:0;
+    var tot=rz+pv+est;
+    var corRz=corLabel,corPv=corLabel,corEst=corLabel,corTot=corLabel;
     if(opts.corAuto){
       corRz=rz>=0?VERDE_FONTE:VERMELHO_FONTE;
       corPv=pv>=0?VERDE_FONTE:VERMELHO_FONTE;
-      corTot=(rz+pv)>=0?VERDE_FONTE:VERMELHO_FONTE;
+      corEst=est>=0?VERDE_FONTE:VERMELHO_FONTE;
+      corTot=tot>=0?VERDE_FONTE:VERMELHO_FONTE;
     }
     var borda=opts.borda?'border-top:2px solid '+opts.borda+';':'';
     var cell=function(valor,cor,coluna){
@@ -3504,22 +3536,25 @@ function abrirResumoSocios(dataEntrega){
     return '<tr><td style="padding:7px 12px;font-size:12px;background:'+bg+';color:'+corLabel+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+label+'</td>'
       +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corRz+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(rz,corRz,'rz')+'</td>'
       +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corPv+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(pv,corPv,'pv')+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corTot+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(rz+pv,corTot,'total')+'</td></tr>';
+      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corEst+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+(temEstoque?fmt(est):'—')+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corTot+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(tot,corTot,'total')+'</td></tr>';
   };
-  var espacador='<tr><td colspan="4" style="padding:6px"></td></tr>';
+  var espacador='<tr><td colspan="5" style="padding:6px"></td></tr>';
   var rows='';
-  rows+=linhaTbl('Entradas',entrRz,entrPv,{bold:true,bg:VERDE_BG,cat:'ENTRADAS'});
+  rows+=linhaTbl('Entradas',entrRz,entrPv,{bold:true,bg:VERDE_BG,cat:'ENTRADAS',estoque:estoqueTotal});
   rows+=espacador;
   rows+=linhaTbl('Custo de Obra',-custoObraRz,-custoObraPv,{cat:'CUSTO_OBRA'});
   rows+=linhaTbl('Custo de Marketing',-marketingRz,-marketingPv,{cat:'MARKETING'});
-  rows+=linhaTbl('Custo Comercial',-comercialRz,-comercialPv,{cat:'COMERCIAL'});
+  rows+=linhaTbl('Custo Comercial',-comercialRz,-comercialPv,{cat:'COMERCIAL',estoque:-estComercial});
   rows+=linhaTbl('Custo Administrativo',-adminRz,-adminPv,{cat:'ADMIN'});
   rows+=linhaTbl('Despesas Financeiras',-financRz,-financPv,{cat:'FINANCEIRAS'});
-  rows+=linhaTbl('TOTAL DESPESAS',-totDespRz,-totDespPv,{bold:true,bg:VERMELHO_BG,cat:'TOTAL_DESPESAS'});
+  rows+=linhaTbl('Impostos',-impostosRz,-impostosPv,{cat:'IMPOSTOS'});
+  rows+=linhaTbl('Imposto Afetação',-retRz,-retPv,{cat:'RET_AFETACAO',estoque:-estImpostoAfet});
+  rows+=linhaTbl('TOTAL DESPESAS',-totDespRz,-totDespPv,{bold:true,bg:VERMELHO_BG,cat:'TOTAL_DESPESAS',estoque:-totDespEstoque});
   // "SALDO" renomeado para "Saldo Empreendimento" (pedido do Leonardo, 18/09/2026) — deixa claro
   // que essa linha é só o resultado operacional do empreendimento, sem o bloco de Empréstimos
   // (que tem sua própria linha "Saldo Empréstimos" logo abaixo).
-  rows+=linhaTbl('Saldo Empreendimento',saldoRz,saldoPv,{bold:true,bg:CINZA_BG,corAuto:true,cat:'SALDO'});
+  rows+=linhaTbl('Saldo Empreendimento',saldoRz,saldoPv,{bold:true,bg:CINZA_BG,corAuto:true,cat:'SALDO',estoque:saldoEstoque});
   rows+=espacador;
   rows+=linhaTbl('Entrada por Empréstimo',emprEntrRz,emprEntrPv,{bold:true,bg:VERDE_BG,cat:'EMPR_ENTRADA'});
   rows+=linhaTbl('Consórcios/Financiamento/Empréstimo',-consorcRz,-consorcPv,{cat:'CONSORCIO'});
@@ -3527,9 +3562,9 @@ function abrirResumoSocios(dataEntrega){
   rows+=linhaTbl('Total Saída Empréstimo',-totSaidaEmprRz,-totSaidaEmprPv,{bold:true,bg:VERMELHO_BG,cat:'TOTAL_SAIDA_EMPR'});
   rows+=linhaTbl('Saldo Empréstimos',saldoEmprRz,saldoEmprPv,{bold:true,bg:CINZA_BG,corAuto:true,cat:'SALDO_EMPR'});
   rows+=espacador;
-  rows+=linhaTbl('Entradas Totais',entrTotRz,entrTotPv,{bold:true,bg:VERDE_BG,cat:'ENTRADAS_TOTAIS'});
-  rows+=linhaTbl('Saídas Totais',-saidTotRz,-saidTotPv,{bold:true,bg:VERMELHO_BG,cat:'SAIDAS_TOTAIS'});
-  rows+=linhaTbl('Saldo Geral',saldoGeralRz,saldoGeralPv,{bold:true,bg:CINZA_BG,corAuto:true,borda:'#999',cat:'SALDO_GERAL'});
+  rows+=linhaTbl('Entradas Totais',entrTotRz,entrTotPv,{bold:true,bg:VERDE_BG,cat:'ENTRADAS_TOTAIS',estoque:estoqueTotal});
+  rows+=linhaTbl('Saídas Totais',-saidTotRz,-saidTotPv,{bold:true,bg:VERMELHO_BG,cat:'SAIDAS_TOTAIS',estoque:-totDespEstoque});
+  rows+=linhaTbl('Saldo Geral',saldoGeralRz,saldoGeralPv,{bold:true,bg:CINZA_BG,corAuto:true,borda:'#999',cat:'SALDO_GERAL',estoque:saldoEstoque});
   // Análise (pedido do Leonardo, 18/09/2026): compara o caixa realmente disponível hoje (aba
   // "Fluxo de Caixa Real", 100% realizado — nunca considera provisão) contra o Saldo Geral
   // Provisionado deste modal, pra dizer se falta ou sobra caixa pra cobrir o que ainda está em
@@ -3594,6 +3629,7 @@ function abrirResumoSocios(dataEntrega){
     +'<thead><tr style="background:#f5f5f5"><th style="text-align:left;padding:7px 12px;font-size:11px;color:#666">Categoria</th>'
     +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Realizado</th>'
     +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Provisionado</th>'
+    +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Estoque</th>'
     +'<th class="r" style="padding:7px 10px;font-size:11px;color:#666">Total</th></tr></thead>'
     +'<tbody>'+rows+'</tbody></table></div>'
     // Tabelinha de conferência de caixa (pedido do Leonardo, 18/09/2026, substituindo o bloco de
@@ -3609,6 +3645,7 @@ function abrirResumoSocios(dataEntrega){
     +'</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+(incluirAtrasoRS?'A receber/a pagar em atraso: <b>incluídos</b>':'A receber/a pagar em atraso: <b>fora</b>')+' (segue o checkbox da Visão Executiva do Caixa).</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no total. Realizado = já efetivado em caixa; Provisionado = ainda em aberto (\'a pagar\'/\'a receber\', exceto Custo de Obra, que usa o Previsto cadastrado); despesas exibidas como valor positivo (saída).'+(chaveCorte!=null?' Filtro "Data da Entrega" ativo: considera lançamentos até '+String(mesDE+1).padStart(2,'0')+'/'+anoDE+' (inclusive).':'')+'</div>'
+    +'<div style="font-size:11px;color:var(--text3)">Estoque = projeção caso as '+estoqueObraRS.length+' unidade(s) disponível(is) ('+fmt(estoqueTotal)+') sejam vendidas: Entradas = valor total do estoque; Custo Comercial = 8%; Imposto Afetação = 4%. Total = Realizado + Provisionado + Estoque.</div>'
     +'</div>';
   // Resumo de Sócios fixo na página (pedido do Leonardo, 09/11/2026): quando existe o container
   // #fc-resumo-socios-inline (aba Fluxo de Caixa, no lugar do antigo card de Movimentações),
@@ -3686,7 +3723,7 @@ function abrirDetalheResumoSocios(cat,coluna,label){
     return false;
   };
   var matchCol=function(r){return coluna==='total'?true:(coluna==='rz'?!isProvisao(r):isProvisao(r));};
-  var GRUPOS_SIMPLES=['MARKETING','COMERCIAL','ADMIN','FINANCEIRAS'];
+  var GRUPOS_SIMPLES=['MARKETING','COMERCIAL','ADMIN','FINANCEIRAS','IMPOSTOS','RET_AFETACAO'];
   var itemsFor=function(c,col){
     var out=[];
     if(c==='ENTRADAS'){
@@ -4565,7 +4602,9 @@ tbody td.r{text-align:right;font-variant-numeric:tabular-nums}
     <button class="nav-tab" data-tab="dash" onclick="goTab(this);renderDash()">Dashboard</button>
     <button class="nav-tab active" data-tab="fluxo" onclick="goTab(this)">Fluxo de Caixa</button>
     <button class="nav-tab" data-tab="fluxoreal" onclick="goTab(this);renderCaixaInicialCamposReal();renderFluxoReal()">Fluxo de Caixa Real</button>
-    <button class="nav-tab" data-tab="dtlh" onclick="goTab(this);updateDtlhFilters();renderDtlh()">Resumo Executivo</button>
+    <!-- Resumo Executivo oculto (pedido do Leonardo, 10/11/2026). Continua no HTML porque outras
+         funções ainda podem referenciar a página; só o botão do menu some. -->
+    <button class="nav-tab" data-tab="dtlh" onclick="goTab(this);updateDtlhFilters();renderDtlh()" style="display:none">Resumo Executivo</button>
     <div class="nav-section-label">Contas</div>
     <button class="nav-tab" data-tab="contaspagar" onclick="goTab(this);renderContasAPagar()">Contas a Pagar</button>
     <button class="nav-tab" data-tab="contaspagas" onclick="goTab(this);renderContasPagas()">Contas Pagas</button>
