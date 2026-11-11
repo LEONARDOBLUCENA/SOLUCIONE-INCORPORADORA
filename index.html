@@ -1378,6 +1378,8 @@ function renderFluxo(){
     {key:'COMERCIAL',    titulo:'CUSTO COMERCIAL',         hdrBg:'#D1F2EB',hdrText:'#0E6655',borda:'#A3E4D7',divisor:'#e8f6f3',zebra:'#f4fdfb',totBg:'#c9f0e4',totLabelBg:'#A3E4D7',totLabel:'Total Custo Comercial'},
     {key:'ADMIN',        titulo:'DESPESAS ADMINISTRATIVAS',hdrBg:'#D6EAF8',hdrText:'#1A5276',borda:'#AED6F1',divisor:'#eaf2f8',zebra:'#f3f9fd',totBg:'#dbeefb',totLabelBg:'#AED6F1',totLabel:'Total Despesas Administrativas'},
     {key:'FINANCEIRAS',  titulo:'DESPESAS FINANCEIRAS',    hdrBg:'#FADBD8',hdrText:'#943126',borda:'#F1948A',divisor:'#f5e8e7',zebra:'#fdf5f4',totBg:'#fbeeed',totLabelBg:'#F1948A',totLabel:'Total Despesas Financeiras'},
+    {key:'IMPOSTOS',     titulo:'IMPOSTOS',                hdrBg:'#FCF3CF',hdrText:'#7D6608',borda:'#F9E79F',divisor:'#faf6e8',zebra:'#fefbf0',totBg:'#faf0c0',totLabelBg:'#F9E79F',totLabel:'Total Impostos'},
+    {key:'RET_AFETACAO', titulo:'IMPOSTO DE AFETAÇÃO (RET)',hdrBg:'#F6DDCC',hdrText:'#A04000',borda:'#EDBB99',divisor:'#f8ece2',zebra:'#fdf6f0',totBg:'#f3d9bf',totLabelBg:'#EDBB99',totLabel:'Total Imposto de Afetação (RET)'},
     {key:'OUTRAS',       titulo:'OUTRAS DESPESAS',         hdrBg:'#EAEDED',hdrText:'#424949',borda:'#CCD1D1',divisor:'#f0f1f1',zebra:'#f7f8f8',totBg:'#e8eaea',totLabelBg:'#CCD1D1',totLabel:'Total Outras Despesas'}
   ];
   const gruposResumoFin={};
@@ -1408,7 +1410,7 @@ function renderFluxo(){
     }
     const grpTotalGeral=acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0);
     // Grupo "Outras Despesas" só aparece quando tem algum valor de verdade — a pedido do
-    // Leonardo (28/08/2026). Os outros 4 grupos continuam sempre visíveis (mesmo zerados),
+    // Leonardo (28/08/2026). Os outros grupos continuam sempre visíveis (mesmo zerados),
     // já que eles têm sentido fixo/estrutural pro Leonardo acompanhar; Outras Despesas é o
     // grupo "sobra"/fallback, então só faz sentido mostrar quando realmente tiver lançamento.
     if(g.key==='OUTRAS'&&grpTotalGeral===0&&acumGrupoTot===0&&totGrupo.every(v=>v===0))return;
@@ -1530,7 +1532,7 @@ function renderFluxo(){
     const emprEntradaG=gruposResumoFin['EMPRESTIMOS_ENTRADA'];
     const entradaEmprFin=emprEntradaG?somaAte(emprEntradaG.acum,emprEntradaG.mensal):0;
     const entradasOperFin=totalEntradasFin-entradaEmprFin;
-    const ordemGrupos=['CUSTO_OBRA','MARKETING','COMERCIAL','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
+    const ordemGrupos=['CUSTO_OBRA','MARKETING','COMERCIAL','ADMIN','FINANCEIRAS','IMPOSTOS','RET_AFETACAO','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
     const EMPR_FAT_COD_RF=['10501','1.05.03'];
     const linhaExec=(label,val,opts)=>{
@@ -1842,6 +1844,8 @@ function renderFluxoReal(){
     {key:'COMERCIAL',    titulo:'CUSTO COMERCIAL',         hdrBg:'#D1F2EB',hdrText:'#0E6655',borda:'#A3E4D7',divisor:'#e8f6f3',zebra:'#f4fdfb',totBg:'#c9f0e4',totLabelBg:'#A3E4D7',totLabel:'Total Custo Comercial'},
     {key:'ADMIN',        titulo:'DESPESAS ADMINISTRATIVAS',hdrBg:'#D6EAF8',hdrText:'#1A5276',borda:'#AED6F1',divisor:'#eaf2f8',zebra:'#f3f9fd',totBg:'#dbeefb',totLabelBg:'#AED6F1',totLabel:'Total Despesas Administrativas'},
     {key:'FINANCEIRAS',  titulo:'DESPESAS FINANCEIRAS',    hdrBg:'#FADBD8',hdrText:'#943126',borda:'#F1948A',divisor:'#f5e8e7',zebra:'#fdf5f4',totBg:'#fbeeed',totLabelBg:'#F1948A',totLabel:'Total Despesas Financeiras'},
+    {key:'IMPOSTOS',     titulo:'IMPOSTOS',                hdrBg:'#FCF3CF',hdrText:'#7D6608',borda:'#F9E79F',divisor:'#faf6e8',zebra:'#fefbf0',totBg:'#faf0c0',totLabelBg:'#F9E79F',totLabel:'Total Impostos'},
+    {key:'RET_AFETACAO', titulo:'IMPOSTO DE AFETAÇÃO (RET)',hdrBg:'#F6DDCC',hdrText:'#A04000',borda:'#EDBB99',divisor:'#f8ece2',zebra:'#fdf6f0',totBg:'#f3d9bf',totLabelBg:'#EDBB99',totLabel:'Total Imposto de Afetação (RET)'},
     {key:'OUTRAS',       titulo:'OUTRAS DESPESAS',         hdrBg:'#EAEDED',hdrText:'#424949',borda:'#CCD1D1',divisor:'#f0f1f1',zebra:'#f7f8f8',totBg:'#e8eaea',totLabelBg:'#CCD1D1',totLabel:'Total Outras Despesas'}
   ];
   const gruposResumoFin={};
@@ -1870,7 +1874,7 @@ function renderFluxoReal(){
     // existe nesta aba) — o grupo mostra só o que já foi efetivamente pago (Contas Pagas).
     const grpTotalGeral=acumGrupoTot+totGrupo.reduce((s,v)=>s+v,0);
     // Grupo "Outras Despesas" só aparece quando tem algum valor de verdade — a pedido do
-    // Leonardo (28/08/2026). Os outros 4 grupos continuam sempre visíveis (mesmo zerados),
+    // Leonardo (28/08/2026). Os outros grupos continuam sempre visíveis (mesmo zerados),
     // já que eles têm sentido fixo/estrutural pro Leonardo acompanhar; Outras Despesas é o
     // grupo "sobra"/fallback, então só faz sentido mostrar quando realmente tiver lançamento.
     if(g.key==='OUTRAS'&&grpTotalGeral===0&&acumGrupoTot===0&&totGrupo.every(v=>v===0))return;
@@ -1986,7 +1990,7 @@ function renderFluxoReal(){
     const emprEntradaG=gruposResumoFin['EMPRESTIMOS_ENTRADA'];
     const entradaEmprFin=emprEntradaG?somaAte(emprEntradaG.acum,emprEntradaG.mensal):0;
     const entradasOperFin=totalEntradasFin-entradaEmprFin;
-    const ordemGrupos=['CUSTO_OBRA','MARKETING','COMERCIAL','ADMIN','FINANCEIRAS','OUTRAS','EMPRESTIMOS'];
+    const ordemGrupos=['CUSTO_OBRA','MARKETING','COMERCIAL','ADMIN','FINANCEIRAS','IMPOSTOS','RET_AFETACAO','OUTRAS','EMPRESTIMOS'];
     let totalDespesasFin=0;
     const EMPR_FAT_COD_RF=['10501','1.05.03'];
     const linhaExec=(label,val,opts)=>{
@@ -3294,6 +3298,8 @@ function abrirProjecaoFluxo(curtoPrazo){
     {key:'COMERCIAL',label:'Custo Comercial',cor:'#0E6655'},
     {key:'ADMIN',label:'Despesas Administrativas',cor:'#1A5276'},
     {key:'FINANCEIRAS',label:'Despesas Financeiras',cor:'#943126'},
+    {key:'IMPOSTOS',label:'Impostos',cor:'#7D6608'},
+    {key:'RET_AFETACAO',label:'Imposto de Afetação (RET)',cor:'#A04000'},
     {key:'EMPRESTIMOS',label:'Empréstimos',cor:'#B35C00'},
     {key:'OUTRAS',label:'Outras Despesas',cor:'#424949'}
   ];
@@ -3366,6 +3372,15 @@ function abrirProjecaoFluxo(curtoPrazo){
 //   Saldo Empréstimos
 //   Saldo Geral
 // Não existe em "Fluxo de Caixa Real" (aba 100% realizado, não há o que separar de provisão).
+// Atualiza o % de comissão usado na projeção do Estoque (linha Custo Comercial da Projeção de
+// Resultado) — pedido do Leonardo, 11/11/2026. Persiste em DATA.comissaoEstoquePct e re-renderiza.
+function atualizarComissaoEstoque(v){
+  var pct=parseFloat(String(v).replace(',','.'));
+  if(isNaN(pct)||pct<0)pct=8;
+  DATA.comissaoEstoquePct=pct;
+  autoSave();
+  abrirResumoSocios();
+}
 function abrirResumoSocios(dataEntrega){
   var obraSel=document.getElementById('fc-obra')?document.getElementById('fc-obra').value:'';
   // "Data da Entrega" (pedido do Leonardo, 18/09/2026): filtro de corte por mês/ano — quando
@@ -3457,7 +3472,12 @@ function abrirResumoSocios(dataEntrega){
   // Imposto Afetação = 4%. Segue a Obra selecionada no topo da aba, igual ao resto do Resumo.
   var estoqueObraRS=(DATA.estoque||[]).filter(function(u){return !obraSel||ccMatch(u.obra||'',obraSel);});
   var estoqueTotal=estoqueObraRS.reduce(function(s,u){return s+(parseFloat(u.venda)||0);},0);
-  var estComercial=estoqueTotal*0.08,estImpostoAfet=estoqueTotal*0.04;
+  // Percentual de comissão sobre o Estoque — editável pelo Leonardo direto na linha "Custo
+  // Comercial" (pedido de 11/11/2026); persistido em DATA.comissaoEstoquePct, default 8%.
+  if(DATA.comissaoEstoquePct==null)DATA.comissaoEstoquePct=8;
+  var comissaoEstoquePct=parseFloat(DATA.comissaoEstoquePct);
+  if(isNaN(comissaoEstoquePct)||comissaoEstoquePct<0)comissaoEstoquePct=8;
+  var estComercial=estoqueTotal*(comissaoEstoquePct/100),estImpostoAfet=estoqueTotal*0.04;
   var totDespRz=custoObraRz+marketingRz+comercialRz+adminRz+financRz+impostosRz+retRz;
   var totDespPv=custoObraPv+marketingPv+comercialPv+adminPv+financPv+impostosPv+retPv;
   var totDespEstoque=estComercial+estImpostoAfet;
@@ -3536,7 +3556,7 @@ function abrirResumoSocios(dataEntrega){
     return '<tr><td style="padding:7px 12px;font-size:12px;background:'+bg+';color:'+corLabel+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+label+'</td>'
       +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corRz+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(rz,corRz,'rz')+'</td>'
       +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corPv+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(pv,corPv,'pv')+'</td>'
-      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corEst+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+(temEstoque?fmt(est):'—')+'</td>'
+      +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corEst+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+(opts.estoqueEditor?opts.estoqueEditor:(temEstoque?fmt(est):'—'))+'</td>'
       +'<td class="r" style="padding:7px 10px;font-size:12px;background:'+bg+';color:'+corTot+';font-weight:'+bold+';'+borda+';white-space:nowrap">'+cell(tot,corTot,'total')+'</td></tr>';
   };
   var espacador='<tr><td colspan="5" style="padding:6px"></td></tr>';
@@ -3549,7 +3569,10 @@ function abrirResumoSocios(dataEntrega){
   rows+=linhaTbl('TOTAL DESPESAS',-totDespRz,-totDespPv,{bold:true,bg:VERMELHO_BG,cat:'TOTAL_DESPESAS',estoque:-totDespEstoque});
   rows+=linhaTbl('Custo de Obra',-custoObraRz,-custoObraPv,{cat:'CUSTO_OBRA'});
   rows+=linhaTbl('Custo de Marketing',-marketingRz,-marketingPv,{cat:'MARKETING'});
-  rows+=linhaTbl('Custo Comercial',-comercialRz,-comercialPv,{cat:'COMERCIAL',estoque:-estComercial});
+  var _estoqueComercialEditor='<span style="display:inline-flex;align-items:center;gap:4px;justify-content:flex-end" onclick="event.stopPropagation()">'
+    +'<input type="number" id="rs-comissao-pct" value="'+comissaoEstoquePct+'" step="0.5" min="0" max="100" onchange="atualizarComissaoEstoque(this.value)" style="width:44px;padding:2px 4px;font-size:11px;border:1px solid var(--border);border-radius:4px;text-align:right">'
+    +'<span style="font-size:11px">% = '+fmt(estComercial)+'</span></span>';
+  rows+=linhaTbl('Custo Comercial',-comercialRz,-comercialPv,{cat:'COMERCIAL',estoque:-estComercial,estoqueEditor:_estoqueComercialEditor});
   rows+=linhaTbl('Custo Administrativo',-adminRz,-adminPv,{cat:'ADMIN'});
   rows+=linhaTbl('Despesas Financeiras',-financRz,-financPv,{cat:'FINANCEIRAS'});
   rows+=linhaTbl('Impostos',-impostosRz,-impostosPv,{cat:'IMPOSTOS'});
@@ -3582,7 +3605,7 @@ function abrirResumoSocios(dataEntrega){
     +'<tbody>'+rows+'</tbody></table></div>'
     +'<div style="font-size:11px;color:var(--text3)">'+(incluirAtrasoRS?'A receber/a pagar em atraso: <b>incluídos</b>':'A receber/a pagar em atraso: <b>fora</b>')+' (segue o checkbox da Visão Executiva do Caixa).</div>'
     +'<div style="font-size:11px;color:var(--text3)">'+linhas.length+' lançamento(s) no total. Realizado = já efetivado em caixa; Provisionado = ainda em aberto (\'a pagar\'/\'a receber\', exceto Custo de Obra, que usa o Previsto cadastrado); despesas exibidas como valor positivo (saída).</div>'
-    +'<div style="font-size:11px;color:var(--text3)">Estoque = projeção caso as '+estoqueObraRS.length+' unidade(s) disponível(is) ('+fmt(estoqueTotal)+') sejam vendidas: Entradas = valor total do estoque; Custo Comercial = 8%; Imposto Afetação = 4%. Total = Realizado + Provisionado + Estoque.</div>'
+    +'<div style="font-size:11px;color:var(--text3)">Estoque = projeção caso as '+estoqueObraRS.length+' unidade(s) disponível(is) ('+fmt(estoqueTotal)+') sejam vendidas: Entradas = valor total do estoque; Custo Comercial = '+comissaoEstoquePct+'% (editável na linha Custo Comercial); Imposto Afetação = 4%. Total = Realizado + Provisionado + Estoque.</div>'
     +'</div>';
   // Resumo de Sócios fixo na página (pedido do Leonardo, 09/11/2026): quando existe o container
   // #fc-resumo-socios-inline (aba Fluxo de Caixa, no lugar do antigo card de Movimentações),
@@ -3819,6 +3842,8 @@ function abrirProjecaoFluxoReal(curtoPrazo){
     {key:'COMERCIAL',label:'Custo Comercial',cor:'#0E6655'},
     {key:'ADMIN',label:'Despesas Administrativas',cor:'#1A5276'},
     {key:'FINANCEIRAS',label:'Despesas Financeiras',cor:'#943126'},
+    {key:'IMPOSTOS',label:'Impostos',cor:'#7D6608'},
+    {key:'RET_AFETACAO',label:'Imposto de Afetação (RET)',cor:'#A04000'},
     {key:'EMPRESTIMOS',label:'Empréstimos',cor:'#B35C00'},
     {key:'OUTRAS',label:'Outras Despesas',cor:'#424949'}
   ];
